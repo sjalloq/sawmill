@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 6 - Task 2.3 Complete
+> **Last Agent Session:** Session 7 - Task 2.4 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `2.4` |
-| **task_name** | Built-in Vivado Plugin |
+| **current_task** | `2.5` |
+| **task_name** | Plugin Discovery CLI |
 | **stage** | Stage 2: Plugin System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -28,7 +28,7 @@
 - [x] **Task 2.1:** Plugin Hook Specification
 - [x] **Task 2.2:** Plugin Manager with Entry Point Discovery
 - [x] **Task 2.3:** Auto-Detection and Plugin Selection
-- [ ] **Task 2.4:** Built-in Vivado Plugin
+- [x] **Task 2.4:** Built-in Vivado Plugin
 - [ ] **Task 2.5:** Plugin Discovery CLI
 
 ### Stage 3: Filter Engine (Ralph Loop)
@@ -64,27 +64,21 @@
 
 ## Current Task Details
 
-### Task 2.4: Built-in Vivado Plugin
+### Task 2.5: Plugin Discovery CLI
 
-**Objective:** Create the reference Vivado plugin as a built-in.
+**Objective:** Implement CLI commands for plugin discovery and introspection.
 
 **Deliverables:**
-- [ ] `sawmill/plugins/vivado.py` with `VivadoPlugin` class
-- [ ] All hooks implemented for Vivado log format:
-  - `can_handle()` - detect Vivado logs
-  - `load_and_parse()` - load file, parse, and group into `list[Message]`
-  - `get_filters()` - comprehensive filter set
-  - `extract_file_reference()` - extract file:line references
-- [ ] Register as built-in plugin (not via entry point)
+- [ ] `--list-plugins` option to enumerate discovered plugins
+- [ ] `--show-info` option (with `--plugin`) to display plugin capabilities
+- [ ] Show: version, hooks implemented, filter counts
 
 **Success Criteria:**
-- [ ] Detects Vivado logs with high confidence
-- [ ] Returns `list[Message]` with proper start_line/end_line for multi-line messages
-- [ ] Correctly extracts severity, message_id, content
-- [ ] Provides comprehensive filter set
-- [ ] Extracts file references from messages
+- [ ] `sawmill --list-plugins` shows all installed plugins
+- [ ] `sawmill --plugin vivado --show-info` shows Vivado plugin details
+- [ ] Output includes plugin version and implemented hooks
 
-**Test Files:** `tests/plugins/test_vivado.py`
+**Test Files:** `tests/test_cli_plugin_discovery.py`
 
 ---
 
@@ -96,17 +90,23 @@
 
 ## Hints for Next Session
 
-- PluginManager is complete in `sawmill/core/plugin.py` with `auto_detect()` method
-- `auto_detect(path)` returns plugin name with highest confidence (>= 0.5)
-- Raises `NoPluginFoundError` if no plugin has confidence >= 0.5
-- Raises `PluginConflictError` if >1 plugin has confidence >= 0.5
-- For Task 2.4, see example Vivado logs in `examples/vivado/`
-- Vivado log patterns documented in `examples/vivado/PATTERNS.md`
-- Plugin should:
-  1. Detect Vivado header ("# Vivado v") with high confidence
-  2. Parse message format: `TYPE: [Category ID-Number] message [file:line]`
-  3. Group multi-line messages (continuation lines start with spaces)
-  4. Provide filters for errors, warnings, critical warnings
+- VivadoPlugin is complete in `sawmill/plugins/vivado.py`
+- To use VivadoPlugin, it needs to be registered with PluginManager:
+  ```python
+  from sawmill.core.plugin import PluginManager
+  from sawmill.plugins.vivado import VivadoPlugin
+
+  manager = PluginManager()
+  manager.register(VivadoPlugin())
+  ```
+- PluginManager has `list_plugins()` and `get_plugin_info()` methods
+- CLI skeleton is in `sawmill/cli.py` using rich-click
+- For Task 2.5, add `--list-plugins` and `--show-info` options
+- VivadoPlugin has:
+  - name: "vivado"
+  - version: "1.0.0"
+  - description: "Parser for Xilinx Vivado synthesis and implementation logs"
+  - 10 filter definitions
 
 ### Architecture Reminder
 
@@ -115,19 +115,23 @@
 - Plugins do ALL parsing - loading files, detecting severity, grouping messages
 - Base app applies filters and displays results
 
-### Example Files Available
-- `examples/vivado/vivado.log` - Real Vivado log for testing (~3000 lines)
-- `examples/vivado/PATTERNS.md` - Analysis of Vivado message patterns
-
 ### Task Definitions
 - Full task details with tests are in `TASKS.md`
 - High-level requirements and architecture are in `PRD.md`
 
-**Primary target: Xilinx Vivado logs.** Use the example log for testing.
-
 ---
 
 ## Session Log
+
+### Session 7 (completed)
+- **Started:** 2026-01-18
+- **Task:** 2.4 - Built-in Vivado Plugin
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/plugins/vivado.py` - VivadoPlugin with all hooks implemented
+  - `tests/plugins/__init__.py` - Test package marker
+  - `tests/plugins/test_vivado.py` - 28 tests for Vivado plugin
+- **Tests:** 92 passing
 
 ### Session 6 (completed)
 - **Started:** 2026-01-18

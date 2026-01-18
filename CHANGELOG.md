@@ -62,6 +62,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 2.4: Built-in Vivado Plugin
+
+### Added
+- `sawmill/plugins/vivado.py` - VivadoPlugin class implementing all hooks
+  - `can_handle(path)` - Detects Vivado logs via header and message IDs
+  - `load_and_parse(path)` - Parses log files with multi-line message grouping
+  - `get_filters()` - 10 pre-defined filters for common Vivado message types
+  - `extract_file_reference(content)` - Extracts [file.v:line] references
+- `tests/plugins/__init__.py` - Test package marker
+- `tests/plugins/test_vivado.py` - 28 tests covering all hooks and integration
+
+### Features
+- High-confidence detection (0.95) via Vivado header pattern (`# Vivado v...`)
+- Medium-confidence detection via message ID patterns (Synth, Vivado, IP_Flow, etc.)
+- Parses all severity levels: INFO, WARNING, CRITICAL WARNING, ERROR
+- Extracts message IDs (e.g., "Synth 8-6157", "Vivado 12-3523")
+- Groups multi-line messages (continuation lines start with spaces or |)
+- Extracts file references in bracketed `[/path/file.v:53]` and inline formats
+- Provides 10 filters: errors, critical-warnings, warnings, info, timing-issues, synthesis, drc, constraints, ip-flow, routing
+
+### Notes
+- Plugin follows architecture principle: plugin is sole source of truth
+- Multi-line grouping handles indented continuation lines and table rows
+- File reference extraction handles both bracketed and inline formats
+- Real Vivado log integration tests pass (~3000 line example log)
+
+---
+
 ## [2026-01-18] Task 2.3: Auto-Detection and Plugin Selection
 
 ### Added
