@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `1.1` |
-| **task_name** | Project Scaffolding |
-| **stage** | Stage 1: Project Setup and Data Models |
+| **current_task** | `1.0` |
+| **task_name** | Test Infrastructure |
+| **stage** | Stage 1: Project Setup |
 | **tests_passing** | N/A (no tests yet) |
 | **blocked** | `false` |
 
@@ -20,14 +20,16 @@
 ## Task Progress
 
 ### Stage 1: Project Setup (Ralph Loop)
+- [ ] **Task 1.0:** Test Infrastructure
 - [ ] **Task 1.1:** Project Scaffolding
-- [ ] **Task 1.2:** LogEntry Data Model
-- [ ] **Task 1.3:** FilterDefinition Data Model
-- [ ] **Task 1.4:** MessageGroup Data Model
+- [ ] **Task 1.2:** Data Model Interfaces
 
-### Stage 2: Core Log Parsing (Ralph Loop)
-- [ ] **Task 2.1:** Basic Log File Loader
-- [ ] **Task 2.2:** Message Boundary Detection
+### Stage 2: Plugin System (Ralph Loop)
+- [ ] **Task 2.1:** Plugin Hook Specification
+- [ ] **Task 2.2:** Plugin Manager with Entry Point Discovery
+- [ ] **Task 2.3:** Auto-Detection and Plugin Selection
+- [ ] **Task 2.4:** Built-in Vivado Plugin
+- [ ] **Task 2.5:** Plugin Discovery CLI
 
 ### Stage 3: Filter Engine (Ralph Loop)
 - [ ] **Task 3.1:** Basic Regex Filter Engine
@@ -37,51 +39,45 @@
 - [ ] **Task 4.1:** Basic CLI with Stdout Output
 - [ ] **Task 4.2:** Output Formats
 - [ ] **Task 4.3:** Message ID Filtering
+- [ ] **Task 4.4:** CLI Integration Tests
 
-### Stage 5: Plugin System (Ralph Loop)
-- [ ] **Task 5.1:** Plugin Hook Specification
-- [ ] **Task 5.2:** Plugin Manager with Entry Point Discovery
-- [ ] **Task 5.3:** Auto-Detection and Plugin Integration
-- [ ] **Task 5.4:** Built-in Vivado Plugin
+### Stage 5: Configuration System (Ralph Loop)
+- [ ] **Task 5.1:** TOML Configuration Loader
+- [ ] **Task 5.2:** Configuration Discovery and Merging
 
-### Stage 6: Configuration System (Ralph Loop)
-- [ ] **Task 6.1:** TOML Configuration Loader
-- [ ] **Task 6.2:** Configuration Discovery and Merging
+### Stage 6: Waiver System (Ralph Loop)
+- [ ] **Task 6.1:** Waiver Data Model and Parser
+- [ ] **Task 6.2:** Waiver Matching Engine
+- [ ] **Task 6.3:** Waiver Generation
 
-### Stage 7: Waiver System (Ralph Loop)
-- [ ] **Task 7.1:** Waiver Data Model and Parser
-- [ ] **Task 7.2:** Waiver Matching Engine
-- [ ] **Task 7.3:** Waiver Generation
+### Stage 7: CI Mode (Ralph Loop)
+- [ ] **Task 7.1:** Exit Code Logic
+- [ ] **Task 7.2:** Waiver Integration in CI
+- [ ] **Task 7.3:** CI Summary Report
 
-### Stage 8: CI Mode (Ralph Loop)
-- [ ] **Task 8.1:** Exit Code Logic
-- [ ] **Task 8.2:** Waiver Integration in CI
-- [ ] **Task 8.3:** CI Summary Report
-
-### Stage 9: TUI (Human-Guided - NOT for Ralph Loop)
-- [ ] **Task 9.1:** Basic TUI Shell
-- [ ] **Task 9.2:** Interactive Filtering
-- [ ] **Task 9.3:** Waiver Management UI
+### Stage 8: TUI (Human-Guided - NOT for Ralph Loop)
+- [ ] **Task 8.1:** Basic TUI Shell
+- [ ] **Task 8.2:** Interactive Filtering
+- [ ] **Task 8.3:** Waiver Management UI
 
 ---
 
 ## Current Task Details
 
-### Task 1.1: Project Scaffolding
+### Task 1.0: Test Infrastructure
 
-**Objective:** Create the basic project structure with proper Python packaging.
+**Objective:** Set up shared test fixtures and utilities for consistent testing.
 
 **Deliverables:**
-- [ ] Directory structure as defined in CLAUDE.md "File Locations"
-- [ ] Empty `__init__.py` files in all packages
-- [ ] Basic `__main__.py` entry point with rich-click CLI skeleton
+- [ ] `tests/conftest.py` with common fixtures
+- [ ] Pytest markers for categorizing tests (slow, integration)
+- [ ] Shared fixtures: `vivado_log`, `small_log`, `empty_log`, `large_log`
 
 **Success Criteria:**
-- [ ] `pip install -e .` succeeds
-- [ ] `python -m sawmill --help` runs without errors
-- [ ] All imports resolve correctly
+- [ ] `pytest --collect-only` shows fixtures available
+- [ ] Fixtures work in other test files via import
 
-**Test File:** `tests/test_project_setup.py`
+**Test File:** `tests/conftest.py`
 
 ---
 
@@ -94,19 +90,23 @@
 ## Hints for Next Session
 
 - pyproject.toml already exists with dependencies configured
-- Use `rich_click` for CLI (drop-in replacement for click)
+- See TASKS.md for full task details including test code
 - Reference CLAUDE.md "File Locations" for exact directory layout
-- Create `sawmill/plugin/` directory for the pluggy-based plugin system
-- Create `sawmill/plugins/` directory for built-in plugins (vivado)
+
+### Architecture Reminder
+
+**Plugin is the sole source of truth.** The base app is just an orchestrator:
+- Base app defines contracts (ParsedMessage, MessageGroup, etc.)
+- Plugins do ALL parsing - loading files, detecting severity, grouping messages
+- Base app applies filters and displays results
 
 ### Example Files Available
 - `examples/vivado/vivado.log` - Real Vivado log for testing (~3000 lines)
 - `examples/vivado/PATTERNS.md` - Analysis of Vivado message patterns
-- `examples/vivado/plugin_reference.py` - Reference Vivado plugin implementation
 
 ### Task Definitions
-- Full task details with tests are in `PRD-NEW-TASKS.md`
-- High-level requirements are in `PRD.md`
+- Full task details with tests are in `TASKS.md`
+- High-level requirements and architecture are in `PRD.md`
 
 **Primary target: Xilinx Vivado logs.** Use the example log for testing.
 
@@ -116,7 +116,7 @@
 
 ### Session 1 (pending)
 - **Started:** (not yet)
-- **Task:** 1.1 - Project Scaffolding
+- **Task:** 1.0 - Test Infrastructure
 - **Outcome:** (pending)
 
 ---
@@ -135,6 +135,6 @@ If you need to restart a task:
 
 ### Project Summary
 
-**Total: 23 tasks across 9 stages**
-- **20 tasks** suitable for ralph loop (Stages 1-8)
-- **3 tasks** require human guidance (Stage 9 - TUI)
+**Total: 22 tasks across 8 stages**
+- **19 tasks** suitable for ralph loop (Stages 1-7)
+- **3 tasks** require human guidance (Stage 8 - TUI)

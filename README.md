@@ -8,11 +8,11 @@ Sawmill is a terminal-based log analysis tool that allows engineers to filter, a
 
 ## Features
 
+- **Plugin-Driven Analysis**: Tool-specific parsing via pluggy-based plugins
 - **Interactive Regex Filtering**: Real-time filtering as you type
-- **Multi-line Message Grouping**: Correctly handle messages that span multiple lines
-- **Plugin System**: Tool-specific intelligence via subprocess-based plugins
+- **Multi-line Message Grouping**: Correctly handle messages that span multiple lines (via plugins)
 - **Configuration Sharing**: Export and share filter configurations via TOML files
-- **Zero Configuration Start**: Works immediately on any log file
+- **CI Integration**: Exit codes and waiver system for build pipeline integration
 
 ## Installation
 
@@ -37,7 +37,8 @@ sawmill --config myconfig.toml logfile.log
 ## Development
 
 This project uses an autonomous development loop. See:
-- `PRD.md` - Full requirements
+- `PRD.md` - Requirements and architecture
+- `TASKS.md` - Detailed task breakdown
 - `PROMPT.md` - Development loop instructions
 - `STATUS.md` - Current development state
 

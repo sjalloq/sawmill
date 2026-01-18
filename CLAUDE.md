@@ -5,9 +5,10 @@ This file provides context for Claude Code when working on the Sawmill project.
 ## Project Overview
 
 Sawmill is a terminal-based log analysis tool for EDA (Electronic Design Automation) engineers. It provides:
+- Plugin-driven log parsing and analysis
 - Interactive regex-based log filtering
 - Plugin system for tool-specific log formats
-- Multi-line message grouping
+- Multi-line message grouping (via plugins)
 - Configuration export/sharing
 
 ## Technology Stack
@@ -21,13 +22,24 @@ Sawmill is a terminal-based log analysis tool for EDA (Electronic Design Automat
 - **Rich** - Terminal formatting and colors
 - **pytest** - Testing framework
 
+## Architecture Principle
+
+**Plugin is the sole source of truth.** The base application is an orchestrator only:
+- Base app defines contracts (interfaces)
+- Base app discovers plugins and orchestrates data flow
+- **Plugins do ALL parsing** - loading files, detecting severity, grouping messages
+- Base app applies filters and displays results
+
+The base app does NOT parse log content, detect severity, or interpret log format.
+
 ## Development Workflow
 
 This project uses an autonomous development loop. Key files:
 
 | File | Purpose |
 |------|---------|
-| `PRD.md` | Full requirements and task definitions |
+| `PRD.md` | Requirements and architecture |
+| `TASKS.md` | Detailed task breakdown with tests |
 | `PROMPT.md` | Instructions for each development iteration |
 | `STATUS.md` | Current state - **READ THIS FIRST** |
 | `CHANGELOG.md` | History of completed work |
@@ -42,7 +54,7 @@ This project uses an autonomous development loop. Key files:
 
 ### Testing
 - Write tests alongside or before implementation
-- Test file mirrors source structure: `sawmill/core/parser.py` → `tests/core/test_parser.py`
+- Test file mirrors source structure: `sawmill/core/filter.py` → `tests/core/test_filter.py`
 - Use pytest fixtures for common setup
 - Mark async tests with `@pytest.mark.asyncio`
 
@@ -50,6 +62,8 @@ This project uses an autonomous development loop. Key files:
 - One task per commit
 - Descriptive commit messages
 - Always update STATUS.md after completing a task
+- Do NOT add "Co-Authored-By" lines to commit messages - keep commits clean and to the point
+- **NEVER modify git config** (user.name, user.email, etc.) - this is the user's personal configuration
 
 ## Common Commands
 
@@ -61,7 +75,7 @@ pip install -e ".[dev]"
 pytest tests/ -v
 
 # Run specific test file
-pytest tests/core/test_parser.py -v
+pytest tests/core/test_filter.py -v
 
 # Run with coverage
 pytest tests/ --cov=sawmill --cov-report=term-missing
@@ -76,23 +90,34 @@ python -m sawmill path/to/logfile.log
 
 ## Architecture Notes
 
-### Data Flow
+### Data Flow (Plugin-Centric)
 ```
-Log File → Parser → [LogEntry] → Grouper → [MessageGroup] → Filter → Display
-                                    ↑
-                              Plugin (boundaries)
+User: sawmill vivado.log --severity error
+
+1. CLI parses arguments
+2. Base app discovers plugins via entry points
+3. Base app calls plugin.can_handle(Path) → select plugin
+4. Base app calls plugin.load_and_parse(Path) → List[ParsedMessage]
+5. Plugin: opens file, handles encoding, parses every line
+6. Base app calls plugin.group_messages() → List[MessageGroup]
+7. Base app applies filters (from plugin + user CLI args)
+8. Base app displays results
+
+Without plugin: error (user must install appropriate plugin or use --plugin)
 ```
 
 ### Key Classes
-- `LogEntry` - Single line from log file
-- `MessageGroup` - Multi-line message unit
+- `Message` - A logical log message (single or multi-line, plugin handles grouping)
 - `FilterDefinition` - A filter pattern with metadata
-- `FilterEngine` - Applies filters to entries/groups
-- `LogParser` - Loads and parses log files
+- `FilterEngine` - Applies filters to messages
 - `PluginManager` - Discovers and manages plugins via pluggy
 - `SawmillPlugin` - Base class for plugins
-- `Waiver` - A waiver entry for accepted warnings/errors
-- `WaiverMatcher` - Matches messages against waivers
+- `Waiver` - A waiver entry for CI acceptance (has reason, author, date)
+- `WaiverMatcher` - Matches messages against waivers in CI mode
+
+### Suppressions vs Waivers
+- **Suppressions**: Display filtering ("hide this noise") - in `[suppress]` config, no metadata
+- **Waivers**: CI acceptance ("reviewed and accepted") - separate `.waivers.toml`, requires metadata
 
 ### Plugin Architecture (pluggy-based)
 Plugins are Python packages that register via entry points:
@@ -104,34 +129,37 @@ my_tool = "sawmill_plugin_mytool:MyToolPlugin"
 ```
 
 Plugins implement hooks:
-- `can_handle(path, content) -> float` - Detection confidence
+- `can_handle(path) -> float` - Detection confidence (0.0-1.0)
+- `load_and_parse(path) -> list[Message]` - **Load, parse, and group into messages**
 - `get_filters() -> list[FilterDefinition]` - Filter definitions
-- `get_message_boundaries() -> list[MessageBoundary]` - Multi-line rules
-- `parse_message(line) -> ParsedMessage | None` - Parse log lines
 - `extract_file_reference(content) -> FileRef | None` - Extract file refs
+
+**Note:** Plugins do ALL parsing and grouping. Base app receives a flat `list[Message]`.
 
 ## Task Dependencies
 
 ```
+1.0 Test Infrastructure
+ ↓
 1.1 Project Scaffolding
  ↓
-1.2 LogEntry → 1.4 MessageGroup
+1.2 Data Model Interfaces
  ↓
-1.3 FilterDefinition
+2.1 Plugin Hook Specification
  ↓
-2.1 Log Loader → 2.2 Boundary Detection
+2.2 Plugin Manager → 2.3 Auto-Detection → 2.4 Vivado Plugin → 2.5 Plugin CLI
  ↓
 3.1 Filter Engine → 3.2 Filter Stats
  ↓
-4.1-4.5 TUI Components
+4.1 CLI Output → 4.2 Formats → 4.3 ID Filter → 4.4 Integration
  ↓
-5.1-5.3 Config System ←→ 6.1-6.3 Plugin System
+5.1 Config Loader → 5.2 Config Discovery
  ↓
-7.1-7.4 Filter Management
+6.1 Waiver Model → 6.2 Waiver Matching → 6.3 Waiver Generation
  ↓
-8.1-8.2 Export
+7.1 CI Exit Codes → 7.2 CI Waivers → 7.3 CI Report
  ↓
-9.1-9.3 Polish
+8.x TUI (Human-Guided)
 ```
 
 ## Example Log Files
@@ -141,10 +169,9 @@ The `examples/` directory contains real log files for development and testing:
 ### Vivado (`examples/vivado/`)
 - `vivado.log` - Full Vivado build log (~3000 lines, synthesis + implementation + bitstream)
 - `PATTERNS.md` - Analysis of message formats and patterns
-- `plugin-spec.json` - Reference plugin specification for Vivado
 
 **Vivado is the primary target for initial development.** Use these examples to:
-1. Test the parser with real multi-line patterns
+1. Test the plugin with real multi-line patterns
 2. Develop the Vivado plugin
 3. Verify filter matching works correctly
 
@@ -163,7 +190,7 @@ CRITICAL WARNING: [Constraints 18-4427] Constraint override warning
 1. **Textual Testing**: Use `app.run_test()` context manager with `pilot` for async tests
 2. **TOML Parsing**: Use `tomli` for reading (Python 3.10 compatible), `tomli_w` for writing
 3. **Regex Validation**: Always validate patterns before storing in FilterDefinition
-4. **Large Files**: Use generators/lazy loading for files > 100k lines
+4. **Large Files**: Plugins should use generators/lazy loading for files > 100k lines
 5. **Plugin Timeouts**: Always set timeouts when calling external plugins
 6. **Vivado Multi-line**: Tables use `|` borders and `-` separators; group these together
 
@@ -175,7 +202,6 @@ sawmill/
 ├── __main__.py          # CLI entry: `python -m sawmill`
 ├── cli.py               # Main CLI with rich-click
 ├── core/
-│   ├── parser.py        # LogParser, MessageBoundary
 │   ├── filter.py        # FilterEngine, FilterStats
 │   ├── config.py        # ConfigLoader, Config
 │   ├── plugin.py        # PluginManager (pluggy-based)
@@ -185,14 +211,13 @@ sawmill/
 │   └── hookspec.py      # SawmillHookSpec definitions
 ├── plugins/
 │   └── vivado.py        # Built-in Vivado plugin
-├── tui/                 # (Deferred - Phase 9)
+├── tui/                 # (Deferred - Stage 8)
 │   ├── app.py           # SawmillApp (main Textual app)
 │   └── widgets/         # LogView, FilterPanel, etc.
 ├── models/
-│   ├── log_entry.py     # LogEntry, MessageGroup
+│   ├── message.py       # Message, FileRef
 │   ├── filter_def.py    # FilterDefinition
-│   ├── waiver.py        # Waiver, WaiverFile
-│   └── message.py       # ParsedMessage, FileRef
+│   └── waiver.py        # Waiver, WaiverFile
 └── utils/
     ├── git.py           # Git repo detection
     └── validation.py    # Regex validation helpers

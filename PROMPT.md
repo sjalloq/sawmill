@@ -12,8 +12,9 @@ You are an autonomous development agent working on the Sawmill project. Your job
 ## Files You Must Read First
 
 1. **STATUS.md** - Your current state. Read this FIRST every session.
-2. **PRD.md** - Full requirements and task definitions (reference as needed)
-3. **CHANGELOG.md** - History of completed work
+2. **TASKS.md** - Detailed task breakdown with tests
+3. **PRD.md** - Requirements and architecture (reference as needed)
+4. **CHANGELOG.md** - History of completed work
 
 ## The Loop Protocol
 
@@ -44,7 +45,7 @@ If tests are failing from a previous session, fix them first before proceeding.
 
 ### Step 3: Work on Current Task
 
-1. **Read the task definition** in PRD.md under "Staged Implementation Plan"
+1. **Read the task definition** in TASKS.md for the current task
 2. **Implement the deliverables** listed for that task
 3. **Write the tests** specified in the task definition
 4. **Run tests frequently** as you work
@@ -70,13 +71,13 @@ When tests pass:
 git add -A
 
 # Commit with descriptive message
+# IMPORTANT: Do NOT add "Co-Authored-By" lines - keep commits clean
 git commit -m "Complete Task X.Y: <task name>
 
 - <bullet point of what was implemented>
 - <another bullet point>
 
-Tests: All passing
-"
+Tests: All passing"
 ```
 
 ### Step 6: Update STATUS.md
@@ -134,7 +135,8 @@ Then exit. The next loop iteration will pick up from the new state.
 - Forget to update STATUS.md
 - Make changes outside the current task scope
 - Commit broken code
-- Mock out any app functionality
+- Mock out any app functionality to work around failures
+- Add "Co-Authored-By" or similar attribution lines to commit messages
 
 ### If You Get Stuck:
 
@@ -160,10 +162,10 @@ Then exit. The next loop iteration will pick up from the new state.
 pytest tests/ -v
 
 # Specific test file
-pytest tests/models/test_log_entry.py -v
+pytest tests/models/test_message.py -v
 
 # Specific test
-pytest tests/models/test_log_entry.py::test_log_entry_creation -v
+pytest tests/models/test_message.py::test_parsed_message_creation -v
 
 # With coverage
 pytest tests/ --cov=sawmill --cov-report=term-missing
@@ -212,12 +214,12 @@ If STATUS.md shows `current_task: 1.1` and no code exists yet:
 
 ```
 1. Read STATUS.md → current_task: 1.2, tests_passing: true
-2. Read PRD.md Task 1.2 → LogEntry Data Model
-3. Create sawmill/models/log_entry.py
-4. Create tests/models/test_log_entry.py
-5. Run pytest → 3 tests pass
-6. git add -A && git commit -m "Complete Task 1.2: LogEntry Data Model"
-7. Update STATUS.md → current_task: 1.3
+2. Read TASKS.md Task 1.2 → Data Model Interfaces
+3. Create sawmill/models/message.py (ParsedMessage, MessageGroup, etc.)
+4. Create tests/models/test_message.py
+5. Run pytest → tests pass
+6. git add -A && git commit -m "Complete Task 1.2: Data Model Interfaces"
+7. Update STATUS.md → current_task: 2.1
 8. Update CHANGELOG.md
 9. git commit -m "Update status: Task 1.2 complete"
 10. Exit

@@ -26,6 +26,10 @@ CONTAINER_NAME="sawmill-ralph-loop"
 WORKSPACE_DIR="${SCRIPT_DIR}"
 CLAUDE_AUTH_DIR="${HOME}/.claude"
 
+# Get git config from host for use in container
+GIT_USER_NAME="$(git config --global user.name 2>/dev/null || echo "Developer")"
+GIT_USER_EMAIL="$(git config --global user.email 2>/dev/null || echo "developer@localhost")"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -222,20 +226,22 @@ run_in_docker() {
 
     # Run Claude Code in container
     # Mount both workspace and Claude auth directory
+    # Note: .claude directory needs write access for session data, todos, etc.
     # --dangerously-skip-permissions: Allow autonomous operation without prompts
-    # --print: Non-interactive mode with single prompt
+    # -p: Non-interactive mode with prompt (streams output so you can Ctrl-C if needed)
     docker run \
         --name "${CONTAINER_NAME}" \
         --rm \
+        -it \
         -v "${WORKSPACE_DIR}:/workspace" \
-        -v "${CLAUDE_AUTH_DIR}:/home/developer/.claude:ro" \
+        -v "${CLAUDE_AUTH_DIR}:/home/developer/.claude" \
         -e "HOME=/home/developer" \
+        -e "PYTHONUNBUFFERED=1" \
+        -e "GIT_USER_NAME=${GIT_USER_NAME}" \
+        -e "GIT_USER_EMAIL=${GIT_USER_EMAIL}" \
         -w /workspace \
         "${DOCKER_IMAGE}" \
-        claude \
-            --dangerously-skip-permissions \
-            --print \
-            "${prompt}"
+        bash -c "git config --global user.name \"\${GIT_USER_NAME}\" && git config --global user.email \"\${GIT_USER_EMAIL}\" && claude --dangerously-skip-permissions -p \"${prompt}\""
 
     return $?
 }
@@ -264,11 +270,13 @@ run_interactive() {
             --rm \
             -it \
             -v "${WORKSPACE_DIR}:/workspace" \
-            -v "${CLAUDE_AUTH_DIR}:/home/developer/.claude:ro" \
+            -v "${CLAUDE_AUTH_DIR}:/home/developer/.claude" \
             -e "HOME=/home/developer" \
+            -e "GIT_USER_NAME=${GIT_USER_NAME}" \
+            -e "GIT_USER_EMAIL=${GIT_USER_EMAIL}" \
             -w /workspace \
             "${DOCKER_IMAGE}" \
-            bash
+            bash -c "git config --global user.name \"\${GIT_USER_NAME}\" && git config --global user.email \"\${GIT_USER_EMAIL}\" && exec bash"
     else
         log_info "Starting interactive shell..."
         cd "${WORKSPACE_DIR}"
