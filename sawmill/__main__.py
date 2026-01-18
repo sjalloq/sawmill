@@ -1,10 +1,13 @@
 """Entry point for sawmill CLI."""
 
+from pathlib import Path
+
 import rich_click as click
 from rich.console import Console
 from rich.table import Table
 
-from sawmill.core.plugin import PluginManager
+from sawmill.core.filter import FilterEngine
+from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
 from sawmill.plugins.vivado import VivadoPlugin
 
 click.rich_click.TEXT_MARKUP = "rich"
@@ -49,6 +52,139 @@ def _get_implemented_hooks(plugin) -> list[str]:
     return hooks
 
 
+def _get_severity_style(severity: str | None) -> str:
+    """Get the Rich style for a given severity level.
+
+    Args:
+        severity: The severity level (info, warning, error, critical).
+
+    Returns:
+        Rich style string for the severity.
+    """
+    styles = {
+        "info": "cyan",
+        "warning": "yellow",
+        "error": "red",
+        "critical": "red bold",
+    }
+    if severity:
+        return styles.get(severity.lower(), "")
+    return ""
+
+
+def _severity_at_or_above(message_severity: str | None, min_severity: str) -> bool:
+    """Check if message severity is at or above the minimum level.
+
+    Args:
+        message_severity: The message's severity (may be None).
+        min_severity: The minimum severity level to show.
+
+    Returns:
+        True if the message should be shown.
+    """
+    if message_severity is None:
+        return False
+
+    levels = {"info": 0, "warning": 1, "error": 2, "critical": 3}
+    msg_level = levels.get(message_severity.lower(), -1)
+    min_level = levels.get(min_severity.lower(), 0)
+    return msg_level >= min_level
+
+
+def _process_log_file(
+    ctx: click.Context,
+    console: Console,
+    logfile: str,
+    plugin_name: str | None,
+    severity: str | None,
+    filter_pattern: str | None,
+    suppress_patterns: tuple[str, ...],
+    suppress_ids: tuple[str, ...],
+) -> None:
+    """Process a log file with the specified filters.
+
+    Args:
+        ctx: Click context.
+        console: Rich console for output.
+        logfile: Path to the log file.
+        plugin_name: Specific plugin to use (or None for auto-detect).
+        severity: Minimum severity level to show.
+        filter_pattern: Regex pattern to include.
+        suppress_patterns: Regex patterns to exclude.
+        suppress_ids: Message IDs to exclude.
+    """
+    manager = _get_plugin_manager()
+    path = Path(logfile)
+
+    # Select plugin
+    if plugin_name:
+        plugin = manager.get_plugin(plugin_name)
+        if plugin is None:
+            console.print(f"[red]Error:[/red] Plugin '{plugin_name}' not found.")
+            console.print("\nAvailable plugins:")
+            for name in manager.list_plugins():
+                console.print(f"  - {name}")
+            ctx.exit(1)
+    else:
+        # Auto-detect plugin
+        try:
+            detected_name = manager.auto_detect(path)
+            plugin = manager.get_plugin(detected_name)
+        except NoPluginFoundError as e:
+            console.print(f"[red]Error:[/red] No plugin can handle this file.")
+            console.print(f"  {e}")
+            console.print("\nInstalled plugins:")
+            for name in manager.list_plugins():
+                console.print(f"  - {name}")
+            console.print("\nUse --plugin to specify a plugin manually.")
+            ctx.exit(1)
+        except PluginConflictError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            ctx.exit(1)
+
+    if plugin is None:
+        console.print("[red]Error:[/red] Plugin not found.")
+        ctx.exit(1)
+
+    # Load and parse the file using the plugin
+    messages = plugin.load_and_parse(path)
+
+    # Apply severity filter
+    if severity:
+        messages = [
+            msg for msg in messages
+            if _severity_at_or_above(msg.severity, severity)
+        ]
+
+    # Apply regex filter if specified
+    if filter_pattern:
+        engine = FilterEngine()
+        messages = engine.apply_filter(filter_pattern, messages)
+
+    # Apply suppression patterns
+    if suppress_patterns:
+        engine = FilterEngine()
+        messages = engine.apply_suppressions(list(suppress_patterns), messages)
+
+    # Apply suppress-id filters
+    if suppress_ids:
+        suppress_id_set = set(suppress_ids)
+        messages = [
+            msg for msg in messages
+            if msg.message_id is None or msg.message_id not in suppress_id_set
+        ]
+
+    # Output the messages with colorization
+    # Note: We use markup=False to prevent Rich from interpreting
+    # log content like [/path/to/file:line] as markup tags.
+    for msg in messages:
+        style = _get_severity_style(msg.severity)
+        if style:
+            console.print(msg.raw_text, style=style, markup=False)
+        else:
+            console.print(msg.raw_text, markup=False)
+
+
 @click.command()
 @click.argument("logfile", required=False, type=click.Path(exists=True))
 @click.option("--version", is_flag=True, help="Show version and exit.")
@@ -67,6 +203,31 @@ def _get_implemented_hooks(plugin) -> list[str]:
     is_flag=True,
     help="Show detailed information about a plugin (requires --plugin)."
 )
+@click.option(
+    "--severity",
+    type=click.Choice(["info", "warning", "error", "critical"], case_sensitive=False),
+    help="Filter to show only messages at or above this severity level."
+)
+@click.option(
+    "--filter",
+    "filter_pattern",
+    type=str,
+    help="Regex pattern to include matching messages."
+)
+@click.option(
+    "--suppress",
+    "suppress_patterns",
+    type=str,
+    multiple=True,
+    help="Regex pattern to exclude matching messages (can be repeated)."
+)
+@click.option(
+    "--suppress-id",
+    "suppress_ids",
+    type=str,
+    multiple=True,
+    help="Message ID to exclude (can be repeated)."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -75,6 +236,10 @@ def cli(
     list_plugins: bool,
     plugin: str | None,
     show_info: bool,
+    severity: str | None,
+    filter_pattern: str | None,
+    suppress_patterns: tuple[str, ...],
+    suppress_ids: tuple[str, ...],
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -173,7 +338,17 @@ def cli(
         click.echo(ctx.get_help())
         return
 
-    click.echo(f"Processing: {logfile}")
+    # Process the log file
+    _process_log_file(
+        ctx,
+        console,
+        logfile,
+        plugin,
+        severity,
+        filter_pattern,
+        suppress_patterns,
+        suppress_ids,
+    )
 
 
 if __name__ == "__main__":
