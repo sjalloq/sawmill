@@ -152,3 +152,63 @@ class PluginManager:
             "version": getattr(plugin, "version", "0.0.0"),
             "description": getattr(plugin, "description", ""),
         }
+
+    def auto_detect(self, path: Path) -> str:
+        """Automatically detect the appropriate plugin for a file.
+
+        Calls the `can_handle` hook on all registered plugins and selects
+        the one with the highest confidence score.
+
+        Args:
+            path: Path to the log file to analyze.
+
+        Returns:
+            Name of the plugin with highest confidence (>= 0.5).
+
+        Raises:
+            NoPluginFoundError: If no plugin has confidence >= 0.5.
+            PluginConflictError: If multiple plugins have confidence >= 0.5.
+        """
+        if not self._plugins:
+            raise NoPluginFoundError(
+                f"No plugins registered. Cannot detect plugin for {path}"
+            )
+
+        # Collect confidence scores from all plugins
+        scores: list[tuple[str, float]] = []
+        for name, plugin in self._plugins.items():
+            try:
+                confidence = plugin.can_handle(path)
+                if confidence is not None:
+                    scores.append((name, float(confidence)))
+            except Exception:
+                # Skip plugins that fail to check
+                pass
+
+        if not scores:
+            raise NoPluginFoundError(
+                f"No plugin could analyze {path}"
+            )
+
+        # Find plugins with confidence >= 0.5
+        high_confidence = [(name, score) for name, score in scores if score >= 0.5]
+
+        if not high_confidence:
+            max_score = max(scores, key=lambda x: x[1])
+            raise NoPluginFoundError(
+                f"No plugin has confidence >= 0.5 for {path}. "
+                f"Best match: {max_score[0]} with confidence {max_score[1]:.2f}"
+            )
+
+        if len(high_confidence) > 1:
+            # Multiple plugins claim high confidence - this is a conflict
+            conflict_info = ", ".join(
+                f"{name} ({score:.2f})" for name, score in high_confidence
+            )
+            raise PluginConflictError(
+                f"Multiple plugins claim confidence >= 0.5 for {path}: {conflict_info}. "
+                f"Use --plugin to specify which plugin to use."
+            )
+
+        # Single plugin with high confidence - return its name
+        return high_confidence[0][0]
