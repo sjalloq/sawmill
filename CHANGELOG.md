@@ -62,6 +62,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 4.2: Output Formats
+
+### Added
+- `sawmill/__main__.py` - Added --format option for output format selection
+  - `--format text` (default) - Human-readable output with severity-based coloring
+  - `--format json` - JSONL format (one JSON object per line)
+  - `--format count` - Summary statistics (total, errors, critical_warnings, warnings, info)
+- `tests/test_cli_formats.py` - 21 tests for output format functionality
+
+### Features
+- Text format preserves original colorized output behavior
+- JSON format includes all message fields (start_line, end_line, raw_text, content, severity, message_id, category, file_ref)
+- Count format shows summary: `total=N errors=N critical_warnings=N warnings=N info=N`
+- All formats work correctly with existing filters (--severity, --filter, --suppress, --suppress-id)
+- Case-insensitive format selection (--format JSON, --format Count, etc.)
+
+### Notes
+- JSON output uses print() for clean JSONL output (one object per line)
+- Count format categorizes messages by severity including "other" for unknown severities
+- Filters are applied before format output, so counts reflect filtered results
+
+---
+
 ## [2026-01-18] Task 4.1: Basic CLI with Stdout Output
 
 ### Added

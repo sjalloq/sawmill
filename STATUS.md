@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 11 - Task 4.1 Complete
+> **Last Agent Session:** Session 12 - Task 4.2 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `4.2` |
-| **task_name** | Output Formats |
+| **current_task** | `4.3` |
+| **task_name** | Message ID Filtering |
 | **stage** | Stage 4: CLI Streaming Interface |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -37,7 +37,7 @@
 
 ### Stage 4: CLI Streaming Interface (Ralph Loop)
 - [x] **Task 4.1:** Basic CLI with Stdout Output
-- [ ] **Task 4.2:** Output Formats
+- [x] **Task 4.2:** Output Formats
 - [ ] **Task 4.3:** Message ID Filtering
 - [ ] **Task 4.4:** CLI Integration Tests
 
@@ -64,22 +64,21 @@
 
 ## Current Task Details
 
-### Task 4.2: Output Formats
+### Task 4.3: Message ID Filtering
 
-**Objective:** Support multiple output formats (text, JSON, count).
+**Objective:** Support filtering by message IDs (requires plugin).
 
 **Deliverables:**
-- [ ] `--format` option with choices: text, json, count
-- [ ] Text format: human-readable with colors (default)
-- [ ] JSON format: one JSON object per line (JSONL)
-- [ ] Count format: summary statistics only
+- [ ] `--id` option to filter by message ID pattern
+- [ ] Support wildcards: `--id "Synth 8-*"` matches all Synth 8-xxxx
+- [ ] `--category` option for high-level categories
 
 **Success Criteria:**
-- [ ] `--format text` outputs colored, readable text
-- [ ] `--format json` outputs valid JSONL
-- [ ] `--format count` outputs summary: `errors=N warnings=M info=K`
+- [ ] `--id "Vivado 12-3523"` matches exact ID
+- [ ] `--id "Synth 8-*"` matches all Synth 8-xxxx messages
+- [ ] `--category timing` matches timing-related messages
 
-**Test Files:** `tests/test_cli_formats.py`
+**Test Files:** `tests/test_cli_id_filter.py`
 
 ---
 
@@ -91,14 +90,13 @@
 
 ## Hints for Next Session
 
-- Task 4.1 (Basic CLI with Stdout Output) is complete
-- CLI now processes log files with --severity, --filter, --suppress, --suppress-id options
-- Output is colorized based on severity using Rich
-- The _process_log_file() function handles all the orchestration
-- For Task 4.2, add --format option with text/json/count choices
-- For JSON, output one JSON object per line (JSONL format)
-- For count, output summary like: `errors=N warnings=M info=K`
-- May need to track severity counts during processing
+- Task 4.2 (Output Formats) is complete
+- CLI now supports --format option with text/json/count choices
+- For Task 4.3, add --id and --category options for message filtering
+- --id should support wildcards with fnmatch (glob-style: Synth 8-* matches Synth 8-6157)
+- --category filters by msg.category field (set by plugin)
+- May need to add category extraction to Vivado plugin if not present
+- Check how message_id is extracted by the Vivado plugin for reference
 
 ### Architecture Reminder
 
@@ -114,6 +112,19 @@
 ---
 
 ## Session Log
+
+### Session 12 (completed)
+- **Started:** 2026-01-18
+- **Task:** 4.2 - Output Formats
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_cli_formats.py` - 21 tests for output format functionality
+- **Files Modified:**
+  - `sawmill/__main__.py` - Added --format option with text/json/count choices
+    - Text format: human-readable with severity-based coloring (default)
+    - JSON format: JSONL (one JSON object per line) with all message fields
+    - Count format: summary statistics (total, errors, warnings, info, critical_warnings)
+- **Tests:** 182 passing
 
 ### Session 11 (completed)
 - **Started:** 2026-01-18
