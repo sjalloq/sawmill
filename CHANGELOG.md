@@ -62,6 +62,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 7.2: Waiver Integration in CI
+
+### Added
+- `sawmill/__main__.py` - Added waiver integration for CI mode
+  - `--waivers <file>` option to load waiver TOML file
+  - `--show-waived` flag to display waived messages with reasons
+  - `--report-unused` flag to identify stale waivers
+  - `_apply_waivers()` helper function for separating waived/unwaived messages
+- `tests/test_ci_waivers.py` - 23 tests for waiver integration
+
+### Features
+- **Waiver Integration:**
+  - Waived messages don't count toward CI failure
+  - Supports all waiver types: id, pattern, file, hash
+  - Works with `--ci` and `--ci --strict` modes
+- **--show-waived Option:**
+  - Displays waived messages with their waiver pattern and reason
+  - Shows severity-colored output for waived messages
+- **--report-unused Option:**
+  - Lists waivers that didn't match any messages (stale waivers)
+  - Helps identify outdated waiver entries for cleanup
+- **Waiver with Filters:**
+  - Works alongside `--severity`, `--filter`, `--suppress`
+  - Waivers apply after other filters
+- **Error Handling:**
+  - Clear error for missing waiver file
+  - Validation error for invalid waiver TOML
+
+### Notes
+- Tests: 410 passing (387 + 23 new)
+- Waivers use WaiverMatcher from Task 6.2
+- Waiver file loading uses WaiverLoader from Task 6.1
+
+---
+
 ## [2026-01-18] Task 7.1: Exit Code Logic
 
 ### Added
