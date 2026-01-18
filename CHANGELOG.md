@@ -62,6 +62,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 7.1: Exit Code Logic
+
+### Added
+- `sawmill/__main__.py` - Added CI mode with exit code logic
+  - `--ci` flag to enable CI mode (exit 1 on errors/critical warnings)
+  - `--strict` flag to also fail on regular warnings
+  - `_has_ci_failures()` helper function for checking failing severities
+- `tests/test_ci_mode.py` - 27 tests for CI mode functionality
+
+### Features
+- CI mode exit codes:
+  - Exit 0: No errors or critical warnings (or no warnings if --strict)
+  - Exit 1: Errors or critical warnings present (or warnings if --strict)
+- Works with all existing filters (--severity, --filter, --suppress, --id, etc.)
+- Filtered/suppressed messages don't count toward failure
+- All output formats (text, json, count) work in CI mode
+- `--strict` without `--ci` has no effect (for backwards compatibility)
+
+### Notes
+- Tests: 387 passing (360 + 27 new)
+- Prepares foundation for Task 7.2 (waiver integration in CI mode)
+
+---
+
 ## [2026-01-18] Task 6.3: Waiver Generation
 
 ### Added

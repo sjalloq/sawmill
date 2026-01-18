@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 19 - Task 6.3 Complete
+> **Last Agent Session:** Session 20 - Task 7.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `7.1` |
-| **task_name** | Exit Code Logic |
+| **current_task** | `7.2` |
+| **task_name** | Waiver Integration in CI |
 | **stage** | Stage 7: CI Mode |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -51,7 +51,7 @@
 - [x] **Task 6.3:** Waiver Generation
 
 ### Stage 7: CI Mode (Ralph Loop)
-- [ ] **Task 7.1:** Exit Code Logic
+- [x] **Task 7.1:** Exit Code Logic
 - [ ] **Task 7.2:** Waiver Integration in CI
 - [ ] **Task 7.3:** CI Summary Report
 
@@ -64,22 +64,22 @@
 
 ## Current Task Details
 
-### Task 7.1: Exit Code Logic
+### Task 7.2: Waiver Integration in CI
 
-**Objective:** Implement CI mode with pass/fail exit codes.
+**Objective:** Apply waivers in CI mode to ignore accepted issues.
 
 **Deliverables:**
-- [ ] CLI option: `--ci` to enable CI mode
-- [ ] Exit 0 if no errors/critical warnings
-- [ ] Exit 1 if errors or critical warnings present
-- [ ] `--strict` to also fail on regular warnings
+- [ ] CLI option: `--waivers <file>` to load waiver file
+- [ ] Waived messages don't count toward failure
+- [ ] `--show-waived` to display what was waived
+- [ ] `--report-unused` to find stale waivers
 
 **Success Criteria:**
-- [ ] `sawmill --ci log` exits 0 on clean log
-- [ ] `sawmill --ci log` exits 1 on errors
-- [ ] `sawmill --ci --strict log` exits 1 on warnings
+- [ ] Waived errors don't cause CI failure
+- [ ] `--show-waived` lists waived messages
+- [ ] `--report-unused` identifies waivers that didn't match anything
 
-**Test Files:** `tests/test_ci_mode.py`
+**Test Files:** `tests/test_ci_waivers.py`
 
 ---
 
@@ -91,12 +91,14 @@
 
 ## Hints for Next Session
 
-- Stage 6 (Waiver System) is complete!
-- For Task 7.1, add --ci and --strict CLI options
-- CI mode should exit 0 on clean logs, 1 on errors/critical_warnings
-- With --strict, also exit 1 on regular warnings
-- Waiver system can be used in Task 7.2 to accept waived issues
-- See TASKS.md Task 7.1 for test examples
+- Task 7.1 (Exit Code Logic) is complete!
+- CI mode is now available with --ci and --strict flags
+- For Task 7.2, add --waivers option to load waiver files
+- Use WaiverMatcher from sawmill.core.waiver to check waived messages
+- Waived errors/warnings should not count toward CI failure
+- Add --show-waived to display waived messages
+- Add --report-unused to identify stale waivers
+- See TASKS.md Task 7.2 for test examples
 
 ### Architecture Reminder
 
@@ -112,6 +114,16 @@
 ---
 
 ## Session Log
+
+### Session 20 (completed)
+- **Started:** 2026-01-18
+- **Task:** 7.1 - Exit Code Logic
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_ci_mode.py` - 27 tests for CI mode exit codes
+- **Files Modified:**
+  - `sawmill/__main__.py` - Added --ci and --strict options, _has_ci_failures() helper
+- **Tests:** 387 passing (360 + 27 new)
 
 ### Session 19 (completed)
 - **Started:** 2026-01-18
