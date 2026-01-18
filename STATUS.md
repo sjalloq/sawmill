@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 15 - Task 5.1 Complete
+> **Last Agent Session:** Session 16 - Task 5.2 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `5.2` |
-| **task_name** | Configuration Discovery and Merging |
-| **stage** | Stage 5: Configuration System |
+| **current_task** | `6.1` |
+| **task_name** | Waiver Data Model and Parser |
+| **stage** | Stage 6: Waiver System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -43,7 +43,7 @@
 
 ### Stage 5: Configuration System (Ralph Loop)
 - [x] **Task 5.1:** TOML Configuration Loader
-- [ ] **Task 5.2:** Configuration Discovery and Merging
+- [x] **Task 5.2:** Configuration Discovery and Merging
 
 ### Stage 6: Waiver System (Ralph Loop)
 - [ ] **Task 6.1:** Waiver Data Model and Parser
@@ -64,24 +64,22 @@
 
 ## Current Task Details
 
-### Task 5.2: Configuration Discovery and Merging
+### Task 6.1: Waiver Data Model and Parser
 
-**Objective:** Implement hierarchical configuration discovery and merging.
+**Objective:** Define waiver data structures and parse waiver files.
 
 **Deliverables:**
-- [ ] `ConfigLoader.discover_configs(start_path)` method
-- [ ] `ConfigLoader.load_merged(start_path)` method
-- [ ] Precedence: CLI > local > git root > user > defaults
-- [ ] `sawmill/utils/git.py` with `find_git_root()` function
+- [ ] Update `sawmill/models/waiver.py` with complete `Waiver`, `WaiverFile` classes
+- [ ] `sawmill/core/waiver.py` with `WaiverLoader` class
+- [ ] Support all waiver types: id, pattern, file, hash
+- [ ] `WaiverValidationError` exception
 
 **Success Criteria:**
-- [ ] Finds configs in correct precedence order
-- [ ] Later configs override earlier values
-- [ ] Unspecified values fall through
-- [ ] Git root detection works correctly
-- [ ] SAWMILL_GIT_ROOT env var overrides git detection
+- [ ] Parse valid waiver TOML files
+- [ ] Validate waiver entries (required fields, valid patterns)
+- [ ] Handle malformed waiver files with clear errors
 
-**Test Files:** `tests/core/test_config_discovery.py`, `tests/utils/test_git.py`
+**Test Files:** `tests/core/test_waiver.py`
 
 ---
 
@@ -93,15 +91,16 @@
 
 ## Hints for Next Session
 
-- Task 5.1 (TOML Configuration Loader) is complete
-- ConfigLoader class with load() method exists in sawmill/core/config.py
-- Config dataclass has general, output, and suppress sections
-- For Task 5.2, add discover_configs() and load_merged() methods to ConfigLoader
-- Create sawmill/utils/git.py with find_git_root() function
-- Git root detection should check for .git directory walking up
-- SAWMILL_GIT_ROOT environment variable overrides detection
-- Config search locations: local (cwd/sawmill.toml) > git root > user (~/.config/sawmill/)
-- See TASKS.md for test examples
+- Task 5.2 (Configuration Discovery and Merging) is complete
+- Stage 5 (Configuration System) is complete
+- ConfigLoader now has discover_configs() and load_merged() methods
+- sawmill/utils/git.py contains find_git_root() function
+- For Task 6.1, create WaiverLoader class in sawmill/core/waiver.py
+- Waiver data model already exists in sawmill/models/waiver.py (needs update)
+- Waivers are for CI acceptance (pass/fail with audit trail)
+- Different from suppressions which are for display filtering
+- Support waiver types: id, pattern, file, hash
+- See TASKS.md Task 6.1 for test examples
 
 ### Architecture Reminder
 
@@ -117,6 +116,20 @@
 ---
 
 ## Session Log
+
+### Session 16 (completed)
+- **Started:** 2026-01-18
+- **Task:** 5.2 - Configuration Discovery and Merging
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/utils/git.py` - Git repository utilities with find_git_root()
+  - `tests/utils/__init__.py` - Test package marker
+  - `tests/utils/test_git.py` - 10 tests for git utilities
+  - `tests/core/test_config_discovery.py` - 21 tests for config discovery
+- **Files Modified:**
+  - `sawmill/core/config.py` - Added discover_configs() and load_merged() methods
+  - `sawmill/utils/__init__.py` - Export find_git_root function
+- **Tests:** 279 passing (248 + 31 new)
 
 ### Session 15 (completed)
 - **Started:** 2026-01-18

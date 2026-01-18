@@ -62,6 +62,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 5.2: Configuration Discovery and Merging
+
+### Added
+- `sawmill/utils/git.py` - Git repository utilities
+  - `find_git_root()` function to locate git repository root
+  - Walks up directory tree looking for .git directory
+  - Supports `SAWMILL_GIT_ROOT` environment variable override
+- `tests/utils/__init__.py` - Test package marker
+- `tests/utils/test_git.py` - 10 tests for git utilities
+- `tests/core/test_config_discovery.py` - 21 tests for config discovery
+
+### Changed
+- `sawmill/core/config.py` - Added discovery and merging methods
+  - `ConfigLoader.discover_configs(start_path)` - Find config files in precedence order
+  - `ConfigLoader.load_merged(start_path)` - Load and merge configs
+  - `ConfigLoader._deep_merge()` - Deep merge dictionaries for config merging
+- `sawmill/utils/__init__.py` - Export find_git_root function
+
+### Features
+- Hierarchical configuration discovery
+- Config precedence: CLI > local > git root > user > defaults
+- Deep merge preserves unspecified values from lower precedence configs
+- Lists are replaced entirely (not merged)
+- Git root detection walks up directory tree
+- SAWMILL_GIT_ROOT environment variable overrides git detection
+
+### Notes
+- Total tests: 279 (248 existing + 31 new)
+- Discovery deduplicates when local dir equals git root
+- Uses os.path.expanduser for user config directory
+
+---
+
 ## [2026-01-18] Task 5.1: TOML Configuration Loader
 
 ### Added
