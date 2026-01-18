@@ -1,5 +1,6 @@
 """Entry point for sawmill CLI."""
 
+import json
 from pathlib import Path
 
 import rich_click as click
@@ -100,6 +101,7 @@ def _process_log_file(
     filter_pattern: str | None,
     suppress_patterns: tuple[str, ...],
     suppress_ids: tuple[str, ...],
+    output_format: str,
 ) -> None:
     """Process a log file with the specified filters.
 
@@ -112,6 +114,7 @@ def _process_log_file(
         filter_pattern: Regex pattern to include.
         suppress_patterns: Regex patterns to exclude.
         suppress_ids: Message IDs to exclude.
+        output_format: Output format (text, json, count).
     """
     manager = _get_plugin_manager()
     path = Path(logfile)
@@ -174,15 +177,60 @@ def _process_log_file(
             if msg.message_id is None or msg.message_id not in suppress_id_set
         ]
 
-    # Output the messages with colorization
-    # Note: We use markup=False to prevent Rich from interpreting
-    # log content like [/path/to/file:line] as markup tags.
-    for msg in messages:
-        style = _get_severity_style(msg.severity)
-        if style:
-            console.print(msg.raw_text, style=style, markup=False)
-        else:
-            console.print(msg.raw_text, markup=False)
+    # Output based on format
+    if output_format.lower() == "json":
+        # JSONL format: one JSON object per line
+        for msg in messages:
+            obj = {
+                "start_line": msg.start_line,
+                "end_line": msg.end_line,
+                "raw_text": msg.raw_text,
+                "content": msg.content,
+                "severity": msg.severity,
+                "message_id": msg.message_id,
+                "category": msg.category,
+            }
+            # Add file_ref if present
+            if msg.file_ref:
+                obj["file_ref"] = {
+                    "path": msg.file_ref.path,
+                    "line": msg.file_ref.line,
+                }
+            print(json.dumps(obj))
+
+    elif output_format.lower() == "count":
+        # Count format: summary statistics by severity
+        counts: dict[str, int] = {
+            "error": 0,
+            "critical_warning": 0,
+            "warning": 0,
+            "info": 0,
+            "other": 0,
+        }
+        for msg in messages:
+            if msg.severity:
+                sev = msg.severity.lower()
+                if sev in counts:
+                    counts[sev] += 1
+                else:
+                    counts["other"] += 1
+            else:
+                counts["other"] += 1
+
+        # Output the summary
+        total = len(messages)
+        console.print(f"total={total} errors={counts['error']} critical_warnings={counts['critical_warning']} warnings={counts['warning']} info={counts['info']}")
+
+    else:
+        # Text format (default): human-readable with colors
+        # Note: We use markup=False to prevent Rich from interpreting
+        # log content like [/path/to/file:line] as markup tags.
+        for msg in messages:
+            style = _get_severity_style(msg.severity)
+            if style:
+                console.print(msg.raw_text, style=style, markup=False)
+            else:
+                console.print(msg.raw_text, markup=False)
 
 
 @click.command()
@@ -228,6 +276,13 @@ def _process_log_file(
     multiple=True,
     help="Message ID to exclude (can be repeated)."
 )
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "count"], case_sensitive=False),
+    default="text",
+    help="Output format: text (colored), json (JSONL), or count (summary)."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -240,6 +295,7 @@ def cli(
     filter_pattern: str | None,
     suppress_patterns: tuple[str, ...],
     suppress_ids: tuple[str, ...],
+    output_format: str,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -348,6 +404,7 @@ def cli(
         filter_pattern,
         suppress_patterns,
         suppress_ids,
+        output_format,
     )
 
 
