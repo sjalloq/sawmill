@@ -1,0 +1,223 @@
+{
+  "plugin_metadata": {
+    "name": "vivado",
+    "version": "1.0.0",
+    "author": "Sawmill",
+    "description": "Xilinx Vivado synthesis, implementation, and bitstream logs",
+    "tool_patterns": [
+      "Vivado v\\d+\\.\\d+",
+      "# Vivado v",
+      "\\[Synth \\d+-\\d+\\]",
+      "\\[Vivado \\d+-\\d+\\]"
+    ]
+  },
+  "detection": {
+    "header_patterns": [
+      "^# Vivado v\\d+\\.\\d+",
+      "^#---+$"
+    ],
+    "content_patterns": [
+      "\\[Synth \\d+-\\d+\\]",
+      "\\[Vivado \\d+-\\d+\\]",
+      "\\[IP_Flow \\d+-\\d+\\]"
+    ],
+    "confidence_rules": {
+      "header_match": 0.9,
+      "content_match_3plus": 0.8,
+      "content_match_1": 0.5
+    }
+  },
+  "message_boundaries": [
+    {
+      "name": "standard_message",
+      "description": "Standard Vivado message with optional continuation",
+      "start_pattern": "^(INFO|WARNING|CRITICAL WARNING|ERROR):\\s*\\[",
+      "continuation_pattern": "^(\\s{2,}|\\t)",
+      "max_lines": 10
+    },
+    {
+      "name": "table_block",
+      "description": "Timing or summary tables",
+      "start_pattern": "^-{20,}$",
+      "continuation_pattern": "^(\\||\\s|[-=])",
+      "end_pattern": "^-{20,}$",
+      "max_lines": 50
+    },
+    {
+      "name": "check_report",
+      "description": "Numbered check report sections",
+      "start_pattern": "^\\d+\\.\\s+checking\\s+",
+      "continuation_pattern": "^(\\s+|-{5,})",
+      "max_lines": 20
+    }
+  ],
+  "severity_patterns": {
+    "error": [
+      "^ERROR:",
+      "FATAL",
+      "\\bfailed\\b",
+      "TNS Failing Endpoints\\s+[1-9]"
+    ],
+    "critical": [
+      "^CRITICAL WARNING:"
+    ],
+    "warning": [
+      "^WARNING:"
+    ],
+    "info": [
+      "^INFO:"
+    ]
+  },
+  "filters": [
+    {
+      "id": "errors",
+      "name": "Errors",
+      "description": "All error messages",
+      "pattern": "^ERROR:",
+      "severity": "error",
+      "enabled_by_default": true,
+      "category": "severity"
+    },
+    {
+      "id": "critical-warnings",
+      "name": "Critical Warnings",
+      "description": "Critical warning messages requiring attention",
+      "pattern": "^CRITICAL WARNING:",
+      "severity": "critical",
+      "enabled_by_default": true,
+      "category": "severity"
+    },
+    {
+      "id": "warnings",
+      "name": "Warnings",
+      "description": "All warning messages",
+      "pattern": "^WARNING:",
+      "severity": "warning",
+      "enabled_by_default": false,
+      "category": "severity"
+    },
+    {
+      "id": "timing-failures",
+      "name": "Timing Failures",
+      "description": "Timing paths with negative slack",
+      "pattern": "(WNS|TNS).*-\\d+\\.\\d+|TNS Failing Endpoints\\s+[1-9]",
+      "severity": "error",
+      "enabled_by_default": true,
+      "category": "timing"
+    },
+    {
+      "id": "timing-summary",
+      "name": "Timing Summary",
+      "description": "Timing summary and clock information",
+      "pattern": "(Design Timing Summary|Clock Summary|WNS\\(ns\\)|All user specified timing constraints)",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "timing"
+    },
+    {
+      "id": "synthesis-modules",
+      "name": "Synthesis Progress",
+      "description": "Module synthesis start/complete messages",
+      "pattern": "\\[Synth 8-615[57]\\]",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "synthesis"
+    },
+    {
+      "id": "synthesis-warnings",
+      "name": "Synthesis Warnings",
+      "description": "Warnings from synthesis",
+      "pattern": "^WARNING: \\[Synth",
+      "severity": "warning",
+      "enabled_by_default": true,
+      "category": "synthesis"
+    },
+    {
+      "id": "constraint-issues",
+      "name": "Constraint Issues",
+      "description": "XDC constraint problems",
+      "pattern": "\\[(Constraints|Vivado 12-4739)\\]",
+      "severity": "warning",
+      "enabled_by_default": true,
+      "category": "constraints"
+    },
+    {
+      "id": "ram-inference",
+      "name": "RAM Inference",
+      "description": "Inferred RAM/ROM blocks",
+      "pattern": "\\[Synth 8-3354\\]|RAM|ROM|BRAM",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "synthesis"
+    },
+    {
+      "id": "fsm-encoding",
+      "name": "FSM Encoding",
+      "description": "State machine encoding decisions",
+      "pattern": "\\[Synth 8-802\\]|FSM|state machine",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "synthesis"
+    },
+    {
+      "id": "ip-generation",
+      "name": "IP Generation",
+      "description": "IP core generation messages",
+      "pattern": "\\[IP_Flow|Generating.*target for IP",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "ip"
+    },
+    {
+      "id": "drc-issues",
+      "name": "DRC Issues",
+      "description": "Design Rule Check messages",
+      "pattern": "\\[DRC|DRC finished with \\d+ Errors",
+      "severity": "warning",
+      "enabled_by_default": true,
+      "category": "drc"
+    },
+    {
+      "id": "power-warnings",
+      "name": "Power Warnings",
+      "description": "Power analysis warnings",
+      "pattern": "\\[Power",
+      "severity": "warning",
+      "enabled_by_default": false,
+      "category": "power"
+    },
+    {
+      "id": "bitstream-status",
+      "name": "Bitstream Status",
+      "description": "Bitstream generation messages",
+      "pattern": "write_bitstream|Bitgen Completed|Bitstream compression",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "bitstream"
+    },
+    {
+      "id": "license-messages",
+      "name": "License Messages",
+      "description": "License acquisition messages",
+      "pattern": "license|License",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "system"
+    },
+    {
+      "id": "phase-progress",
+      "name": "Phase Progress",
+      "description": "Build phase start/end markers",
+      "pattern": "^-{10,}$|^Starting|completed successfully|Time \\(s\\):",
+      "severity": "info",
+      "enabled_by_default": false,
+      "category": "progress"
+    }
+  ],
+  "quick_filters": {
+    "problems_only": ["errors", "critical-warnings", "timing-failures"],
+    "synthesis_focus": ["errors", "critical-warnings", "synthesis-warnings", "ram-inference", "fsm-encoding"],
+    "timing_focus": ["errors", "timing-failures", "timing-summary", "constraint-issues"],
+    "verbose": ["errors", "critical-warnings", "warnings", "timing-summary", "phase-progress"]
+  }
+}
