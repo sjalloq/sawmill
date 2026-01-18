@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 1 - Task 1.0 Complete
+> **Last Agent Session:** Session 2 - Task 1.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `1.1` |
-| **task_name** | Project Scaffolding |
+| **current_task** | `1.2` |
+| **task_name** | Data Model Interfaces |
 | **stage** | Stage 1: Project Setup |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -21,7 +21,7 @@
 
 ### Stage 1: Project Setup (Ralph Loop)
 - [x] **Task 1.0:** Test Infrastructure
-- [ ] **Task 1.1:** Project Scaffolding
+- [x] **Task 1.1:** Project Scaffolding
 - [ ] **Task 1.2:** Data Model Interfaces
 
 ### Stage 2: Plugin System (Ralph Loop)
@@ -64,21 +64,24 @@
 
 ## Current Task Details
 
-### Task 1.1: Project Scaffolding
+### Task 1.2: Data Model Interfaces
 
-**Objective:** Create the basic project structure with proper Python packaging.
+**Objective:** Create the data model interfaces (contracts) that plugins will instantiate.
 
 **Deliverables:**
-- [ ] Directory structure as defined in PRD Technical Architecture
-- [ ] Empty `__init__.py` files in all packages
-- [ ] Basic `__main__.py` entry point with rich-click CLI skeleton
+- [ ] `sawmill/models/message.py` with `Message`, `FileRef`
+- [ ] `sawmill/models/filter_def.py` with `FilterDefinition`
+- [ ] `sawmill/models/waiver.py` with `Waiver`, `WaiverFile`
+- [ ] Regex validation on `FilterDefinition.pattern` field
 
 **Success Criteria:**
-- [ ] `pip install -e .` succeeds
-- [ ] `python -m sawmill --help` runs without errors
-- [ ] All imports resolve correctly
+- [ ] All models can be instantiated with required fields
+- [ ] Optional fields default to `None`
+- [ ] Invalid regex patterns raise validation errors
+- [ ] `Message.matches_filter()` works correctly
+- [ ] Equality comparison works correctly
 
-**Test File:** `tests/test_project_setup.py`
+**Test Files:** `tests/models/test_message.py`, `tests/models/test_filter_def.py`
 
 ---
 
@@ -90,15 +93,16 @@
 
 ## Hints for Next Session
 
-- pyproject.toml already exists with dependencies configured
-- Test infrastructure (conftest.py) is in place with fixtures
-- See TASKS.md for full task details including test code
-- Reference CLAUDE.md "File Locations" for exact directory layout
+- Sawmill package is now installed and working
+- Use Pydantic for data models (already in dependencies)
+- Message class represents a logical message (single or multi-line)
+- Plugin creates Message instances, not the base app
+- See TASKS.md for exact test code to implement
 
 ### Architecture Reminder
 
 **Plugin is the sole source of truth.** The base app is just an orchestrator:
-- Base app defines contracts (ParsedMessage, MessageGroup, etc.)
+- Base app defines contracts (Message, FilterDefinition, etc.)
 - Plugins do ALL parsing - loading files, detecting severity, grouping messages
 - Base app applies filters and displays results
 
@@ -115,6 +119,24 @@
 ---
 
 ## Session Log
+
+### Session 2 (completed)
+- **Started:** 2026-01-18
+- **Task:** 1.1 - Project Scaffolding
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/__init__.py`
+  - `sawmill/__main__.py`
+  - `sawmill/cli.py`
+  - `sawmill/core/__init__.py`
+  - `sawmill/models/__init__.py`
+  - `sawmill/plugin/__init__.py`
+  - `sawmill/plugins/__init__.py`
+  - `sawmill/tui/__init__.py`
+  - `sawmill/tui/widgets/__init__.py`
+  - `sawmill/utils/__init__.py`
+  - `tests/test_project_setup.py`
+- **Tests:** 8 passing
 
 ### Session 1 (completed)
 - **Started:** 2026-01-18

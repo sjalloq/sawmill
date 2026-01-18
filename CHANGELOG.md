@@ -62,6 +62,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 1.1: Project Scaffolding
+
+### Added
+- `sawmill/__init__.py` - Package marker with version
+- `sawmill/__main__.py` - CLI entry point with rich-click
+- `sawmill/cli.py` - CLI re-export for convenience
+- `sawmill/core/__init__.py` - Core logic package
+- `sawmill/models/__init__.py` - Data models package
+- `sawmill/plugin/__init__.py` - Plugin system package
+- `sawmill/plugins/__init__.py` - Built-in plugins package
+- `sawmill/tui/__init__.py` - TUI package
+- `sawmill/tui/widgets/__init__.py` - TUI widgets package
+- `sawmill/utils/__init__.py` - Utilities package
+- `tests/test_project_setup.py` - Package import and CLI tests
+
+### Notes
+- CLI skeleton uses rich-click for formatted help output
+- Package can be installed with `pip install -e .`
+- `python -m sawmill --help` works correctly
+- All package imports resolve
+
+---
+
 ## [2026-01-18] Task 1.0: Test Infrastructure
 
 ### Added
