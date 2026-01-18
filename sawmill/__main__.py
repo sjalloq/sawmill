@@ -1,5 +1,6 @@
 """Entry point for sawmill CLI."""
 
+import fnmatch
 import json
 from pathlib import Path
 
@@ -92,6 +93,26 @@ def _severity_at_or_above(message_severity: str | None, min_severity: str) -> bo
     return msg_level >= min_level
 
 
+def _match_message_id(message_id: str | None, pattern: str) -> bool:
+    """Check if a message ID matches a pattern (supports wildcards).
+
+    Uses fnmatch for glob-style pattern matching:
+    - '*' matches any sequence of characters
+    - '?' matches any single character
+
+    Args:
+        message_id: The message ID to check (may be None).
+        pattern: The pattern to match against (e.g., "Synth 8-*").
+
+    Returns:
+        True if the message ID matches the pattern.
+    """
+    if message_id is None:
+        return False
+
+    return fnmatch.fnmatch(message_id, pattern)
+
+
 def _process_log_file(
     ctx: click.Context,
     console: Console,
@@ -101,6 +122,8 @@ def _process_log_file(
     filter_pattern: str | None,
     suppress_patterns: tuple[str, ...],
     suppress_ids: tuple[str, ...],
+    id_patterns: tuple[str, ...],
+    categories: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Process a log file with the specified filters.
@@ -114,6 +137,8 @@ def _process_log_file(
         filter_pattern: Regex pattern to include.
         suppress_patterns: Regex patterns to exclude.
         suppress_ids: Message IDs to exclude.
+        id_patterns: Message ID patterns to include (supports wildcards).
+        categories: Categories to include.
         output_format: Output format (text, json, count).
     """
     manager = _get_plugin_manager()
@@ -175,6 +200,24 @@ def _process_log_file(
         messages = [
             msg for msg in messages
             if msg.message_id is None or msg.message_id not in suppress_id_set
+        ]
+
+    # Apply message ID pattern filters (include only matching)
+    if id_patterns:
+        filtered = []
+        for msg in messages:
+            for pattern in id_patterns:
+                if _match_message_id(msg.message_id, pattern):
+                    filtered.append(msg)
+                    break
+        messages = filtered
+
+    # Apply category filters (include only matching)
+    if categories:
+        category_set = {c.lower() for c in categories}
+        messages = [
+            msg for msg in messages
+            if msg.category and msg.category.lower() in category_set
         ]
 
     # Output based on format
@@ -283,6 +326,20 @@ def _process_log_file(
     default="text",
     help="Output format: text (colored), json (JSONL), or count (summary)."
 )
+@click.option(
+    "--id",
+    "id_patterns",
+    type=str,
+    multiple=True,
+    help="Message ID pattern to include (supports wildcards, e.g., 'Synth 8-*'). Can be repeated."
+)
+@click.option(
+    "--category",
+    "categories",
+    type=str,
+    multiple=True,
+    help="Category to include (e.g., 'synth', 'timing'). Can be repeated."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -296,6 +353,8 @@ def cli(
     suppress_patterns: tuple[str, ...],
     suppress_ids: tuple[str, ...],
     output_format: str,
+    id_patterns: tuple[str, ...],
+    categories: tuple[str, ...],
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -404,6 +463,8 @@ def cli(
         filter_pattern,
         suppress_patterns,
         suppress_ids,
+        id_patterns,
+        categories,
         output_format,
     )
 
