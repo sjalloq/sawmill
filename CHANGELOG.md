@@ -62,6 +62,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 4.1: Basic CLI with Stdout Output
+
+### Added
+- `sawmill/__main__.py` - Extended CLI with log file processing
+  - `--severity` option to filter by severity level (info/warning/error/critical)
+  - `--filter` option for regex pattern filtering (include matches)
+  - `--suppress` option for regex pattern suppression (exclude matches, repeatable)
+  - `--suppress-id` option to exclude messages by ID (repeatable)
+  - `_process_log_file()` function for orchestrating log processing
+  - `_get_severity_style()` for Rich-based severity colorization
+  - `_severity_at_or_above()` for severity level comparison
+- `tests/test_cli.py` - 17 tests for CLI log processing
+
+### Features
+- Auto-detects plugin based on file content (errors if no plugin matches)
+- Manual plugin selection with `--plugin` option
+- Severity filter shows messages at or above specified level
+- Regex filter includes only matching messages
+- Suppression patterns hide matching messages (accumulative)
+- ID-based suppression hides specific message IDs
+- Colorized output based on severity (cyan=info, yellow=warning, red=error, bold red=critical)
+- Proper handling of Rich markup in log content (file paths with brackets)
+
+### Notes
+- Uses FilterEngine from Task 3.1 for pattern filtering
+- Uses PluginManager.auto_detect() from Task 2.3 for plugin selection
+- Output uses markup=False to prevent Rich from interpreting log content as markup
+
+---
+
 ## [2026-01-18] Task 3.2: Filter Statistics
 
 ### Added

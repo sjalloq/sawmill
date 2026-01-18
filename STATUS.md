@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 10 - Task 3.2 Complete
+> **Last Agent Session:** Session 11 - Task 4.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `4.1` |
-| **task_name** | Basic CLI with Stdout Output |
+| **current_task** | `4.2` |
+| **task_name** | Output Formats |
 | **stage** | Stage 4: CLI Streaming Interface |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -36,7 +36,7 @@
 - [x] **Task 3.2:** Filter Statistics
 
 ### Stage 4: CLI Streaming Interface (Ralph Loop)
-- [ ] **Task 4.1:** Basic CLI with Stdout Output
+- [x] **Task 4.1:** Basic CLI with Stdout Output
 - [ ] **Task 4.2:** Output Formats
 - [ ] **Task 4.3:** Message ID Filtering
 - [ ] **Task 4.4:** CLI Integration Tests
@@ -64,29 +64,22 @@
 
 ## Current Task Details
 
-### Task 4.1: Basic CLI with Stdout Output
+### Task 4.2: Output Formats
 
-**Objective:** Create a CLI that reads a log file, delegates to plugin, and streams filtered output.
+**Objective:** Support multiple output formats (text, JSON, count).
 
 **Deliverables:**
-- [ ] Accept log file as positional argument
-- [ ] `--severity` option to filter by severity level
-- [ ] `--filter` option for regex pattern (include matches)
-- [ ] `--suppress` option for regex pattern (exclude matches) - can be repeated
-- [ ] `--suppress-id` option for message ID (exclude by ID) - can be repeated
-- [ ] `--plugin` option to force specific plugin
-- [ ] Stream matching lines to stdout with Rich formatting
+- [ ] `--format` option with choices: text, json, count
+- [ ] Text format: human-readable with colors (default)
+- [ ] JSON format: one JSON object per line (JSONL)
+- [ ] Count format: summary statistics only
 
 **Success Criteria:**
-- [ ] `sawmill logfile.log` auto-detects plugin and processes file
-- [ ] `sawmill logfile.log` errors if no plugin can handle the file
-- [ ] `sawmill logfile.log --severity error` filters to errors
-- [ ] `sawmill logfile.log --filter "pattern"` filters by regex
-- [ ] `sawmill logfile.log --suppress "pattern"` hides matching messages
-- [ ] Multiple `--suppress` options accumulate
-- [ ] Output is colorized based on severity
+- [ ] `--format text` outputs colored, readable text
+- [ ] `--format json` outputs valid JSONL
+- [ ] `--format count` outputs summary: `errors=N warnings=M info=K`
 
-**Test Files:** `tests/test_cli.py`
+**Test Files:** `tests/test_cli_formats.py`
 
 ---
 
@@ -98,13 +91,14 @@
 
 ## Hints for Next Session
 
-- Stage 3 (Filter Engine) is complete
-- `sawmill/core/filter.py` has `FilterEngine` and `FilterStats` classes
-- Both are exported from `sawmill.core`
-- The CLI already has `--list-plugins`, `--show-info`, and `--plugin` options
-- Add log file processing to the existing CLI in `sawmill/__main__.py`
-- Use PluginManager.auto_detect() to select plugin when `--plugin` not specified
-- Call plugin.load_and_parse() to get messages, then use FilterEngine
+- Task 4.1 (Basic CLI with Stdout Output) is complete
+- CLI now processes log files with --severity, --filter, --suppress, --suppress-id options
+- Output is colorized based on severity using Rich
+- The _process_log_file() function handles all the orchestration
+- For Task 4.2, add --format option with text/json/count choices
+- For JSON, output one JSON object per line (JSONL format)
+- For count, output summary like: `errors=N warnings=M info=K`
+- May need to track severity counts during processing
 
 ### Architecture Reminder
 
@@ -120,6 +114,19 @@
 ---
 
 ## Session Log
+
+### Session 11 (completed)
+- **Started:** 2026-01-18
+- **Task:** 4.1 - Basic CLI with Stdout Output
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_cli.py` - 17 tests for CLI log processing
+- **Files Modified:**
+  - `sawmill/__main__.py` - Extended CLI with log processing capabilities
+    - Added --severity, --filter, --suppress, --suppress-id options
+    - Added _process_log_file(), _get_severity_style(), _severity_at_or_above() functions
+    - Integrated FilterEngine and PluginManager
+- **Tests:** 161 passing
 
 ### Session 10 (completed)
 - **Started:** 2026-01-18
