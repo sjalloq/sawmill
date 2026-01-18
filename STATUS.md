@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 16 - Task 5.2 Complete
+> **Last Agent Session:** Session 17 - Task 6.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `6.1` |
-| **task_name** | Waiver Data Model and Parser |
+| **current_task** | `6.2` |
+| **task_name** | Waiver Matching Engine |
 | **stage** | Stage 6: Waiver System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -46,7 +46,7 @@
 - [x] **Task 5.2:** Configuration Discovery and Merging
 
 ### Stage 6: Waiver System (Ralph Loop)
-- [ ] **Task 6.1:** Waiver Data Model and Parser
+- [x] **Task 6.1:** Waiver Data Model and Parser
 - [ ] **Task 6.2:** Waiver Matching Engine
 - [ ] **Task 6.3:** Waiver Generation
 
@@ -64,22 +64,23 @@
 
 ## Current Task Details
 
-### Task 6.1: Waiver Data Model and Parser
+### Task 6.2: Waiver Matching Engine
 
-**Objective:** Define waiver data structures and parse waiver files.
+**Objective:** Implement waiver matching against log messages.
 
 **Deliverables:**
-- [ ] Update `sawmill/models/waiver.py` with complete `Waiver`, `WaiverFile` classes
-- [ ] `sawmill/core/waiver.py` with `WaiverLoader` class
-- [ ] Support all waiver types: id, pattern, file, hash
-- [ ] `WaiverValidationError` exception
+- [ ] `sawmill/core/waiver.py` with `WaiverMatcher` class
+- [ ] Method: `is_waived(message, waivers) -> Optional[Waiver]`
+- [ ] Support all match types with correct priority
 
 **Success Criteria:**
-- [ ] Parse valid waiver TOML files
-- [ ] Validate waiver entries (required fields, valid patterns)
-- [ ] Handle malformed waiver files with clear errors
+- [ ] ID patterns match message IDs
+- [ ] Regex patterns match message content
+- [ ] File patterns match source file paths
+- [ ] Hash matches exact message content
+- [ ] Priority order: hash > id > pattern > file
 
-**Test Files:** `tests/core/test_waiver.py`
+**Test Files:** `tests/core/test_waiver_matching.py`
 
 ---
 
@@ -91,16 +92,17 @@
 
 ## Hints for Next Session
 
-- Task 5.2 (Configuration Discovery and Merging) is complete
-- Stage 5 (Configuration System) is complete
-- ConfigLoader now has discover_configs() and load_merged() methods
-- sawmill/utils/git.py contains find_git_root() function
-- For Task 6.1, create WaiverLoader class in sawmill/core/waiver.py
-- Waiver data model already exists in sawmill/models/waiver.py (needs update)
-- Waivers are for CI acceptance (pass/fail with audit trail)
-- Different from suppressions which are for display filtering
-- Support waiver types: id, pattern, file, hash
-- See TASKS.md Task 6.1 for test examples
+- Task 6.1 (Waiver Data Model and Parser) is complete
+- WaiverLoader class is in sawmill/core/waiver.py
+- Waiver data model is in sawmill/models/waiver.py
+- For Task 6.2, add WaiverMatcher class to sawmill/core/waiver.py
+- WaiverMatcher.is_waived(message) should return matching Waiver or None
+- Match priority order: hash > id > pattern > file
+- ID type: exact match on message.message_id
+- Pattern type: regex match on message.raw_text
+- File type: match on message.file_ref.path (if present)
+- Hash type: exact match on hash of message.raw_text
+- See TASKS.md Task 6.2 for test examples
 
 ### Architecture Reminder
 
@@ -116,6 +118,17 @@
 ---
 
 ## Session Log
+
+### Session 17 (completed)
+- **Started:** 2026-01-18
+- **Task:** 6.1 - Waiver Data Model and Parser
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/core/waiver.py` - WaiverLoader class and WaiverValidationError exception
+  - `tests/core/test_waiver.py` - 25 tests for waiver loading and validation
+- **Files Modified:**
+  - `sawmill/core/__init__.py` - Export WaiverLoader and WaiverValidationError
+- **Tests:** 304 passing (279 + 25 new)
 
 ### Session 16 (completed)
 - **Started:** 2026-01-18

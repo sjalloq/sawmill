@@ -62,6 +62,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 6.1: Waiver Data Model and Parser
+
+### Added
+- `sawmill/core/waiver.py` - Waiver loading and validation
+  - `WaiverLoader` class for reading TOML waiver files
+  - `WaiverValidationError` exception with context (path, line, waiver index)
+  - `load()` method for loading from file path
+  - `load_from_string()` method for testing convenience
+- `tests/core/test_waiver.py` - 25 tests for waiver loading and validation
+- Updated `sawmill/core/__init__.py` to export WaiverLoader and WaiverValidationError
+
+### Features
+- Support all four waiver types: id, pattern, file, hash
+- Validate required fields: type, pattern, reason, author, date
+- Validate regex patterns for pattern type waivers
+- Support optional fields: expires, ticket
+- Parse [metadata] section with optional tool field
+- Error messages include file path, waiver entry index, and line number
+- Handle single waiver (dict) and multiple waivers (list) TOML formats
+
+### Notes
+- Waivers are for CI acceptance (pass/fail with audit trail)
+- Different from suppressions which are for display filtering (no metadata)
+- In TOML, regex backslashes must be escaped or use literal strings
+- Total tests: 304 (279 existing + 25 new)
+
+---
+
 ## [2026-01-18] Task 5.2: Configuration Discovery and Merging
 
 ### Added
