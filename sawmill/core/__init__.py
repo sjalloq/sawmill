@@ -4,6 +4,7 @@ This module provides the core functionality:
 - PluginManager: Plugin discovery and registration
 - FilterEngine: Regex filtering for messages
 - ConfigLoader: Configuration file loading
+- WaiverLoader: Waiver file loading and validation
 """
 
 from sawmill.core.config import (
@@ -21,6 +22,7 @@ from sawmill.core.plugin import (
     PluginError,
     PluginManager,
 )
+from sawmill.core.waiver import WaiverLoader, WaiverValidationError
 
 __all__ = [
     "Config",
@@ -35,4 +37,6 @@ __all__ = [
     "PluginError",
     "PluginManager",
     "SuppressConfig",
+    "WaiverLoader",
+    "WaiverValidationError",
 ]
