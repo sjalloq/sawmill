@@ -62,6 +62,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 4.3: Message ID Filtering
+
+### Added
+- `sawmill/__main__.py` - Added --id and --category options for message filtering
+  - `--id` option filters by message ID pattern (supports fnmatch wildcards)
+  - `--category` option filters by message category (case-insensitive)
+  - `_match_message_id()` helper function for glob-style pattern matching
+- `tests/test_cli_id_filter.py` - 17 tests for ID and category filtering
+
+### Features
+- Exact ID matching: `--id "Vivado 12-3523"` matches specific ID
+- Wildcard matching: `--id "Synth 8-*"` matches all Synth 8-xxxx messages
+- Question mark wildcard: `--id "Synth 8-1?"` matches Synth 8-10, 8-11, etc.
+- Category filter: `--category synth` matches all messages with synth category
+- Multiple `--id` options are OR'd (match any)
+- Multiple `--category` options are OR'd (match any)
+- `--id` and `--category` together are AND'd (must match both)
+- Works with all existing options (--severity, --filter, --suppress, --format)
+
+### Notes
+- Uses Python's fnmatch for glob-style pattern matching
+- Category matching is case-insensitive
+- Category is extracted by Vivado plugin from message ID prefix (e.g., "Synth" -> "synth")
+
+---
+
 ## [2026-01-18] Task 4.2: Output Formats
 
 ### Added

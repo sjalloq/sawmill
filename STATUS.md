@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 12 - Task 4.2 Complete
+> **Last Agent Session:** Session 13 - Task 4.3 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `4.3` |
-| **task_name** | Message ID Filtering |
+| **current_task** | `4.4` |
+| **task_name** | CLI Integration Tests |
 | **stage** | Stage 4: CLI Streaming Interface |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -38,7 +38,7 @@
 ### Stage 4: CLI Streaming Interface (Ralph Loop)
 - [x] **Task 4.1:** Basic CLI with Stdout Output
 - [x] **Task 4.2:** Output Formats
-- [ ] **Task 4.3:** Message ID Filtering
+- [x] **Task 4.3:** Message ID Filtering
 - [ ] **Task 4.4:** CLI Integration Tests
 
 ### Stage 5: Configuration System (Ralph Loop)
@@ -64,21 +64,20 @@
 
 ## Current Task Details
 
-### Task 4.3: Message ID Filtering
+### Task 4.4: CLI Integration Tests
 
-**Objective:** Support filtering by message IDs (requires plugin).
+**Objective:** Verify full pipeline works end-to-end with real Vivado logs.
 
 **Deliverables:**
-- [ ] `--id` option to filter by message ID pattern
-- [ ] Support wildcards: `--id "Synth 8-*"` matches all Synth 8-xxxx
-- [ ] `--category` option for high-level categories
+- [ ] Integration tests using `examples/vivado/vivado.log`
+- [ ] Test full pipeline: CLI -> plugin.load_and_parse() -> filter -> format
 
 **Success Criteria:**
-- [ ] `--id "Vivado 12-3523"` matches exact ID
-- [ ] `--id "Synth 8-*"` matches all Synth 8-xxxx messages
-- [ ] `--category timing` matches timing-related messages
+- [ ] Full pipeline executes without error
+- [ ] Output matches expected format
+- [ ] All filter options work together correctly
 
-**Test Files:** `tests/test_cli_id_filter.py`
+**Test Files:** `tests/test_cli_integration.py`
 
 ---
 
@@ -90,13 +89,14 @@
 
 ## Hints for Next Session
 
-- Task 4.2 (Output Formats) is complete
-- CLI now supports --format option with text/json/count choices
-- For Task 4.3, add --id and --category options for message filtering
-- --id should support wildcards with fnmatch (glob-style: Synth 8-* matches Synth 8-6157)
-- --category filters by msg.category field (set by plugin)
-- May need to add category extraction to Vivado plugin if not present
-- Check how message_id is extracted by the Vivado plugin for reference
+- Task 4.3 (Message ID Filtering) is complete
+- CLI now supports --id and --category options for message filtering
+- --id supports fnmatch wildcards (*, ?)
+- --category filters by msg.category field (case-insensitive)
+- For Task 4.4, create integration tests using the real Vivado log in examples/
+- Use vivado_log fixture from conftest.py
+- Test the full pipeline with various option combinations
+- Mark tests with @pytest.mark.integration
 
 ### Architecture Reminder
 
@@ -112,6 +112,19 @@
 ---
 
 ## Session Log
+
+### Session 13 (completed)
+- **Started:** 2026-01-18
+- **Task:** 4.3 - Message ID Filtering
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_cli_id_filter.py` - 17 tests for ID and category filtering
+- **Files Modified:**
+  - `sawmill/__main__.py` - Added --id and --category options
+    - `--id` filters by message ID pattern (supports fnmatch wildcards)
+    - `--category` filters by message category (case-insensitive)
+    - Added `_match_message_id()` helper for glob-style pattern matching
+- **Tests:** 199 passing
 
 ### Session 12 (completed)
 - **Started:** 2026-01-18
