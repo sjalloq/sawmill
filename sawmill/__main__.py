@@ -94,6 +94,31 @@ def _severity_at_or_above(message_severity: str | None, min_severity: str) -> bo
     return msg_level >= min_level
 
 
+def _has_ci_failures(messages: list, strict: bool) -> bool:
+    """Check if messages contain CI-failing severities.
+
+    In normal CI mode, errors and critical warnings cause failure.
+    In strict mode, regular warnings also cause failure.
+
+    Args:
+        messages: List of messages to check.
+        strict: If True, also fail on regular warnings.
+
+    Returns:
+        True if there are CI-failing messages.
+    """
+    failing_severities = {"error", "critical_warning"}
+    if strict:
+        failing_severities.add("warning")
+
+    for msg in messages:
+        if msg.severity:
+            sev = msg.severity.lower()
+            if sev in failing_severities:
+                return True
+    return False
+
+
 def _match_message_id(message_id: str | None, pattern: str) -> bool:
     """Check if a message ID matches a pattern (supports wildcards).
 
@@ -126,7 +151,7 @@ def _process_log_file(
     id_patterns: tuple[str, ...],
     categories: tuple[str, ...],
     output_format: str,
-) -> None:
+) -> list:
     """Process a log file with the specified filters.
 
     Args:
@@ -141,6 +166,9 @@ def _process_log_file(
         id_patterns: Message ID patterns to include (supports wildcards).
         categories: Categories to include.
         output_format: Output format (text, json, count).
+
+    Returns:
+        List of filtered messages.
     """
     manager = _get_plugin_manager()
     path = Path(logfile)
@@ -223,6 +251,8 @@ def _process_log_file(
 
     # Output based on format
     _output_messages(console, messages, output_format)
+
+    return messages
 
 
 def _output_messages(
@@ -425,6 +455,16 @@ def _generate_waivers(
     is_flag=True,
     help="Generate waiver TOML from errors/warnings in the log. Output to stdout."
 )
+@click.option(
+    "--ci",
+    is_flag=True,
+    help="CI mode: exit 1 if errors or critical warnings are found."
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="With --ci, also fail on regular warnings."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -441,6 +481,8 @@ def cli(
     id_patterns: tuple[str, ...],
     categories: tuple[str, ...],
     generate_waivers: bool,
+    ci: bool,
+    strict: bool,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -545,7 +587,7 @@ def cli(
         return
 
     # Process the log file
-    _process_log_file(
+    messages = _process_log_file(
         ctx,
         console,
         logfile,
@@ -558,6 +600,10 @@ def cli(
         categories,
         output_format,
     )
+
+    # Check CI exit codes
+    if ci and _has_ci_failures(messages, strict):
+        ctx.exit(1)
 
 
 if __name__ == "__main__":
