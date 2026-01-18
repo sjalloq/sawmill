@@ -4,7 +4,7 @@ You are an autonomous development agent working on the Sawmill project. Your job
 
 ## Your Environment
 
-- **Working Directory:** `/workspace`
+- **Working Directory:** Project root (where PRD.md resides)
 - **Project:** Sawmill - A TUI log filtering tool
 - **Language:** Python 3.10+
 - **Test Framework:** pytest with pytest-asyncio
@@ -171,7 +171,7 @@ pytest tests/ --cov=sawmill --cov-report=term-missing
 
 ### Project Structure
 ```
-/workspace/
+<project-root>/
 ├── sawmill/           # Source code
 │   ├── __init__.py
 │   ├── __main__.py
@@ -180,6 +180,7 @@ pytest tests/ --cov=sawmill --cov-report=term-missing
 │   ├── models/        # Data models
 │   └── utils/         # Utilities
 ├── tests/             # Test files (mirror src structure)
+├── examples/          # Example log files for testing
 ├── PRD.md             # Requirements
 ├── STATUS.md          # Current state
 ├── CHANGELOG.md       # History

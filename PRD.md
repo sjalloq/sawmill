@@ -18,7 +18,7 @@ Sawmill is a terminal-based log analysis tool that allows engineers to filter, a
 ### Goals
 
 1. **Generic Log Filtering:** Provide powerful regex-based filtering for any text log file without tool-specific configuration
-2. **Plugin Extensibility:** Enable tool-specific intelligence through a simple subprocess-based plugin architecture
+2. **Plugin Extensibility:** Enable tool-specific intelligence through a pluggy-based plugin architecture (same pattern as pytest)
 3. **Multi-line Pattern Support:** Correctly handle log messages that span multiple lines (common in EDA tools)
 4. **Interactive Customization:** Allow users to modify and extend filter definitions in real-time through the TUI
 5. **Configuration Portability:** Enable saving and sharing customized filter configurations via TOML files
@@ -29,7 +29,7 @@ Sawmill is a terminal-based log analysis tool that allows engineers to filter, a
 - **Live Log Monitoring:** Real-time tailing of actively-written log files (focus is post-processing)
 - **Log Aggregation:** Combining logs from multiple sources or files
 - **Advanced Analytics:** Statistical analysis, graphing, or trend detection
-- **Waiver System:** Full waiver approval workflow (deferred to future version)
+- **Multi-user Waiver Workflow:** Full waiver approval workflow with multiple reviewers (deferred to future version; basic waiver generation/matching IS in scope)
 
 ---
 
@@ -145,7 +145,7 @@ vivado = "sawmill_plugin_vivado:VivadoPlugin"
 Plugins implement hooks to customize sawmill behavior:
 
 ```python
-from sawmill.plugin import SawmillPlugin, hookimpl
+from sawmill.plugin import SawmillPlugin, hookimpl, SAWMILL_PLUGIN_API_VERSION
 from sawmill.models import FilterDefinition, MessageBoundary, ParsedMessage, FileRef
 
 class VivadoPlugin(SawmillPlugin):
@@ -153,6 +153,7 @@ class VivadoPlugin(SawmillPlugin):
 
     name = "vivado"
     version = "1.0.0"
+    api_version = SAWMILL_PLUGIN_API_VERSION  # Required: declares API compatibility
     description = "Xilinx Vivado synthesis and implementation logs"
 
     @hookimpl
@@ -232,6 +233,8 @@ class VivadoPlugin(SawmillPlugin):
 | `extract_severity(message)` | Determine severity from message | `str \| None` |
 | `extract_file_reference(content)` | Find source file references | `FileRef \| None` |
 | `format_message(message, format)` | Custom output formatting | `str` |
+| `get_categories()` | List message categories plugin understands | `list[str]` |
+| `get_quick_filters()` | Named filter presets (e.g., 'timing_focus') | `dict[str, list[str]]` |
 
 #### Plugin Discovery
 
@@ -241,6 +244,8 @@ Plugins are discovered via Python entry points:
 # sawmill/core/plugin.py
 import importlib.metadata
 import pluggy
+
+SAWMILL_PLUGIN_API_VERSION = 1  # Increment when hook signatures change
 
 class PluginManager:
     def __init__(self):
@@ -252,8 +257,22 @@ class PluginManager:
         """Load all installed plugins."""
         for ep in importlib.metadata.entry_points(group="sawmill.plugins"):
             plugin = ep.load()()
+            # Check API version compatibility
+            if hasattr(plugin, 'api_version') and plugin.api_version != SAWMILL_PLUGIN_API_VERSION:
+                logger.warning(f"Plugin {plugin.name} uses API v{plugin.api_version}, expected v{SAWMILL_PLUGIN_API_VERSION}")
             self.pm.register(plugin)
 ```
+
+#### Plugin Conflict Resolution
+
+When multiple plugins could handle a file:
+
+1. **Explicit `--plugin X` flag always wins** - no auto-detection performed
+2. **Error if >1 plugin returns confidence > 0.5** - user must specify with `--plugin`
+3. **If exactly one plugin > 0.5 threshold** - that plugin is selected
+4. **If no plugin > 0.5** - generic mode (no plugin-specific features)
+
+This ensures deterministic behavior and prevents silent conflicts.
 
 #### Built-in Plugins
 
@@ -281,12 +300,26 @@ theme = "monokai"
 search_paths = ["~/.config/sawmill/plugins", "./plugins"]
 enabled = ["synopsys-dc", "cadence-genus"]
 
+# Plugin-specific configuration
+[plugins.vivado]
+device_family = "ultrascale"
+timing_threshold = -0.5
+
 [[filters.custom]]
 id = "my-filter-1"
 name = "Custom Error Pattern"
 pattern = "CUSTOM_ERROR_\\d+"
 severity = "error"
 enabled = true
+
+# Suppression rules for display filtering (distinct from waivers for CI pass/fail)
+# Suppressions hide messages from output but don't affect CI exit codes
+[suppress]
+patterns = [
+    "^INFO: \\[.*\\] Launching helper",  # Verbose startup noise
+    "^INFO: \\[Vivado 12-627\\]",         # Always-present message
+]
+message_ids = ["Common 17-55"]           # Suppress specific message IDs
 ```
 
 ### 6. Interactive Filter Customization
@@ -324,6 +357,8 @@ base_plugin = "synopsys-dc"
 plugin_version = "1.0.0"
 created_by = "shareef"
 created_at = "2026-01-18T14:30:00Z"
+git_commit = "abc123def"          # Git commit hash (if in repo)
+git_dirty = false                  # Whether working tree had uncommitted changes
 
 [[filters.modified]]
 id = "critical-timing"
@@ -403,6 +438,10 @@ sawmill vivado.log --category timing,constraints
 sawmill vivado.log --format text      # Default: human-readable
 sawmill vivado.log --format json      # JSON lines (one per message)
 sawmill vivado.log --format count     # Summary counts only
+
+# Delta/Baseline comparison - show only NEW messages not in baseline
+sawmill vivado.log --baseline previous.log
+sawmill vivado.log --baseline previous.log --severity error,critical
 ```
 
 ### 2. CI/Lint Mode
@@ -446,6 +485,18 @@ sawmill vivado.log --tui        # Explicit TUI mode
 ```
 
 **Note:** TUI mode is deferred to later development phases as it requires human feedback for UX decisions.
+
+### 5. Plugin Discovery Mode
+Query installed plugins and their capabilities.
+
+```bash
+# List all discovered plugins
+sawmill --list-plugins
+
+# Show detailed plugin information
+sawmill --plugin vivado --show-info
+# Output: version, hooks implemented, categories, filter counts, etc.
+```
 
 ---
 
@@ -551,10 +602,11 @@ sawmill --ci --waivers project.waivers.toml --report-unused vivado.log
 **Deliverable:** Fully functional CLI for filtering and viewing logs
 
 ### Phase 5: Plugin System
-- Plugin discovery mechanism
-- Subprocess communication protocol
+- Plugin discovery via entry points
+- pluggy hook-based architecture
 - Auto-detection based on log content
 - Reference plugin (Vivado)
+- Plugin discovery CLI (`--list-plugins`, `--show-info`)
 
 **Deliverable:** Auto-detect tool and load tool-specific filters
 
@@ -718,6 +770,95 @@ This section breaks down implementation into discrete, testable tasks. Each task
 
 ## Stage 1: Project Setup and Data Models
 
+### Task 1.0: Test Infrastructure
+
+**Objective:** Set up shared test fixtures and utilities for consistent testing.
+
+**Deliverables:**
+- `tests/conftest.py` with common fixtures
+- Pytest markers for categorizing tests (slow, integration)
+- Shared fixtures: `vivado_log`, `small_log`, `empty_log`, `large_log`, `sample_log_entries`
+
+**Success Criteria:**
+- [ ] `pytest --collect-only` shows fixtures available
+- [ ] Fixtures work in other test files via import
+
+**Tests:**
+```python
+# tests/conftest.py
+"""Shared pytest fixtures for Sawmill tests."""
+
+import pytest
+from pathlib import Path
+
+
+@pytest.fixture
+def project_root():
+    """Return the project root directory."""
+    return Path(__file__).parent.parent
+
+
+@pytest.fixture
+def vivado_log(project_root):
+    """Full Vivado log file for integration tests."""
+    return project_root / "examples/vivado/vivado.log"
+
+
+@pytest.fixture
+def small_log(tmp_path):
+    """Minimal multi-format log for unit tests."""
+    content = """\
+INFO: [Synth 8-6157] synthesizing module 'top' [/path/file.v:10]
+WARNING: [Vivado 12-3523] Component name change
+  Additional detail line
+  Another detail line
+CRITICAL WARNING: [Constraints 18-4427] Override warning
+ERROR: [Route 35-9] Routing failed
+Plain text line with no format
+"""
+    f = tmp_path / "test.log"
+    f.write_text(content)
+    return f
+
+
+@pytest.fixture
+def empty_log(tmp_path):
+    """Empty log file."""
+    f = tmp_path / "empty.log"
+    f.write_text("")
+    return f
+
+
+@pytest.fixture
+def large_log(tmp_path):
+    """100k line log file for performance tests."""
+    f = tmp_path / "large.log"
+    lines = [f"INFO: [Test {i % 100}-{i}] Message number {i}" for i in range(100000)]
+    f.write_text("\n".join(lines))
+    return f
+
+
+@pytest.fixture
+def sample_log_entries():
+    """Pre-built LogEntry objects for filter tests."""
+    from sawmill.models.log_entry import LogEntry
+    return [
+        LogEntry(line_number=1, content="ERROR: [Test 1-1] error msg", raw_text="ERROR: [Test 1-1] error msg", severity="error"),
+        LogEntry(line_number=2, content="WARNING: [Test 2-1] warning msg", raw_text="WARNING: [Test 2-1] warning msg", severity="warning"),
+        LogEntry(line_number=3, content="CRITICAL WARNING: [Test 3-1] critical", raw_text="CRITICAL WARNING: [Test 3-1] critical", severity="critical"),
+        LogEntry(line_number=4, content="INFO: [Test 4-1] info msg", raw_text="INFO: [Test 4-1] info msg", severity="info"),
+        LogEntry(line_number=5, content="Plain text no format", raw_text="Plain text no format", severity=None),
+    ]
+
+
+# Pytest markers
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: mark test as slow running")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
+```
+
+---
+
 ### Task 1.1: Project Scaffolding
 
 **Objective:** Create the basic project structure with proper Python packaging.
@@ -835,6 +976,16 @@ def test_filter_toggle():
 def test_filter_source_tracking():
     f = FilterDefinition(id="t", name="T", pattern="test", enabled=True, source="plugin:synopsys-dc")
     assert f.source == "plugin:synopsys-dc"
+
+def test_redos_pattern_rejected():
+    """Regex patterns known to cause ReDoS should be rejected."""
+    with pytest.raises(ValidationError):
+        FilterDefinition(
+            id="bad",
+            name="Bad",
+            pattern=r"(a+)+$",  # Known ReDoS pattern
+            enabled=True
+        )
 ```
 
 ---
@@ -951,6 +1102,24 @@ def test_load_utf8_file(tmp_path):
     entries = parser.load_file(log_file)
 
     assert "\u2603" in entries[0].content
+
+def test_load_binary_file_gracefully(tmp_path):
+    """Binary files should fail with clear error, not crash."""
+    from sawmill.core.parser import LogParseError
+
+    binary_file = tmp_path / "binary.log"
+    binary_file.write_bytes(b'\x00\x01\x02\xff\xfe')
+
+    parser = LogParser()
+    with pytest.raises(LogParseError) as exc:
+        parser.load_file(binary_file)
+    assert "binary" in str(exc.value).lower() or "decode" in str(exc.value).lower()
+
+def test_load_nonexistent_file():
+    """Missing file should raise FileNotFoundError."""
+    parser = LogParser()
+    with pytest.raises(FileNotFoundError):
+        parser.load_file(Path("/nonexistent/file.log"))
 ```
 
 ---
@@ -1020,6 +1189,69 @@ def test_no_boundaries_single_line_groups():
 
     assert len(groups) == 2
     assert len(groups[0].entries) == 1
+```
+
+---
+
+### Task 2.3: Basic Severity Detection
+
+**Objective:** Add regex-based severity extraction to LogParser for common patterns. This breaks the CLI→Plugin circular dependency by providing basic severity detection before plugins are loaded.
+
+**Deliverables:**
+- Add `severity` field population to `LogParser.load_file()`
+- Support common patterns: `^ERROR:`, `^WARNING:`, `^CRITICAL WARNING:`, `^INFO:`
+- Plugins can override via `parse_message()` hook later
+
+**Success Criteria:**
+- [ ] LogEntry.severity populated for standard message formats
+- [ ] Unknown formats get severity=None (not an error)
+- [ ] Case-insensitive matching for severity keywords
+
+**Tests:**
+```python
+# tests/core/test_parser_severity.py
+from pathlib import Path
+
+def test_severity_detection_error(tmp_path):
+    """ERROR: lines should have severity='error'."""
+    log_file = tmp_path / "test.log"
+    log_file.write_text("ERROR: [Test 1-1] something failed\nINFO: normal\n")
+
+    parser = LogParser()
+    entries = parser.load_file(log_file)
+
+    assert entries[0].severity == "error"
+    assert entries[1].severity == "info"
+
+def test_severity_detection_critical_warning(tmp_path):
+    """CRITICAL WARNING: should have severity='critical_warning'."""
+    log_file = tmp_path / "test.log"
+    log_file.write_text("CRITICAL WARNING: [Test 1-1] important\n")
+
+    parser = LogParser()
+    entries = parser.load_file(log_file)
+
+    assert entries[0].severity == "critical_warning"
+
+def test_severity_detection_unknown_format(tmp_path):
+    """Unknown formats should have severity=None."""
+    log_file = tmp_path / "test.log"
+    log_file.write_text("Some random log line\nAnother plain line\n")
+
+    parser = LogParser()
+    entries = parser.load_file(log_file)
+
+    assert all(e.severity is None for e in entries)
+
+def test_severity_detection_case_insensitive(tmp_path):
+    """Severity detection should be case-insensitive."""
+    log_file = tmp_path / "test.log"
+    log_file.write_text("error: lowercase\nERROR: uppercase\nError: mixed\n")
+
+    parser = LogParser()
+    entries = parser.load_file(log_file)
+
+    assert all(e.severity == "error" for e in entries)
 ```
 
 ---
@@ -1130,16 +1362,17 @@ def test_disabled_filters_ignored():
 ```python
 # tests/core/test_filter_stats.py
 def test_basic_stats():
+    # Create 100 lines: Line 0 through Line 99
     groups = [MessageGroup([LogEntry(i, f"Line {i}", f"Line {i}")]) for i in range(100)]
+    # Pattern matches lines ending in 0,2,4,6,8 (all even numbers)
+    # That's: 0,2,4,6,8,10,12,...98 = 50 total matches
     filters = [FilterDefinition(id="1", name="Even", pattern=r"Line [02468]$", enabled=True)]
 
     engine = FilterEngine()
     stats = engine.get_stats(filters, groups)
 
     assert stats.total_lines == 100
-    assert stats.matched_lines == 10  # 0, 2, 4, 6, 8, 20, 40, 60, 80 ... wait, this needs review
-    # Actually matches: 0,2,4,6,8 = 5 in 0-9, then 20,22,24,26,28 etc...
-    # Pattern matches lines ending in 0,2,4,6,8: Line 0, Line 2, etc.
+    assert stats.matched_lines == 50  # All even numbers: 0,2,4,...98
 
 def test_stats_percentage():
     groups = [MessageGroup([LogEntry(i, "Match" if i < 25 else "NoMatch", "...")]) for i in range(100)]
@@ -1318,6 +1551,78 @@ def test_wildcard_id_filter(tmp_path):
 
 ---
 
+### Task 4.4: CLI Integration Tests
+
+**Objective:** Verify full pipeline works end-to-end with real Vivado logs.
+
+**Deliverables:**
+- Integration tests using `examples/vivado/vivado.log`
+- Test full pipeline: load → parse → group → filter → format
+- Verify counts match analyzed values from `PATTERNS.md`
+
+**Success Criteria:**
+- [ ] Full pipeline executes without error
+- [ ] Output matches expected format
+- [ ] All filter options work together correctly
+
+**Tests:**
+```python
+# tests/test_cli_integration.py
+from pathlib import Path
+import pytest
+
+@pytest.mark.integration
+def test_vivado_log_loads_successfully(vivado_log):
+    """Full Vivado log should load and process without errors."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [str(vivado_log), '--format', 'count'])
+
+    assert result.exit_code == 0
+    assert "error" in result.output.lower() or "warning" in result.output.lower()
+
+@pytest.mark.integration
+def test_vivado_severity_filter(vivado_log):
+    """Severity filtering should work on real Vivado logs."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [str(vivado_log), '--severity', 'error,critical'])
+
+    assert result.exit_code == 0
+    # Should not contain INFO messages
+    assert "INFO:" not in result.output
+
+@pytest.mark.integration
+def test_vivado_combined_filters(vivado_log):
+    """Multiple filters should work together."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        str(vivado_log),
+        '--severity', 'warning',
+        '--filter', 'timing',
+        '--format', 'count'
+    ])
+
+    assert result.exit_code == 0
+
+@pytest.mark.integration
+def test_pipeline_parser_to_filter_to_output(small_log):
+    """Test complete pipeline from parsing to output."""
+    runner = CliRunner()
+
+    # Test text output
+    result = runner.invoke(cli, [str(small_log), '--format', 'text'])
+    assert result.exit_code == 0
+
+    # Test JSON output
+    result = runner.invoke(cli, [str(small_log), '--format', 'json'])
+    assert result.exit_code == 0
+
+    # Test count output
+    result = runner.invoke(cli, [str(small_log), '--format', 'count'])
+    assert result.exit_code == 0
+```
+
+---
+
 ## Stage 5: Plugin System
 
 ### Task 5.1: Plugin Hook Specification
@@ -1337,6 +1642,7 @@ def test_wildcard_id_filter(tmp_path):
 **Tests:**
 ```python
 # tests/plugin/test_hookspec.py
+from pathlib import Path
 from sawmill.plugin import SawmillPlugin, hookimpl, SawmillHookSpec
 
 def test_hookspec_defines_required_hooks():
@@ -1375,6 +1681,7 @@ def test_base_plugin_has_defaults():
 **Tests:**
 ```python
 # tests/core/test_plugin_manager.py
+from pathlib import Path
 import pluggy
 from sawmill.core.plugin import PluginManager
 from sawmill.plugin import SawmillPlugin, hookimpl
@@ -1419,12 +1726,17 @@ def test_plugin_hooks_called():
 **Success Criteria:**
 - [ ] Selects plugin with highest confidence score
 - [ ] Returns None if no plugin has confidence > threshold (0.5)
-- [ ] `--plugin vivado` forces Vivado plugin
+- [ ] **Errors if >1 plugin has confidence > 0.5** (conflict resolution)
+- [ ] `--plugin vivado` forces Vivado plugin (bypasses auto-detect)
 - [ ] Aggregates filters from active plugin
 
 **Tests:**
 ```python
 # tests/core/test_plugin_autodetect.py
+from pathlib import Path
+from sawmill.core.plugin import PluginConflictError, PluginManager
+from sawmill.plugin import SawmillPlugin, hookimpl
+
 def test_auto_detect_selects_highest_confidence():
     manager = PluginManager()
 
@@ -1460,6 +1772,29 @@ def test_auto_detect_returns_none_below_threshold():
     selected = manager.auto_detect(Path("test.log"), "content")
     assert selected is None
 
+def test_auto_detect_errors_on_conflict():
+    """If multiple plugins both return >0.5, raise error."""
+    manager = PluginManager()
+
+    class PluginA(SawmillPlugin):
+        name = "plugin_a"
+        @hookimpl
+        def can_handle(self, path, content):
+            return 0.8
+
+    class PluginB(SawmillPlugin):
+        name = "plugin_b"
+        @hookimpl
+        def can_handle(self, path, content):
+            return 0.75
+
+    manager.register(PluginA())
+    manager.register(PluginB())
+
+    with pytest.raises(PluginConflictError) as exc:
+        manager.auto_detect(Path("test.log"), "content")
+    assert "plugin_a" in str(exc.value) or "plugin_b" in str(exc.value)
+
 def test_cli_plugin_option(tmp_path):
     log_file = tmp_path / "test.log"
     log_file.write_text("INFO: test")
@@ -1490,6 +1825,7 @@ def test_cli_plugin_option(tmp_path):
 **Tests:**
 ```python
 # tests/plugins/test_vivado.py
+from pathlib import Path
 from sawmill.plugins.vivado import VivadoPlugin
 
 def test_vivado_detects_vivado_logs():
@@ -1547,6 +1883,63 @@ def test_vivado_filters_cover_common_cases(example_vivado_log):
 
 ---
 
+### Task 5.5: Plugin Discovery CLI
+
+**Objective:** Implement CLI commands for plugin discovery and introspection.
+
+**Deliverables:**
+- `--list-plugins` option to enumerate discovered plugins
+- `--show-info` option (with `--plugin`) to display plugin capabilities
+- Show: version, hooks implemented, categories, filter counts
+
+**Success Criteria:**
+- [ ] `sawmill --list-plugins` shows all installed plugins
+- [ ] `sawmill --plugin vivado --show-info` shows Vivado plugin details
+- [ ] Output includes plugin version and implemented hooks
+
+**Tests:**
+```python
+# tests/test_cli_plugin_discovery.py
+from click.testing import CliRunner
+from sawmill.cli import cli
+
+def test_list_plugins():
+    """--list-plugins should enumerate all plugins."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['--list-plugins'])
+
+    assert result.exit_code == 0
+    assert "vivado" in result.output.lower()
+
+def test_show_plugin_info():
+    """--show-info should display plugin capabilities."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['--plugin', 'vivado', '--show-info'])
+
+    assert result.exit_code == 0
+    assert "vivado" in result.output.lower()
+    assert "version" in result.output.lower() or "1.0" in result.output
+
+def test_show_info_requires_plugin():
+    """--show-info without --plugin should error."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['--show-info'])
+
+    # Should fail or provide helpful message
+    assert result.exit_code != 0 or "plugin" in result.output.lower()
+
+def test_list_plugins_shows_metadata():
+    """Plugin list should include basic metadata."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['--list-plugins'])
+
+    assert result.exit_code == 0
+    # Should show at least name and possibly version
+    assert "vivado" in result.output.lower()
+```
+
+---
+
 ## Stage 6: Configuration System
 
 ### Task 6.1: TOML Configuration Loader
@@ -1589,6 +1982,18 @@ def test_default_values():
 
     assert config.output.format == "text"  # default
     assert config.output.color is True  # default
+
+def test_malformed_toml_error_message(tmp_path):
+    """Malformed TOML should give line number in error."""
+    from sawmill.core.config import ConfigError
+
+    bad_config = tmp_path / "bad.toml"
+    bad_config.write_text('[section\nkey = "unclosed')
+
+    loader = ConfigLoader()
+    with pytest.raises(ConfigError) as exc:
+        loader.load(bad_config)
+    assert "line" in str(exc.value).lower()
 ```
 
 ---
@@ -1601,11 +2006,21 @@ def test_default_values():
 - Method: `ConfigLoader.discover_configs(start_path) -> List[Path]`
 - Method: `ConfigLoader.merge_configs(configs) -> Config`
 - Precedence: CLI > local > git root > user > defaults
+- `sawmill/utils/git.py` with `find_git_root()` function
+
+**Git Detection Requirements:**
+The `sawmill/utils/git.py` module should:
+1. Find git root by walking up from current directory looking for `.git/`
+2. Return `None` if not in a git repo (don't error)
+3. Work with both git directories and git worktrees
+4. Be fast (cache result for session)
+5. Support `SAWMILL_GIT_ROOT` env var override for submodules/bare repos
 
 **Success Criteria:**
 - [ ] Finds configs in correct precedence order
 - [ ] Later configs override earlier values
 - [ ] Unspecified values fall through
+- [ ] Git root detection works correctly
 
 **Tests:**
 ```python
@@ -1627,6 +2042,33 @@ def test_precedence_order(tmp_path, monkeypatch):
 
     assert config.output.format == "json"  # local overrides user
     assert config.output.color is False  # from user config
+
+# tests/utils/test_git.py
+def test_find_git_root_in_repo(tmp_path, monkeypatch):
+    """Should find .git directory."""
+    (tmp_path / ".git").mkdir()
+    subdir = tmp_path / "src" / "deep"
+    subdir.mkdir(parents=True)
+    monkeypatch.chdir(subdir)
+
+    from sawmill.utils.git import find_git_root
+    assert find_git_root() == tmp_path
+
+def test_find_git_root_not_in_repo(tmp_path, monkeypatch):
+    """Should return None outside git repo."""
+    monkeypatch.chdir(tmp_path)
+
+    from sawmill.utils.git import find_git_root
+    assert find_git_root() is None
+
+def test_git_root_env_override(tmp_path, monkeypatch):
+    """SAWMILL_GIT_ROOT should override detection."""
+    override_path = tmp_path / "override"
+    override_path.mkdir()
+    monkeypatch.setenv("SAWMILL_GIT_ROOT", str(override_path))
+
+    from sawmill.utils.git import find_git_root
+    assert find_git_root() == override_path
 ```
 
 ---
@@ -1972,6 +2414,7 @@ def test_ci_report_generation(tmp_path):
 ## Summary: Task Checklist
 
 ### Stage 1: Project Setup (Ralph Loop)
+- [ ] Task 1.0: Test Infrastructure
 - [ ] Task 1.1: Project Scaffolding
 - [ ] Task 1.2: LogEntry Data Model
 - [ ] Task 1.3: FilterDefinition Data Model
@@ -1980,6 +2423,7 @@ def test_ci_report_generation(tmp_path):
 ### Stage 2: Core Log Parsing (Ralph Loop)
 - [ ] Task 2.1: Basic Log File Loader
 - [ ] Task 2.2: Message Boundary Detection
+- [ ] Task 2.3: Basic Severity Detection
 
 ### Stage 3: Filter Engine (Ralph Loop)
 - [ ] Task 3.1: Basic Regex Filter Engine
@@ -1989,12 +2433,14 @@ def test_ci_report_generation(tmp_path):
 - [ ] Task 4.1: Basic CLI with Stdout Output
 - [ ] Task 4.2: Output Formats
 - [ ] Task 4.3: Message ID Filtering
+- [ ] Task 4.4: CLI Integration Tests
 
 ### Stage 5: Plugin System (Ralph Loop)
 - [ ] Task 5.1: Plugin Hook Specification
 - [ ] Task 5.2: Plugin Manager with Entry Point Discovery
 - [ ] Task 5.3: Auto-Detection and Plugin Integration
 - [ ] Task 5.4: Built-in Vivado Plugin
+- [ ] Task 5.5: Plugin Discovery CLI
 
 ### Stage 6: Configuration System (Ralph Loop)
 - [ ] Task 6.1: TOML Configuration Loader
@@ -2017,8 +2463,8 @@ def test_ci_report_generation(tmp_path):
 
 ---
 
-**Total: 23 tasks across 9 stages**
-- **20 tasks** suitable for ralph loop (Stages 1-8)
+**Total: 27 tasks across 9 stages**
+- **24 tasks** suitable for ralph loop (Stages 1-8)
 - **3 tasks** require human guidance (Stage 9)
 
 Each task is designed to be:
