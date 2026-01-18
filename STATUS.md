@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 2 - Task 1.1 Complete
+> **Last Agent Session:** Session 3 - Task 1.2 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `1.2` |
-| **task_name** | Data Model Interfaces |
-| **stage** | Stage 1: Project Setup |
+| **current_task** | `2.1` |
+| **task_name** | Plugin Hook Specification |
+| **stage** | Stage 2: Plugin System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -22,7 +22,7 @@
 ### Stage 1: Project Setup (Ralph Loop)
 - [x] **Task 1.0:** Test Infrastructure
 - [x] **Task 1.1:** Project Scaffolding
-- [ ] **Task 1.2:** Data Model Interfaces
+- [x] **Task 1.2:** Data Model Interfaces
 
 ### Stage 2: Plugin System (Ralph Loop)
 - [ ] **Task 2.1:** Plugin Hook Specification
@@ -64,24 +64,21 @@
 
 ## Current Task Details
 
-### Task 1.2: Data Model Interfaces
+### Task 2.1: Plugin Hook Specification
 
-**Objective:** Create the data model interfaces (contracts) that plugins will instantiate.
+**Objective:** Define the pluggy hook specification for sawmill plugins.
 
 **Deliverables:**
-- [ ] `sawmill/models/message.py` with `Message`, `FileRef`
-- [ ] `sawmill/models/filter_def.py` with `FilterDefinition`
-- [ ] `sawmill/models/waiver.py` with `Waiver`, `WaiverFile`
-- [ ] Regex validation on `FilterDefinition.pattern` field
+- [ ] `sawmill/plugin/__init__.py` with hook markers and base class
+- [ ] `sawmill/plugin/hookspec.py` with `SawmillHookSpec` class
+- [ ] All hook definitions with proper signatures
 
 **Success Criteria:**
-- [ ] All models can be instantiated with required fields
-- [ ] Optional fields default to `None`
-- [ ] Invalid regex patterns raise validation errors
-- [ ] `Message.matches_filter()` works correctly
-- [ ] Equality comparison works correctly
+- [ ] Hook specification defines all required hooks
+- [ ] `hookimpl` decorator available for plugins
+- [ ] `SawmillPlugin` base class provides sensible defaults (returning empty/None)
 
-**Test Files:** `tests/models/test_message.py`, `tests/models/test_filter_def.py`
+**Test Files:** `tests/plugin/test_hookspec.py`
 
 ---
 
@@ -93,11 +90,10 @@
 
 ## Hints for Next Session
 
-- Sawmill package is now installed and working
-- Use Pydantic for data models (already in dependencies)
-- Message class represents a logical message (single or multi-line)
-- Plugin creates Message instances, not the base app
-- See TASKS.md for exact test code to implement
+- Data models are now complete: Message, FileRef, FilterDefinition, Waiver, WaiverFile
+- Use pluggy for the hook specification system (already in dependencies)
+- Hooks: `can_handle(path)`, `load_and_parse(path)`, `get_filters()`
+- SawmillPlugin base class should provide default implementations that return empty/None
 
 ### Architecture Reminder
 
@@ -119,6 +115,19 @@
 ---
 
 ## Session Log
+
+### Session 3 (completed)
+- **Started:** 2026-01-18
+- **Task:** 1.2 - Data Model Interfaces
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/models/message.py` - Message and FileRef models
+  - `sawmill/models/filter_def.py` - FilterDefinition with regex validation
+  - `sawmill/models/waiver.py` - Waiver and WaiverFile models
+  - `tests/models/__init__.py` - Test package marker
+  - `tests/models/test_message.py` - 11 tests for message models
+  - `tests/models/test_filter_def.py` - 10 tests for filter definitions
+- **Tests:** 29 passing
 
 ### Session 2 (completed)
 - **Started:** 2026-01-18

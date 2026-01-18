@@ -62,6 +62,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 1.2: Data Model Interfaces
+
+### Added
+- `sawmill/models/message.py` - Message and FileRef Pydantic models
+  - Message: represents a logical log message (single or multi-line)
+  - FileRef: represents source file references
+  - Message.matches_filter() for regex matching against raw_text
+- `sawmill/models/filter_def.py` - FilterDefinition model with regex validation
+  - Uses Pydantic field_validator to validate regex patterns
+  - Invalid patterns raise ValueError during instantiation
+- `sawmill/models/waiver.py` - Waiver and WaiverFile models
+  - Waiver: CI acceptance entry with type, pattern, reason, author, date
+  - WaiverFile: collection of waivers for a tool
+- `sawmill/models/__init__.py` - Exports all model classes
+- `tests/models/test_message.py` - 11 tests for message models
+- `tests/models/test_filter_def.py` - 10 tests for filter definitions
+
+### Notes
+- All models use Pydantic v2 for validation
+- Message model supports both single-line and multi-line messages
+- FilterDefinition validates regex patterns at construction time
+- Optional fields default to None as expected
+
+---
+
 ## [2026-01-18] Task 1.1: Project Scaffolding
 
 ### Added
