@@ -10,7 +10,8 @@ from rich.table import Table
 
 from sawmill.core.filter import FilterEngine
 from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
-from sawmill.core.waiver import WaiverGenerator
+from sawmill.core.waiver import WaiverGenerator, WaiverLoader, WaiverMatcher, WaiverValidationError
+from sawmill.models.waiver import Waiver
 from sawmill.plugins.vivado import VivadoPlugin
 
 click.rich_click.TEXT_MARKUP = "rich"
@@ -117,6 +118,36 @@ def _has_ci_failures(messages: list, strict: bool) -> bool:
             if sev in failing_severities:
                 return True
     return False
+
+
+def _apply_waivers(
+    messages: list,
+    matcher: WaiverMatcher,
+) -> tuple[list, list, list[Waiver]]:
+    """Separate messages into waived and unwaived lists.
+
+    Args:
+        messages: All messages to process.
+        matcher: WaiverMatcher to use for checking waivers.
+
+    Returns:
+        A tuple of (unwaived_messages, waived_messages, used_waivers).
+    """
+    unwaived: list = []
+    waived: list = []
+    used_waivers: list[Waiver] = []
+
+    for msg in messages:
+        waiver = matcher.is_waived(msg)
+        if waiver:
+            waived.append((msg, waiver))
+            # Track used waivers (by identity, not by hash)
+            if waiver not in used_waivers:
+                used_waivers.append(waiver)
+        else:
+            unwaived.append(msg)
+
+    return unwaived, waived, used_waivers
 
 
 def _match_message_id(message_id: str | None, pattern: str) -> bool:
@@ -465,6 +496,21 @@ def _generate_waivers(
     is_flag=True,
     help="With --ci, also fail on regular warnings."
 )
+@click.option(
+    "--waivers",
+    type=click.Path(exists=False),
+    help="Path to waiver TOML file. Waived messages don't count toward CI failure."
+)
+@click.option(
+    "--show-waived",
+    is_flag=True,
+    help="Display messages that were waived (with waiver reasons)."
+)
+@click.option(
+    "--report-unused",
+    is_flag=True,
+    help="Report waivers that didn't match any messages (stale waivers)."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -483,6 +529,9 @@ def cli(
     generate_waivers: bool,
     ci: bool,
     strict: bool,
+    waivers: str | None,
+    show_waived: bool,
+    report_unused: bool,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -586,6 +635,23 @@ def cli(
         _generate_waivers(ctx, console, logfile, plugin)
         return
 
+    # Load waivers if specified
+    waiver_matcher: WaiverMatcher | None = None
+    all_waivers: list[Waiver] = []
+    if waivers:
+        waiver_path = Path(waivers)
+        if not waiver_path.exists():
+            console.print(f"[red]Error:[/red] Waiver file not found: {waivers}")
+            ctx.exit(1)
+        try:
+            loader = WaiverLoader()
+            waiver_file = loader.load(waiver_path)
+            all_waivers = waiver_file.waivers
+            waiver_matcher = WaiverMatcher(all_waivers)
+        except WaiverValidationError as e:
+            console.print(f"[red]Error:[/red] Invalid waiver file: {e}")
+            ctx.exit(1)
+
     # Process the log file
     messages = _process_log_file(
         ctx,
@@ -601,7 +667,34 @@ def cli(
         output_format,
     )
 
-    # Check CI exit codes
+    # Apply waivers if loaded
+    waived_messages: list = []
+    used_waivers: list[Waiver] = []
+    if waiver_matcher:
+        messages, waived_messages, used_waivers = _apply_waivers(messages, waiver_matcher)
+
+    # Show waived messages if requested
+    if show_waived and waived_messages:
+        console.print("\n[bold cyan]Waived Messages:[/bold cyan]")
+        for msg, waiver in waived_messages:
+            style = _get_severity_style(msg.severity)
+            console.print(f"  [dim]Waived by:[/dim] {waiver.pattern} ({waiver.type})")
+            console.print(f"  [dim]Reason:[/dim] {waiver.reason}")
+            if style:
+                console.print(f"  {msg.raw_text}", style=style, markup=False)
+            else:
+                console.print(f"  {msg.raw_text}", markup=False)
+            console.print()
+
+    # Report unused waivers if requested
+    if report_unused and all_waivers:
+        unused_waivers = [w for w in all_waivers if w not in used_waivers]
+        if unused_waivers:
+            console.print("\n[bold yellow]Unused Waivers:[/bold yellow]")
+            for waiver in unused_waivers:
+                console.print(f"  - {waiver.pattern} ({waiver.type}): {waiver.reason}")
+
+    # Check CI exit codes (only on unwaived messages)
     if ci and _has_ci_failures(messages, strict):
         ctx.exit(1)
 
