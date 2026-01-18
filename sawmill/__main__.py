@@ -2,6 +2,7 @@
 
 import fnmatch
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import rich_click as click
@@ -148,6 +149,139 @@ def _apply_waivers(
             unwaived.append(msg)
 
     return unwaived, waived, used_waivers
+
+
+def _generate_ci_report(
+    messages: list,
+    waived_messages: list,
+    used_waivers: list[Waiver],
+    all_waivers: list[Waiver],
+    strict: bool,
+    log_file: str,
+    plugin_name: str,
+) -> dict:
+    """Generate a CI summary report as a dictionary.
+
+    Args:
+        messages: List of unwaived messages.
+        waived_messages: List of (message, waiver) tuples for waived messages.
+        used_waivers: List of waivers that matched messages.
+        all_waivers: All waivers that were loaded.
+        strict: If True, warnings also cause CI failure.
+        log_file: Path to the log file being analyzed.
+        plugin_name: Name of the plugin used.
+
+    Returns:
+        Dictionary containing the CI report.
+    """
+    # Count messages by severity
+    counts: dict[str, int] = {
+        "error": 0,
+        "critical_warning": 0,
+        "warning": 0,
+        "info": 0,
+        "other": 0,
+    }
+    for msg in messages:
+        if msg.severity:
+            sev = msg.severity.lower()
+            if sev in counts:
+                counts[sev] += 1
+            else:
+                counts["other"] += 1
+        else:
+            counts["other"] += 1
+
+    # Count waived messages by severity
+    waived_counts: dict[str, int] = {
+        "error": 0,
+        "critical_warning": 0,
+        "warning": 0,
+        "info": 0,
+        "other": 0,
+    }
+    for msg, waiver in waived_messages:
+        if msg.severity:
+            sev = msg.severity.lower()
+            if sev in waived_counts:
+                waived_counts[sev] += 1
+            else:
+                waived_counts["other"] += 1
+        else:
+            waived_counts["other"] += 1
+
+    # Calculate exit code based on unwaived messages
+    exit_code = 0
+    failing_severities = {"error", "critical_warning"}
+    if strict:
+        failing_severities.add("warning")
+
+    for msg in messages:
+        if msg.severity:
+            sev = msg.severity.lower()
+            if sev in failing_severities:
+                exit_code = 1
+                break
+
+    # Build issues list (unwaived messages with CI-relevant severities)
+    issues = []
+    for msg in messages:
+        issues.append({
+            "message_id": msg.message_id,
+            "severity": msg.severity,
+            "content": msg.content,
+            "line": msg.start_line,
+            "raw_text": msg.raw_text,
+        })
+
+    # Build waived list
+    waived_list = []
+    for msg, waiver in waived_messages:
+        waived_list.append({
+            "message_id": msg.message_id,
+            "severity": msg.severity,
+            "content": msg.content,
+            "line": msg.start_line,
+            "waiver_pattern": waiver.pattern,
+            "waiver_type": waiver.type,
+            "waiver_reason": waiver.reason,
+        })
+
+    # Find unused waivers
+    unused_waivers = []
+    for waiver in all_waivers:
+        if waiver not in used_waivers:
+            unused_waivers.append({
+                "pattern": waiver.pattern,
+                "type": waiver.type,
+                "reason": waiver.reason,
+            })
+
+    # Build the report
+    report = {
+        "metadata": {
+            "log_file": log_file,
+            "plugin": plugin_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        "exit_code": exit_code,
+        "summary": {
+            "total": len(messages) + len(waived_messages),
+            "errors": counts["error"],
+            "critical_warnings": counts["critical_warning"],
+            "warnings": counts["warning"],
+            "info": counts["info"],
+            "waived": len(waived_messages),
+            "unwaived_errors": counts["error"],
+            "unwaived_critical_warnings": counts["critical_warning"],
+            "unwaived_warnings": counts["warning"],
+        },
+        "issues": issues,
+        "waived": waived_list,
+        "unused_waivers": unused_waivers,
+    }
+
+    return report
 
 
 def _match_message_id(message_id: str | None, pattern: str) -> bool:
@@ -511,6 +645,12 @@ def _generate_waivers(
     is_flag=True,
     help="Report waivers that didn't match any messages (stale waivers)."
 )
+@click.option(
+    "--report",
+    "report_file",
+    type=click.Path(),
+    help="Write JSON summary report to this file."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -532,6 +672,7 @@ def cli(
     waivers: str | None,
     show_waived: bool,
     report_unused: bool,
+    report_file: str | None,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -693,6 +834,33 @@ def cli(
             console.print("\n[bold yellow]Unused Waivers:[/bold yellow]")
             for waiver in unused_waivers:
                 console.print(f"  - {waiver.pattern} ({waiver.type}): {waiver.reason}")
+
+    # Determine the plugin name used (for report metadata)
+    used_plugin_name = plugin if plugin else "vivado"  # Default to vivado for auto-detect
+    if not plugin:
+        try:
+            manager = _get_plugin_manager()
+            used_plugin_name = manager.auto_detect(Path(logfile))
+        except (NoPluginFoundError, PluginConflictError):
+            pass  # Keep default
+
+    # Generate CI report if requested
+    if report_file:
+        report = _generate_ci_report(
+            messages=messages,
+            waived_messages=waived_messages,
+            used_waivers=used_waivers,
+            all_waivers=all_waivers,
+            strict=strict,
+            log_file=logfile,
+            plugin_name=used_plugin_name,
+        )
+
+        # Write the report to file
+        report_path = Path(report_file)
+        # Create parent directories if they don't exist
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2))
 
     # Check CI exit codes (only on unwaived messages)
     if ci and _has_ci_failures(messages, strict):
