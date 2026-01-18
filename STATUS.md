@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 9 - Task 3.1 Complete
+> **Last Agent Session:** Session 10 - Task 3.2 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `3.2` |
-| **task_name** | Filter Statistics |
-| **stage** | Stage 3: Filter Engine |
+| **current_task** | `4.1` |
+| **task_name** | Basic CLI with Stdout Output |
+| **stage** | Stage 4: CLI Streaming Interface |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -33,7 +33,7 @@
 
 ### Stage 3: Filter Engine (Ralph Loop)
 - [x] **Task 3.1:** Basic Regex Filter Engine
-- [ ] **Task 3.2:** Filter Statistics
+- [x] **Task 3.2:** Filter Statistics
 
 ### Stage 4: CLI Streaming Interface (Ralph Loop)
 - [ ] **Task 4.1:** Basic CLI with Stdout Output
@@ -64,21 +64,29 @@
 
 ## Current Task Details
 
-### Task 3.2: Filter Statistics
+### Task 4.1: Basic CLI with Stdout Output
 
-**Objective:** Track and report filter match statistics.
+**Objective:** Create a CLI that reads a log file, delegates to plugin, and streams filtered output.
 
 **Deliverables:**
-- [ ] `FilterStats` dataclass with `total_messages`, `matched_messages`, `match_percentage`
-- [ ] Method: `FilterEngine.get_stats(filters, messages) -> FilterStats`
-- [ ] Per-filter match counts
+- [ ] Accept log file as positional argument
+- [ ] `--severity` option to filter by severity level
+- [ ] `--filter` option for regex pattern (include matches)
+- [ ] `--suppress` option for regex pattern (exclude matches) - can be repeated
+- [ ] `--suppress-id` option for message ID (exclude by ID) - can be repeated
+- [ ] `--plugin` option to force specific plugin
+- [ ] Stream matching lines to stdout with Rich formatting
 
 **Success Criteria:**
-- [ ] Correctly counts total and matched messages
-- [ ] Calculates accurate percentages
-- [ ] Provides per-filter breakdown
+- [ ] `sawmill logfile.log` auto-detects plugin and processes file
+- [ ] `sawmill logfile.log` errors if no plugin can handle the file
+- [ ] `sawmill logfile.log --severity error` filters to errors
+- [ ] `sawmill logfile.log --filter "pattern"` filters by regex
+- [ ] `sawmill logfile.log --suppress "pattern"` hides matching messages
+- [ ] Multiple `--suppress` options accumulate
+- [ ] Output is colorized based on severity
 
-**Test Files:** `tests/core/test_filter_stats.py`
+**Test Files:** `tests/test_cli.py`
 
 ---
 
@@ -90,12 +98,13 @@
 
 ## Hints for Next Session
 
-- Stage 3.1 (Filter Engine) is complete
-- `sawmill/core/filter.py` has `FilterEngine` class with `apply_filter`, `apply_filters`, `apply_suppressions`
-- FilterEngine is exported from `sawmill.core`
-- For Task 3.2, add `FilterStats` dataclass and `get_stats()` method to filter.py
-- FilterStats should include `per_filter` dict mapping filter IDs to match counts
-- Look at tests in TASKS.md for expected behavior
+- Stage 3 (Filter Engine) is complete
+- `sawmill/core/filter.py` has `FilterEngine` and `FilterStats` classes
+- Both are exported from `sawmill.core`
+- The CLI already has `--list-plugins`, `--show-info`, and `--plugin` options
+- Add log file processing to the existing CLI in `sawmill/__main__.py`
+- Use PluginManager.auto_detect() to select plugin when `--plugin` not specified
+- Call plugin.load_and_parse() to get messages, then use FilterEngine
 
 ### Architecture Reminder
 
@@ -111,6 +120,17 @@
 ---
 
 ## Session Log
+
+### Session 10 (completed)
+- **Started:** 2026-01-18
+- **Task:** 3.2 - Filter Statistics
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/core/test_filter_stats.py` - 17 tests for filter statistics
+- **Files Modified:**
+  - `sawmill/core/filter.py` - Added FilterStats dataclass and get_stats() method
+  - `sawmill/core/__init__.py` - Export FilterStats
+- **Tests:** 144 passing
 
 ### Session 9 (completed)
 - **Started:** 2026-01-18

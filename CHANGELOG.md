@@ -62,6 +62,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 3.2: Filter Statistics
+
+### Added
+- `FilterStats` dataclass in `sawmill/core/filter.py`
+  - `total_messages` - Total count of messages processed
+  - `matched_messages` - Count of messages matching all enabled filters
+  - `match_percentage` - Percentage of matched messages (0.0-100.0)
+  - `per_filter` - Dict mapping filter IDs to individual match counts
+- `FilterEngine.get_stats()` method for calculating filter statistics
+- `tests/core/test_filter_stats.py` - 17 tests for filter statistics
+- Updated `sawmill/core/__init__.py` to export FilterStats
+
+### Features
+- Correctly counts total and matched messages
+- Calculates accurate percentages (handles edge cases like 0 total)
+- Provides per-filter breakdown for enabled filters only
+- Disabled filters excluded from per_filter stats
+- Uses AND mode for matched_messages (consistent with apply_filters)
+- Handles empty message lists and no-filter scenarios
+
+### Notes
+- per_filter shows individual matches per filter (not dependent on other filters)
+- matched_messages uses AND mode (all filters must match)
+- Useful for displaying filter effectiveness in CLI/TUI
+
+---
+
 ## [2026-01-18] Task 3.1: Basic Regex Filter Engine
 
 ### Added
