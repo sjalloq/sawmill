@@ -62,6 +62,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 2.2: Plugin Manager with Entry Point Discovery
+
+### Added
+- `sawmill/core/plugin.py` - PluginManager class with complete plugin infrastructure
+  - `PluginManager` - Main class for plugin management
+  - `register(plugin)` - Register a plugin instance
+  - `unregister(name)` - Remove a registered plugin
+  - `discover()` - Discover plugins via `sawmill.plugins` entry points
+  - `list_plugins()` - List all registered plugin names
+  - `get_plugin(name)` - Get plugin instance by name
+  - `get_plugin_info(name)` - Get plugin metadata (name, version, description)
+- `sawmill/core/__init__.py` - Updated to export PluginManager and exceptions
+- Exception classes for error handling:
+  - `PluginError` - Base exception for plugin errors
+  - `PluginConflictError` - When multiple plugins claim high confidence
+  - `NoPluginFoundError` - When no plugin can handle a file
+- `tests/core/__init__.py` - Test package marker
+- `tests/core/test_plugin_manager.py` - 15 tests for plugin manager
+
+### Notes
+- Uses pluggy for hook management (same architecture as pytest)
+- Entry point discovery uses `importlib.metadata.entry_points`
+- Compatible with Python 3.10+ entry points API
+- Plugins registered with pluggy can be called via `pm.hook.<hookname>()`
+
+---
+
 ## [2026-01-18] Task 2.1: Plugin Hook Specification
 
 ### Added

@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 4 - Task 2.1 Complete
+> **Last Agent Session:** Session 5 - Task 2.2 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `2.2` |
-| **task_name** | Plugin Manager with Entry Point Discovery |
+| **current_task** | `2.3` |
+| **task_name** | Auto-Detection and Plugin Selection |
 | **stage** | Stage 2: Plugin System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -26,7 +26,7 @@
 
 ### Stage 2: Plugin System (Ralph Loop)
 - [x] **Task 2.1:** Plugin Hook Specification
-- [ ] **Task 2.2:** Plugin Manager with Entry Point Discovery
+- [x] **Task 2.2:** Plugin Manager with Entry Point Discovery
 - [ ] **Task 2.3:** Auto-Detection and Plugin Selection
 - [ ] **Task 2.4:** Built-in Vivado Plugin
 - [ ] **Task 2.5:** Plugin Discovery CLI
@@ -64,22 +64,23 @@
 
 ## Current Task Details
 
-### Task 2.2: Plugin Manager with Entry Point Discovery
+### Task 2.3: Auto-Detection and Plugin Selection
 
-**Objective:** Implement plugin discovery via Python entry points.
+**Objective:** Automatically detect log type and select appropriate plugin.
 
 **Deliverables:**
-- [ ] `sawmill/core/plugin.py` with `PluginManager` class
-- [ ] Discovery via `importlib.metadata.entry_points`
-- [ ] Plugin registration with pluggy
-- [ ] `PluginConflictError` exception for when >1 plugin has confidence > 0.5
+- [ ] Method: `PluginManager.auto_detect(path) -> Optional[str]`
+- [ ] Method: `PluginManager.get_plugin(name) -> SawmillPlugin`
+- [ ] CLI option: `--plugin <name>` to force specific plugin
+- [ ] Conflict detection when >1 plugin has confidence > 0.5
 
 **Success Criteria:**
-- [ ] Discovers plugins from `sawmill.plugins` entry point group
-- [ ] Registers plugins with pluggy PluginManager
-- [ ] Lists available plugins with metadata
+- [ ] Selects plugin with highest confidence score
+- [ ] Raises NoPluginFoundError if no plugin has confidence > 0.5
+- [ ] Raises PluginConflictError if >1 plugin has confidence > 0.5
+- [ ] `--plugin vivado` forces Vivado plugin (bypasses auto-detect)
 
-**Test Files:** `tests/core/test_plugin_manager.py`
+**Test Files:** `tests/core/test_plugin_autodetect.py`
 
 ---
 
@@ -91,11 +92,15 @@
 
 ## Hints for Next Session
 
-- Hook specification is complete in `sawmill/plugin/hookspec.py`
-- `SawmillHookSpec` defines: `can_handle`, `load_and_parse`, `get_filters`, `extract_file_reference`
-- `SawmillPlugin` base class with defaults in `sawmill/plugin/__init__.py`
-- Use `importlib.metadata.entry_points(group="sawmill.plugins")` for discovery
-- Create pluggy.PluginManager and register hookspec, then register plugins
+- PluginManager is complete in `sawmill/core/plugin.py`
+- Already has `register()`, `unregister()`, `get_plugin()`, `list_plugins()`, `get_plugin_info()`, `discover()`
+- Need to add `auto_detect(path)` method that:
+  1. Calls `can_handle` hook for all plugins
+  2. Checks confidence scores
+  3. Raises NoPluginFoundError if max < 0.5
+  4. Raises PluginConflictError if >1 plugin has confidence > 0.5
+  5. Returns plugin name with highest confidence
+- Exception classes already exist: `PluginConflictError`, `NoPluginFoundError`
 
 ### Architecture Reminder
 
@@ -117,6 +122,17 @@
 ---
 
 ## Session Log
+
+### Session 5 (completed)
+- **Started:** 2026-01-18
+- **Task:** 2.2 - Plugin Manager with Entry Point Discovery
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/core/plugin.py` - PluginManager class with discovery and registration
+  - `sawmill/core/__init__.py` - Updated to export PluginManager and exceptions
+  - `tests/core/__init__.py` - Test package marker
+  - `tests/core/test_plugin_manager.py` - 15 tests for plugin manager
+- **Tests:** 52 passing
 
 ### Session 4 (completed)
 - **Started:** 2026-01-18
