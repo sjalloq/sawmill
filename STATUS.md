@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 3 - Task 1.2 Complete
+> **Last Agent Session:** Session 4 - Task 2.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `2.1` |
-| **task_name** | Plugin Hook Specification |
+| **current_task** | `2.2` |
+| **task_name** | Plugin Manager with Entry Point Discovery |
 | **stage** | Stage 2: Plugin System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -25,7 +25,7 @@
 - [x] **Task 1.2:** Data Model Interfaces
 
 ### Stage 2: Plugin System (Ralph Loop)
-- [ ] **Task 2.1:** Plugin Hook Specification
+- [x] **Task 2.1:** Plugin Hook Specification
 - [ ] **Task 2.2:** Plugin Manager with Entry Point Discovery
 - [ ] **Task 2.3:** Auto-Detection and Plugin Selection
 - [ ] **Task 2.4:** Built-in Vivado Plugin
@@ -64,21 +64,22 @@
 
 ## Current Task Details
 
-### Task 2.1: Plugin Hook Specification
+### Task 2.2: Plugin Manager with Entry Point Discovery
 
-**Objective:** Define the pluggy hook specification for sawmill plugins.
+**Objective:** Implement plugin discovery via Python entry points.
 
 **Deliverables:**
-- [ ] `sawmill/plugin/__init__.py` with hook markers and base class
-- [ ] `sawmill/plugin/hookspec.py` with `SawmillHookSpec` class
-- [ ] All hook definitions with proper signatures
+- [ ] `sawmill/core/plugin.py` with `PluginManager` class
+- [ ] Discovery via `importlib.metadata.entry_points`
+- [ ] Plugin registration with pluggy
+- [ ] `PluginConflictError` exception for when >1 plugin has confidence > 0.5
 
 **Success Criteria:**
-- [ ] Hook specification defines all required hooks
-- [ ] `hookimpl` decorator available for plugins
-- [ ] `SawmillPlugin` base class provides sensible defaults (returning empty/None)
+- [ ] Discovers plugins from `sawmill.plugins` entry point group
+- [ ] Registers plugins with pluggy PluginManager
+- [ ] Lists available plugins with metadata
 
-**Test Files:** `tests/plugin/test_hookspec.py`
+**Test Files:** `tests/core/test_plugin_manager.py`
 
 ---
 
@@ -90,10 +91,11 @@
 
 ## Hints for Next Session
 
-- Data models are now complete: Message, FileRef, FilterDefinition, Waiver, WaiverFile
-- Use pluggy for the hook specification system (already in dependencies)
-- Hooks: `can_handle(path)`, `load_and_parse(path)`, `get_filters()`
-- SawmillPlugin base class should provide default implementations that return empty/None
+- Hook specification is complete in `sawmill/plugin/hookspec.py`
+- `SawmillHookSpec` defines: `can_handle`, `load_and_parse`, `get_filters`, `extract_file_reference`
+- `SawmillPlugin` base class with defaults in `sawmill/plugin/__init__.py`
+- Use `importlib.metadata.entry_points(group="sawmill.plugins")` for discovery
+- Create pluggy.PluginManager and register hookspec, then register plugins
 
 ### Architecture Reminder
 
@@ -115,6 +117,17 @@
 ---
 
 ## Session Log
+
+### Session 4 (completed)
+- **Started:** 2026-01-18
+- **Task:** 2.1 - Plugin Hook Specification
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/plugin/hookspec.py` - SawmillHookSpec with all hook definitions
+  - `sawmill/plugin/__init__.py` - Updated with hookimpl and SawmillPlugin base class
+  - `tests/plugin/__init__.py` - Test package marker
+  - `tests/plugin/test_hookspec.py` - 8 tests for hook specification
+- **Tests:** 37 passing
 
 ### Session 3 (completed)
 - **Started:** 2026-01-18

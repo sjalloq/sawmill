@@ -62,6 +62,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 2.1: Plugin Hook Specification
+
+### Added
+- `sawmill/plugin/hookspec.py` - SawmillHookSpec class defining plugin hooks
+  - `can_handle(path)` - Returns confidence score (0.0-1.0) for file handling
+  - `load_and_parse(path)` - Load and parse log file into Message list
+  - `get_filters()` - Return plugin-provided filter definitions
+  - `extract_file_reference(content)` - Extract file:line references
+- `sawmill/plugin/__init__.py` - Updated with full plugin infrastructure
+  - `hookimpl` decorator for plugins to mark hook implementations
+  - `SawmillPlugin` base class with default implementations
+  - Default implementations return 0.0/[]/None (opt-out pattern)
+- `tests/plugin/__init__.py` - Test package marker
+- `tests/plugin/test_hookspec.py` - 8 tests for hook specification
+
+### Notes
+- Uses pluggy for hook management (same as pytest)
+- SawmillPlugin can be subclassed with @hookimpl decorated methods
+- Base class defaults allow incremental plugin implementation
+
+---
+
 ## [2026-01-18] Task 1.2: Data Model Interfaces
 
 ### Added
