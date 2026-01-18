@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 7 - Task 2.4 Complete
+> **Last Agent Session:** Session 8 - Task 2.5 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `2.5` |
-| **task_name** | Plugin Discovery CLI |
-| **stage** | Stage 2: Plugin System |
+| **current_task** | `3.1` |
+| **task_name** | Basic Regex Filter Engine |
+| **stage** | Stage 3: Filter Engine |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -29,7 +29,7 @@
 - [x] **Task 2.2:** Plugin Manager with Entry Point Discovery
 - [x] **Task 2.3:** Auto-Detection and Plugin Selection
 - [x] **Task 2.4:** Built-in Vivado Plugin
-- [ ] **Task 2.5:** Plugin Discovery CLI
+- [x] **Task 2.5:** Plugin Discovery CLI
 
 ### Stage 3: Filter Engine (Ralph Loop)
 - [ ] **Task 3.1:** Basic Regex Filter Engine
@@ -64,21 +64,24 @@
 
 ## Current Task Details
 
-### Task 2.5: Plugin Discovery CLI
+### Task 3.1: Basic Regex Filter Engine
 
-**Objective:** Implement CLI commands for plugin discovery and introspection.
+**Objective:** Implement the core filtering logic that operates on plugin output.
 
 **Deliverables:**
-- [ ] `--list-plugins` option to enumerate discovered plugins
-- [ ] `--show-info` option (with `--plugin`) to display plugin capabilities
-- [ ] Show: version, hooks implemented, filter counts
+- [ ] `sawmill/core/filter.py` with `FilterEngine` class
+- [ ] Method: `apply_filter(pattern, messages) -> list[Message]`
+- [ ] Method: `apply_filters(filters, messages, mode='AND'|'OR') -> list[Message]`
+- [ ] Method: `apply_suppressions(patterns, messages) -> list[Message]`
 
 **Success Criteria:**
-- [ ] `sawmill --list-plugins` shows all installed plugins
-- [ ] `sawmill --plugin vivado --show-info` shows Vivado plugin details
-- [ ] Output includes plugin version and implemented hooks
+- [ ] Single filter correctly matches messages
+- [ ] AND mode requires all filters to match
+- [ ] OR mode requires any filter to match
+- [ ] Suppressions remove matching messages
+- [ ] Invalid regex returns empty results with error flag
 
-**Test Files:** `tests/test_cli_plugin_discovery.py`
+**Test Files:** `tests/core/test_filter.py`
 
 ---
 
@@ -90,23 +93,14 @@
 
 ## Hints for Next Session
 
-- VivadoPlugin is complete in `sawmill/plugins/vivado.py`
-- To use VivadoPlugin, it needs to be registered with PluginManager:
-  ```python
-  from sawmill.core.plugin import PluginManager
-  from sawmill.plugins.vivado import VivadoPlugin
-
-  manager = PluginManager()
-  manager.register(VivadoPlugin())
-  ```
-- PluginManager has `list_plugins()` and `get_plugin_info()` methods
-- CLI skeleton is in `sawmill/cli.py` using rich-click
-- For Task 2.5, add `--list-plugins` and `--show-info` options
-- VivadoPlugin has:
-  - name: "vivado"
-  - version: "1.0.0"
-  - description: "Parser for Xilinx Vivado synthesis and implementation logs"
-  - 10 filter definitions
+- Stage 2 (Plugin System) is complete
+- CLI now has `--list-plugins` and `--plugin <name> --show-info` options
+- `_get_plugin_manager()` in `sawmill/__main__.py` handles plugin setup
+- For Task 3.1, create `sawmill/core/filter.py` with `FilterEngine` class
+- FilterEngine operates on `list[Message]` provided by plugins
+- Message model has `matches_filter(pattern)` method already
+- Look at tests in TASKS.md for expected behavior (AND/OR modes, suppressions)
+- FilterDefinition is in `sawmill/models/filter_def.py`
 
 ### Architecture Reminder
 
@@ -122,6 +116,16 @@
 ---
 
 ## Session Log
+
+### Session 8 (completed)
+- **Started:** 2026-01-18
+- **Task:** 2.5 - Plugin Discovery CLI
+- **Outcome:** Complete
+- **Files Modified:**
+  - `sawmill/__main__.py` - Added --list-plugins and --show-info options
+- **Files Created:**
+  - `tests/test_cli_plugin_discovery.py` - 12 tests for plugin discovery CLI
+- **Tests:** 104 passing
 
 ### Session 7 (completed)
 - **Started:** 2026-01-18

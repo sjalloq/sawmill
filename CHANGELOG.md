@@ -62,6 +62,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 2.5: Plugin Discovery CLI
+
+### Added
+- `sawmill/__main__.py` - Updated CLI with plugin discovery commands
+  - `--list-plugins` option to enumerate all installed plugins
+  - `--show-info` option (with `--plugin`) to display plugin capabilities
+  - `_get_plugin_manager()` helper for consistent plugin setup
+  - `_get_implemented_hooks()` helper for hook introspection
+- `tests/test_cli_plugin_discovery.py` - 12 tests for plugin discovery CLI
+
+### Features
+- `--list-plugins` shows table with name, version, description for all plugins
+- `--show-info` displays: version, description, implemented hooks, filter count/details
+- Filter table shows ID, name, enabled status, and description
+- Error handling for unknown plugins with list of available alternatives
+- Rich-formatted output with tables and styling
+
+### Notes
+- Built-in Vivado plugin is automatically registered
+- External plugins discovered via entry points
+- Implemented hooks detected via `sawmill_impl` attribute on methods
+
+---
+
 ## [2026-01-18] Task 2.4: Built-in Vivado Plugin
 
 ### Added
