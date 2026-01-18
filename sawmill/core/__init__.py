@@ -5,7 +5,7 @@ This module provides the core functionality:
 - FilterEngine: Regex filtering for messages
 """
 
-from sawmill.core.filter import FilterEngine
+from sawmill.core.filter import FilterEngine, FilterStats
 from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,
@@ -15,6 +15,7 @@ from sawmill.core.plugin import (
 
 __all__ = [
     "FilterEngine",
+    "FilterStats",
     "PluginManager",
     "PluginError",
     "PluginConflictError",

@@ -7,10 +7,28 @@ The FilterEngine applies filters, suppressions, and provides statistics.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Literal
 
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import Message
+
+
+@dataclass
+class FilterStats:
+    """Statistics about filter matches.
+
+    Attributes:
+        total_messages: Total number of messages processed.
+        matched_messages: Number of messages that matched all enabled filters.
+        match_percentage: Percentage of messages that matched (0.0-100.0).
+        per_filter: Dict mapping filter IDs to their individual match counts.
+    """
+
+    total_messages: int
+    matched_messages: int
+    match_percentage: float
+    per_filter: dict[str, int] = field(default_factory=dict)
 
 
 class FilterEngine:
@@ -138,3 +156,50 @@ class FilterEngine:
             msg for msg in messages
             if not any(cp.search(msg.raw_text) for cp in compiled_patterns)
         ]
+
+    def get_stats(
+        self,
+        filters: list[FilterDefinition],
+        messages: list[Message],
+    ) -> FilterStats:
+        """Calculate statistics about filter matches.
+
+        Args:
+            filters: List of filter definitions to analyze.
+            messages: List of messages to analyze.
+
+        Returns:
+            FilterStats containing total counts, match counts, percentages,
+            and per-filter breakdown.
+        """
+        total = len(messages)
+
+        # Calculate per-filter match counts
+        per_filter: dict[str, int] = {}
+        enabled_filters = [f for f in filters if f.enabled]
+
+        for filt in enabled_filters:
+            try:
+                compiled = re.compile(filt.pattern)
+                count = sum(1 for msg in messages if compiled.search(msg.raw_text))
+                per_filter[filt.id] = count
+            except re.error:
+                # Invalid pattern matches nothing
+                per_filter[filt.id] = 0
+
+        # Calculate matched messages (messages matching ALL enabled filters)
+        matched = self.apply_filters(filters, messages, mode="AND")
+        matched_count = len(matched)
+
+        # Calculate percentage
+        if total > 0:
+            percentage = (matched_count / total) * 100.0
+        else:
+            percentage = 0.0
+
+        return FilterStats(
+            total_messages=total,
+            matched_messages=matched_count,
+            match_percentage=percentage,
+            per_filter=per_filter,
+        )
