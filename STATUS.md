@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 5 - Task 2.2 Complete
+> **Last Agent Session:** Session 6 - Task 2.3 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `2.3` |
-| **task_name** | Auto-Detection and Plugin Selection |
+| **current_task** | `2.4` |
+| **task_name** | Built-in Vivado Plugin |
 | **stage** | Stage 2: Plugin System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -27,7 +27,7 @@
 ### Stage 2: Plugin System (Ralph Loop)
 - [x] **Task 2.1:** Plugin Hook Specification
 - [x] **Task 2.2:** Plugin Manager with Entry Point Discovery
-- [ ] **Task 2.3:** Auto-Detection and Plugin Selection
+- [x] **Task 2.3:** Auto-Detection and Plugin Selection
 - [ ] **Task 2.4:** Built-in Vivado Plugin
 - [ ] **Task 2.5:** Plugin Discovery CLI
 
@@ -64,23 +64,27 @@
 
 ## Current Task Details
 
-### Task 2.3: Auto-Detection and Plugin Selection
+### Task 2.4: Built-in Vivado Plugin
 
-**Objective:** Automatically detect log type and select appropriate plugin.
+**Objective:** Create the reference Vivado plugin as a built-in.
 
 **Deliverables:**
-- [ ] Method: `PluginManager.auto_detect(path) -> Optional[str]`
-- [ ] Method: `PluginManager.get_plugin(name) -> SawmillPlugin`
-- [ ] CLI option: `--plugin <name>` to force specific plugin
-- [ ] Conflict detection when >1 plugin has confidence > 0.5
+- [ ] `sawmill/plugins/vivado.py` with `VivadoPlugin` class
+- [ ] All hooks implemented for Vivado log format:
+  - `can_handle()` - detect Vivado logs
+  - `load_and_parse()` - load file, parse, and group into `list[Message]`
+  - `get_filters()` - comprehensive filter set
+  - `extract_file_reference()` - extract file:line references
+- [ ] Register as built-in plugin (not via entry point)
 
 **Success Criteria:**
-- [ ] Selects plugin with highest confidence score
-- [ ] Raises NoPluginFoundError if no plugin has confidence > 0.5
-- [ ] Raises PluginConflictError if >1 plugin has confidence > 0.5
-- [ ] `--plugin vivado` forces Vivado plugin (bypasses auto-detect)
+- [ ] Detects Vivado logs with high confidence
+- [ ] Returns `list[Message]` with proper start_line/end_line for multi-line messages
+- [ ] Correctly extracts severity, message_id, content
+- [ ] Provides comprehensive filter set
+- [ ] Extracts file references from messages
 
-**Test Files:** `tests/core/test_plugin_autodetect.py`
+**Test Files:** `tests/plugins/test_vivado.py`
 
 ---
 
@@ -92,15 +96,17 @@
 
 ## Hints for Next Session
 
-- PluginManager is complete in `sawmill/core/plugin.py`
-- Already has `register()`, `unregister()`, `get_plugin()`, `list_plugins()`, `get_plugin_info()`, `discover()`
-- Need to add `auto_detect(path)` method that:
-  1. Calls `can_handle` hook for all plugins
-  2. Checks confidence scores
-  3. Raises NoPluginFoundError if max < 0.5
-  4. Raises PluginConflictError if >1 plugin has confidence > 0.5
-  5. Returns plugin name with highest confidence
-- Exception classes already exist: `PluginConflictError`, `NoPluginFoundError`
+- PluginManager is complete in `sawmill/core/plugin.py` with `auto_detect()` method
+- `auto_detect(path)` returns plugin name with highest confidence (>= 0.5)
+- Raises `NoPluginFoundError` if no plugin has confidence >= 0.5
+- Raises `PluginConflictError` if >1 plugin has confidence >= 0.5
+- For Task 2.4, see example Vivado logs in `examples/vivado/`
+- Vivado log patterns documented in `examples/vivado/PATTERNS.md`
+- Plugin should:
+  1. Detect Vivado header ("# Vivado v") with high confidence
+  2. Parse message format: `TYPE: [Category ID-Number] message [file:line]`
+  3. Group multi-line messages (continuation lines start with spaces)
+  4. Provide filters for errors, warnings, critical warnings
 
 ### Architecture Reminder
 
@@ -122,6 +128,16 @@
 ---
 
 ## Session Log
+
+### Session 6 (completed)
+- **Started:** 2026-01-18
+- **Task:** 2.3 - Auto-Detection and Plugin Selection
+- **Outcome:** Complete
+- **Files Modified:**
+  - `sawmill/core/plugin.py` - Added `auto_detect(path)` method
+- **Files Created:**
+  - `tests/core/test_plugin_autodetect.py` - 12 tests for auto-detection
+- **Tests:** 64 passing
 
 ### Session 5 (completed)
 - **Started:** 2026-01-18

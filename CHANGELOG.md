@@ -62,6 +62,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 2.3: Auto-Detection and Plugin Selection
+
+### Added
+- `PluginManager.auto_detect(path)` method in `sawmill/core/plugin.py`
+  - Calls `can_handle` on all registered plugins
+  - Returns plugin name with highest confidence (>= 0.5)
+  - Raises `NoPluginFoundError` if no plugin has confidence >= 0.5
+  - Raises `PluginConflictError` if multiple plugins have confidence >= 0.5
+  - Error messages include helpful diagnostics (best match, conflicting plugins)
+- `tests/core/test_plugin_autodetect.py` - 12 tests for auto-detection
+  - Tests for selecting highest confidence plugin
+  - Tests for no plugin match error
+  - Tests for conflict error when multiple plugins match
+  - Tests for boundary conditions (exactly 0.5 confidence)
+  - Tests for error handling (plugin exceptions)
+  - Tests for path-specific confidence
+
+### Notes
+- Plugin conflict detection threshold is >= 0.5 (inclusive)
+- Error messages suggest using `--plugin` to resolve conflicts
+- Plugins that throw exceptions during `can_handle` are skipped gracefully
+
+---
+
 ## [2026-01-18] Task 2.2: Plugin Manager with Entry Point Discovery
 
 ### Added
