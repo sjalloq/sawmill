@@ -62,6 +62,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 6.2: Waiver Matching Engine
+
+### Added
+- `sawmill/core/waiver.py` - Added `WaiverMatcher` class
+  - `is_waived(message)` method returning matching Waiver or None
+  - Support for all four waiver types with correct priority
+- `tests/core/test_waiver_matching.py` - 29 tests for waiver matching
+- Updated `sawmill/core/__init__.py` to export WaiverMatcher
+
+### Features
+- **Match Types:**
+  - ID: Exact match on message.message_id
+  - Pattern: Regex match on message.raw_text (with DOTALL for multiline)
+  - File: Exact, endswith, or glob-style match on file_ref.path
+  - Hash: SHA-256 hash match on message.raw_text
+- **Priority Order:** hash > id > pattern > file (highest to lowest)
+- Pre-organizes waivers by type for efficient matching
+
+### Notes
+- Pattern matching uses DOTALL flag to handle multiline log messages
+- File matching supports glob-style wildcards (* matches any characters)
+- First matching waiver is returned (based on priority and order)
+
+---
+
 ## [2026-01-18] Task 6.1: Waiver Data Model and Parser
 
 ### Added

@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 17 - Task 6.1 Complete
+> **Last Agent Session:** Session 18 - Task 6.2 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `6.2` |
-| **task_name** | Waiver Matching Engine |
+| **current_task** | `6.3` |
+| **task_name** | Waiver Generation |
 | **stage** | Stage 6: Waiver System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -47,7 +47,7 @@
 
 ### Stage 6: Waiver System (Ralph Loop)
 - [x] **Task 6.1:** Waiver Data Model and Parser
-- [ ] **Task 6.2:** Waiver Matching Engine
+- [x] **Task 6.2:** Waiver Matching Engine
 - [ ] **Task 6.3:** Waiver Generation
 
 ### Stage 7: CI Mode (Ralph Loop)
@@ -64,23 +64,21 @@
 
 ## Current Task Details
 
-### Task 6.2: Waiver Matching Engine
+### Task 6.3: Waiver Generation
 
-**Objective:** Implement waiver matching against log messages.
+**Objective:** Generate waiver file from current log messages.
 
 **Deliverables:**
-- [ ] `sawmill/core/waiver.py` with `WaiverMatcher` class
-- [ ] Method: `is_waived(message, waivers) -> Optional[Waiver]`
-- [ ] Support all match types with correct priority
+- [ ] CLI option: `--generate-waivers`
+- [ ] Output valid waiver TOML to stdout
+- [ ] Include message metadata for review
 
 **Success Criteria:**
-- [ ] ID patterns match message IDs
-- [ ] Regex patterns match message content
-- [ ] File patterns match source file paths
-- [ ] Hash matches exact message content
-- [ ] Priority order: hash > id > pattern > file
+- [ ] Generates valid TOML waiver file
+- [ ] Includes all unwaived errors/warnings
+- [ ] User can redirect to file: `sawmill log --generate-waivers > waivers.toml`
 
-**Test Files:** `tests/core/test_waiver_matching.py`
+**Test Files:** `tests/test_waiver_generation.py`
 
 ---
 
@@ -92,17 +90,17 @@
 
 ## Hints for Next Session
 
-- Task 6.1 (Waiver Data Model and Parser) is complete
+- Task 6.2 (Waiver Matching Engine) is complete
+- WaiverMatcher class is in sawmill/core/waiver.py
 - WaiverLoader class is in sawmill/core/waiver.py
 - Waiver data model is in sawmill/models/waiver.py
-- For Task 6.2, add WaiverMatcher class to sawmill/core/waiver.py
-- WaiverMatcher.is_waived(message) should return matching Waiver or None
-- Match priority order: hash > id > pattern > file
-- ID type: exact match on message.message_id
-- Pattern type: regex match on message.raw_text
-- File type: match on message.file_ref.path (if present)
-- Hash type: exact match on hash of message.raw_text
-- See TASKS.md Task 6.2 for test examples
+- For Task 6.3, add --generate-waivers CLI option
+- Output should be valid TOML that can be parsed by WaiverLoader
+- Include all errors/warnings/critical_warnings from the log
+- Generate waivers of type "id" for messages with message_id
+- For messages without message_id, generate type "hash" with SHA-256
+- Include author placeholder and current date
+- See TASKS.md Task 6.3 for test examples
 
 ### Architecture Reminder
 
@@ -118,6 +116,17 @@
 ---
 
 ## Session Log
+
+### Session 18 (completed)
+- **Started:** 2026-01-18
+- **Task:** 6.2 - Waiver Matching Engine
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/core/test_waiver_matching.py` - 29 tests for waiver matching
+- **Files Modified:**
+  - `sawmill/core/waiver.py` - Added WaiverMatcher class with is_waived() method
+  - `sawmill/core/__init__.py` - Export WaiverMatcher
+- **Tests:** 333 passing (304 + 29 new)
 
 ### Session 17 (completed)
 - **Started:** 2026-01-18
