@@ -16,6 +16,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2026-01-18] Task 7.3: CI Summary Report
+
+### Added
+- `--report <file>` CLI option to write JSON summary report
+- `_generate_ci_report()` helper function in `sawmill/__main__.py`
+- Report includes:
+  - Metadata (log_file, plugin, timestamp)
+  - Summary counts (total, errors, critical_warnings, warnings, info)
+  - Waiver tracking (waived count, unwaived errors/warnings)
+  - Exit code calculation (0 for pass, 1 for fail)
+  - List of all issues with severity, message_id, content, line
+  - List of waived messages with waiver details
+  - List of unused waivers (for detecting stale waivers)
+- New test file: `tests/test_ci_report.py` - 19 tests
+
+### Notes
+- Report works with or without --ci flag
+- Automatically creates parent directories for report file
+- Report respects all filters (--severity, --suppress-id, etc.)
+- Stage 7 (CI Mode) is now COMPLETE
+
+---
+
+## [2026-01-18] Task 7.2: Waiver Integration in CI
+
+### Added
+- `--waivers <file>` option to load waiver file for CI mode
+- `--show-waived` flag to display waived messages with reasons
+- `--report-unused` flag to warn about stale/unused waivers
+- `_apply_waivers()` helper function for waiver processing
+- Waived messages don't count toward CI failure exit code
+- New test file: `tests/test_ci_waivers.py` - 23 tests
+
+---
+
+## [2026-01-18] Task 7.1: Exit Code Logic
+
+### Added
+- `--ci` flag for CI mode (exit 1 on errors/critical warnings)
+- `--strict` flag for strict mode (also fail on regular warnings)
+- `_has_ci_failures()` helper function for exit code determination
+- New test file: `tests/test_ci_mode.py` - 27 tests
+
+---
+
+## [2026-01-18] Task 6.3: Waiver Generation
+
+### Added
+- `WaiverGenerator` class in `sawmill/core/waiver.py`
+- `--generate-waivers` CLI option to output waiver TOML
+- Generates waivers with message_id, hash, or pattern type
+- New test file: `tests/test_waiver_generation.py` - 27 tests
+
+---
+
+## [2026-01-18] Task 6.2: Waiver Matching Engine
+
+### Added
+- `WaiverMatcher` class with `is_waived()` method
+- Supports id, pattern, hash, and file waiver types
+- New test file: `tests/core/test_waiver_matching.py` - 29 tests
+
+---
+
+## [2026-01-18] Task 6.1: Waiver Data Model and Parser
+
+### Added
+- `sawmill/core/waiver.py` with WaiverLoader class
+- WaiverValidationError for error handling
+- New test file: `tests/core/test_waiver.py` - 25 tests
+
+---
+
 ## [2026-01-18] Architecture Realignment
 
 ### Changed

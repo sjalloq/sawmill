@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 21 - Task 7.2 Complete
+> **Last Agent Session:** Session 22 - Task 7.3 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `7.3` |
-| **task_name** | CI Summary Report |
-| **stage** | Stage 7: CI Mode |
+| **current_task** | `8.1` |
+| **task_name** | Basic TUI Shell |
+| **stage** | Stage 8: TUI (Human-Guided) |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -50,10 +50,10 @@
 - [x] **Task 6.2:** Waiver Matching Engine
 - [x] **Task 6.3:** Waiver Generation
 
-### Stage 7: CI Mode (Ralph Loop)
+### Stage 7: CI Mode (Ralph Loop) - COMPLETE
 - [x] **Task 7.1:** Exit Code Logic
 - [x] **Task 7.2:** Waiver Integration in CI
-- [ ] **Task 7.3:** CI Summary Report
+- [x] **Task 7.3:** CI Summary Report
 
 ### Stage 8: TUI (Human-Guided - NOT for Ralph Loop)
 - [ ] **Task 8.1:** Basic TUI Shell
@@ -64,20 +64,17 @@
 
 ## Current Task Details
 
-### Task 7.3: CI Summary Report
+### Task 8.1: Basic TUI Shell (Human-Guided)
 
-**Objective:** Generate structured summary report for CI systems.
+**Note:** Stage 8 tasks require human guidance for UX decisions. Do not attempt these tasks autonomously.
 
-**Deliverables:**
-- [ ] CLI option: `--report <file>` to write JSON report
-- [ ] Include: counts, waived items, unwaived issues
+**Objective:** Create minimal Textual application with log viewing.
 
-**Success Criteria:**
-- [ ] Generates valid JSON report
-- [ ] Includes error/warning counts
-- [ ] Includes list of unwaived issues
-
-**Test Files:** `tests/test_ci_report.py`
+**Approach:** Develop iteratively with human feedback on:
+- Layout decisions
+- Color schemes
+- Keyboard shortcuts
+- Scroll behavior
 
 ---
 
@@ -89,13 +86,15 @@
 
 ## Hints for Next Session
 
-- Task 7.2 (Waiver Integration in CI) is complete!
-- CI mode now supports --waivers, --show-waived, and --report-unused
-- For Task 7.3, add --report option to write JSON summary to file
-- The report should include counts (total, errors, warnings, etc.)
-- Include waived and unwaived message details
-- Use json module to write formatted JSON output
-- See TASKS.md Task 7.3 for test examples
+- All Stage 1-7 tasks are COMPLETE!
+- Stage 7 CI Mode is fully implemented:
+  - `--ci` and `--strict` for exit code behavior
+  - `--waivers` for waiver file loading
+  - `--show-waived` to display waived messages
+  - `--report-unused` to warn about stale waivers
+  - `--report <file>` to generate JSON summary report
+- Stage 8 (TUI) requires human guidance for UX decisions
+- Do NOT attempt Stage 8 tasks autonomously
 
 ### Architecture Reminder
 
