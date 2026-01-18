@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 13 - Task 4.3 Complete
+> **Last Agent Session:** Session 14 - Task 4.4 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `4.4` |
-| **task_name** | CLI Integration Tests |
-| **stage** | Stage 4: CLI Streaming Interface |
+| **current_task** | `5.1` |
+| **task_name** | TOML Configuration Loader |
+| **stage** | Stage 5: Configuration System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -39,7 +39,7 @@
 - [x] **Task 4.1:** Basic CLI with Stdout Output
 - [x] **Task 4.2:** Output Formats
 - [x] **Task 4.3:** Message ID Filtering
-- [ ] **Task 4.4:** CLI Integration Tests
+- [x] **Task 4.4:** CLI Integration Tests
 
 ### Stage 5: Configuration System (Ralph Loop)
 - [ ] **Task 5.1:** TOML Configuration Loader
@@ -64,20 +64,23 @@
 
 ## Current Task Details
 
-### Task 4.4: CLI Integration Tests
+### Task 5.1: TOML Configuration Loader
 
-**Objective:** Verify full pipeline works end-to-end with real Vivado logs.
+**Objective:** Implement configuration file parsing.
 
 **Deliverables:**
-- [ ] Integration tests using `examples/vivado/vivado.log`
-- [ ] Test full pipeline: CLI -> plugin.load_and_parse() -> filter -> format
+- [ ] `sawmill/core/config.py` with `ConfigLoader` class
+- [ ] `Config` dataclass with all settings including `suppress` section
+- [ ] Parse and validate TOML configuration
+- [ ] `ConfigError` exception for malformed TOML
 
 **Success Criteria:**
-- [ ] Full pipeline executes without error
-- [ ] Output matches expected format
-- [ ] All filter options work together correctly
+- [ ] Parses valid TOML files correctly
+- [ ] Parses `[suppress]` patterns and message_ids
+- [ ] Returns sensible defaults for missing keys
+- [ ] Handles malformed TOML with clear errors (including line number)
 
-**Test Files:** `tests/test_cli_integration.py`
+**Test Files:** `tests/core/test_config.py`
 
 ---
 
@@ -89,14 +92,14 @@
 
 ## Hints for Next Session
 
-- Task 4.3 (Message ID Filtering) is complete
-- CLI now supports --id and --category options for message filtering
-- --id supports fnmatch wildcards (*, ?)
-- --category filters by msg.category field (case-insensitive)
-- For Task 4.4, create integration tests using the real Vivado log in examples/
-- Use vivado_log fixture from conftest.py
-- Test the full pipeline with various option combinations
-- Mark tests with @pytest.mark.integration
+- Task 4.4 (CLI Integration Tests) is complete - Stage 4 done!
+- 26 integration tests verify full CLI pipeline with real Vivado logs
+- For Task 5.1, create ConfigLoader class in sawmill/core/config.py
+- Use tomli for TOML parsing (already in dependencies)
+- Config should have sections: general, output, suppress
+- Suppress section contains patterns (list of regex) and message_ids (list of IDs)
+- ConfigError should include line number from TOML parsing errors
+- See TASKS.md for test examples
 
 ### Architecture Reminder
 
@@ -112,6 +115,25 @@
 ---
 
 ## Session Log
+
+### Session 14 (completed)
+- **Started:** 2026-01-18
+- **Task:** 4.4 - CLI Integration Tests
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_cli_integration.py` - 26 integration tests for full CLI pipeline
+    - TestFullPipeline: Loading and processing with all output formats
+    - TestSeverityFilter: Severity filtering on real logs
+    - TestFilterPatterns: Regex pattern filtering
+    - TestSuppressionPatterns: Suppression pattern filtering
+    - TestSuppressIdFilter: Message ID suppression
+    - TestIdFilter: Message ID pattern filtering with wildcards
+    - TestCategoryFilter: Category filtering
+    - TestCombinedFilters: Multiple filters working together
+    - TestEdgeCases: Empty results, no matches
+    - TestOutputFormat: JSON and count format correctness
+    - TestPluginSelection: Plugin selection and error handling
+- **Tests:** 225 passing (199 + 26 new)
 
 ### Session 13 (completed)
 - **Started:** 2026-01-18

@@ -62,6 +62,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 4.4: CLI Integration Tests
+
+### Added
+- `tests/test_cli_integration.py` - 26 integration tests using real Vivado log file
+  - TestFullPipeline: Tests for loading and processing with all output formats
+  - TestSeverityFilter: Tests for severity filtering on real logs
+  - TestFilterPatterns: Tests for regex pattern filtering
+  - TestSuppressionPatterns: Tests for suppression pattern filtering
+  - TestSuppressIdFilter: Tests for message ID suppression
+  - TestIdFilter: Tests for message ID pattern filtering with wildcards
+  - TestCategoryFilter: Tests for category filtering
+  - TestCombinedFilters: Tests for multiple filters working together
+  - TestEdgeCases: Tests for edge cases (empty results, no matches)
+  - TestOutputFormat: Tests for JSON and count format correctness
+  - TestPluginSelection: Tests for plugin selection and error handling
+
+### Features Verified
+- Full pipeline: CLI -> plugin.load_and_parse() -> filter -> format
+- Auto-detection of Vivado plugin from log content
+- All output formats (text, json, count) produce correct output
+- Severity filtering at all levels (info, warning, error, critical)
+- Regex pattern filtering and suppression
+- Message ID filtering with wildcards (*, ?)
+- Category filtering (case-insensitive)
+- Multiple filters applied together correctly (AND behavior)
+- Empty results handled gracefully
+- Invalid plugin name produces clear error
+
+### Notes
+- Tests marked with @pytest.mark.integration for easy filtering
+- Uses real `examples/vivado/vivado.log` file (~3000 lines)
+- Verifies JSON output produces valid JSONL with all expected fields
+- Confirms count output includes all severity categories
+- Total tests: 225 (199 existing + 26 new integration tests)
+
+---
+
 ## [2026-01-18] Task 4.3: Message ID Filtering
 
 ### Added
