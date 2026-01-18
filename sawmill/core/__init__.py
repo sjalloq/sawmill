@@ -22,7 +22,7 @@ from sawmill.core.plugin import (
     PluginError,
     PluginManager,
 )
-from sawmill.core.waiver import WaiverLoader, WaiverValidationError
+from sawmill.core.waiver import WaiverLoader, WaiverMatcher, WaiverValidationError
 
 __all__ = [
     "Config",
@@ -38,5 +38,6 @@ __all__ = [
     "PluginManager",
     "SuppressConfig",
     "WaiverLoader",
+    "WaiverMatcher",
     "WaiverValidationError",
 ]

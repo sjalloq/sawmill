@@ -1,18 +1,21 @@
-"""Waiver loading and parsing for sawmill.
+"""Waiver loading, parsing, and matching for sawmill.
 
-This module provides the WaiverLoader class for reading TOML waiver files
-and validating waiver entries.
+This module provides:
+- WaiverLoader: For reading TOML waiver files and validating waiver entries
+- WaiverMatcher: For matching log messages against waivers
 
 Waivers are for CI acceptance (pass/fail decisions with audit trail).
 They are distinct from suppressions which are for display filtering.
 """
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Optional
 
 import tomli
 
+from sawmill.models.message import Message
 from sawmill.models.waiver import Waiver, WaiverFile
 
 
@@ -282,3 +285,173 @@ class WaiverLoader:
         if match:
             return int(match.group(1))
         return None
+
+
+class WaiverMatcher:
+    """Matches log messages against waivers.
+
+    The matcher checks messages against a list of waivers and returns the
+    first matching waiver, or None if no waiver matches.
+
+    Waivers are matched in priority order:
+    1. hash - Exact match on SHA-256 hash of message.raw_text
+    2. id - Exact match on message.message_id
+    3. pattern - Regex match on message.raw_text
+    4. file - Match on message.file_ref.path
+
+    Example usage:
+        matcher = WaiverMatcher(waivers)
+        waiver = matcher.is_waived(message)
+        if waiver:
+            print(f"Message waived by: {waiver.reason}")
+    """
+
+    def __init__(self, waivers: list[Waiver]):
+        """Initialize the matcher with a list of waivers.
+
+        Args:
+            waivers: List of Waiver objects to match against
+        """
+        self._waivers = waivers
+
+        # Pre-organize waivers by type for efficient matching
+        self._hash_waivers: list[Waiver] = []
+        self._id_waivers: list[Waiver] = []
+        self._pattern_waivers: list[Waiver] = []
+        self._file_waivers: list[Waiver] = []
+
+        for waiver in waivers:
+            if waiver.type == "hash":
+                self._hash_waivers.append(waiver)
+            elif waiver.type == "id":
+                self._id_waivers.append(waiver)
+            elif waiver.type == "pattern":
+                self._pattern_waivers.append(waiver)
+            elif waiver.type == "file":
+                self._file_waivers.append(waiver)
+
+    @property
+    def waivers(self) -> list[Waiver]:
+        """Get the list of waivers."""
+        return self._waivers
+
+    def is_waived(self, message: Message) -> Optional[Waiver]:
+        """Check if a message is waived.
+
+        Waivers are checked in priority order:
+        1. hash - Exact match on SHA-256 hash of message.raw_text
+        2. id - Exact match on message.message_id
+        3. pattern - Regex match on message.raw_text
+        4. file - Match on message.file_ref.path
+
+        The first matching waiver is returned. If no waivers match, None is returned.
+
+        Args:
+            message: The Message to check against waivers
+
+        Returns:
+            The matching Waiver if found, or None
+        """
+        # Priority 1: Hash match (highest priority)
+        for waiver in self._hash_waivers:
+            if self._match_hash(message, waiver):
+                return waiver
+
+        # Priority 2: ID match
+        for waiver in self._id_waivers:
+            if self._match_id(message, waiver):
+                return waiver
+
+        # Priority 3: Pattern match
+        for waiver in self._pattern_waivers:
+            if self._match_pattern(message, waiver):
+                return waiver
+
+        # Priority 4: File match (lowest priority)
+        for waiver in self._file_waivers:
+            if self._match_file(message, waiver):
+                return waiver
+
+        return None
+
+    def _match_hash(self, message: Message, waiver: Waiver) -> bool:
+        """Check if message matches a hash waiver.
+
+        Args:
+            message: The message to check
+            waiver: The hash waiver to match against
+
+        Returns:
+            True if the SHA-256 hash of message.raw_text matches the waiver pattern
+        """
+        message_hash = hashlib.sha256(message.raw_text.encode("utf-8")).hexdigest()
+        return message_hash == waiver.pattern
+
+    def _match_id(self, message: Message, waiver: Waiver) -> bool:
+        """Check if message matches an ID waiver.
+
+        Args:
+            message: The message to check
+            waiver: The ID waiver to match against
+
+        Returns:
+            True if message.message_id exactly matches the waiver pattern
+        """
+        if message.message_id is None:
+            return False
+        return message.message_id == waiver.pattern
+
+    def _match_pattern(self, message: Message, waiver: Waiver) -> bool:
+        """Check if message matches a pattern (regex) waiver.
+
+        Args:
+            message: The message to check
+            waiver: The pattern waiver to match against
+
+        Returns:
+            True if waiver.pattern regex matches message.raw_text
+        """
+        try:
+            # Use DOTALL flag so '.' matches newlines in multi-line messages
+            return bool(re.search(waiver.pattern, message.raw_text, re.DOTALL))
+        except re.error:
+            # Invalid regex pattern - should not happen if WaiverLoader validated
+            return False
+
+    def _match_file(self, message: Message, waiver: Waiver) -> bool:
+        """Check if message matches a file waiver.
+
+        The file waiver pattern is matched against the message's file_ref.path.
+        The match can be:
+        - Exact match
+        - Pattern matches end of path (for relative paths)
+        - Glob-style wildcards (* matches any characters)
+
+        Args:
+            message: The message to check
+            waiver: The file waiver to match against
+
+        Returns:
+            True if the message's file path matches the waiver pattern
+        """
+        if message.file_ref is None:
+            return False
+
+        file_path = message.file_ref.path
+        pattern = waiver.pattern
+
+        # Exact match
+        if file_path == pattern:
+            return True
+
+        # End match (relative path matching)
+        if file_path.endswith(pattern):
+            return True
+
+        # Glob-style matching (convert * to regex .*)
+        # Escape regex special characters except *
+        regex_pattern = re.escape(pattern).replace(r"\*", ".*")
+        try:
+            return bool(re.fullmatch(regex_pattern, file_path))
+        except re.error:
+            return False
