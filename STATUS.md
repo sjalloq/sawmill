@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 14 - Task 4.4 Complete
+> **Last Agent Session:** Session 15 - Task 5.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `5.1` |
-| **task_name** | TOML Configuration Loader |
+| **current_task** | `5.2` |
+| **task_name** | Configuration Discovery and Merging |
 | **stage** | Stage 5: Configuration System |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -42,7 +42,7 @@
 - [x] **Task 4.4:** CLI Integration Tests
 
 ### Stage 5: Configuration System (Ralph Loop)
-- [ ] **Task 5.1:** TOML Configuration Loader
+- [x] **Task 5.1:** TOML Configuration Loader
 - [ ] **Task 5.2:** Configuration Discovery and Merging
 
 ### Stage 6: Waiver System (Ralph Loop)
@@ -64,23 +64,24 @@
 
 ## Current Task Details
 
-### Task 5.1: TOML Configuration Loader
+### Task 5.2: Configuration Discovery and Merging
 
-**Objective:** Implement configuration file parsing.
+**Objective:** Implement hierarchical configuration discovery and merging.
 
 **Deliverables:**
-- [ ] `sawmill/core/config.py` with `ConfigLoader` class
-- [ ] `Config` dataclass with all settings including `suppress` section
-- [ ] Parse and validate TOML configuration
-- [ ] `ConfigError` exception for malformed TOML
+- [ ] `ConfigLoader.discover_configs(start_path)` method
+- [ ] `ConfigLoader.load_merged(start_path)` method
+- [ ] Precedence: CLI > local > git root > user > defaults
+- [ ] `sawmill/utils/git.py` with `find_git_root()` function
 
 **Success Criteria:**
-- [ ] Parses valid TOML files correctly
-- [ ] Parses `[suppress]` patterns and message_ids
-- [ ] Returns sensible defaults for missing keys
-- [ ] Handles malformed TOML with clear errors (including line number)
+- [ ] Finds configs in correct precedence order
+- [ ] Later configs override earlier values
+- [ ] Unspecified values fall through
+- [ ] Git root detection works correctly
+- [ ] SAWMILL_GIT_ROOT env var overrides git detection
 
-**Test Files:** `tests/core/test_config.py`
+**Test Files:** `tests/core/test_config_discovery.py`, `tests/utils/test_git.py`
 
 ---
 
@@ -92,13 +93,14 @@
 
 ## Hints for Next Session
 
-- Task 4.4 (CLI Integration Tests) is complete - Stage 4 done!
-- 26 integration tests verify full CLI pipeline with real Vivado logs
-- For Task 5.1, create ConfigLoader class in sawmill/core/config.py
-- Use tomli for TOML parsing (already in dependencies)
-- Config should have sections: general, output, suppress
-- Suppress section contains patterns (list of regex) and message_ids (list of IDs)
-- ConfigError should include line number from TOML parsing errors
+- Task 5.1 (TOML Configuration Loader) is complete
+- ConfigLoader class with load() method exists in sawmill/core/config.py
+- Config dataclass has general, output, and suppress sections
+- For Task 5.2, add discover_configs() and load_merged() methods to ConfigLoader
+- Create sawmill/utils/git.py with find_git_root() function
+- Git root detection should check for .git directory walking up
+- SAWMILL_GIT_ROOT environment variable overrides detection
+- Config search locations: local (cwd/sawmill.toml) > git root > user (~/.config/sawmill/)
 - See TASKS.md for test examples
 
 ### Architecture Reminder
@@ -115,6 +117,20 @@
 ---
 
 ## Session Log
+
+### Session 15 (completed)
+- **Started:** 2026-01-18
+- **Task:** 5.1 - TOML Configuration Loader
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/core/config.py` - ConfigLoader class for TOML configuration
+    - Config dataclass with general, output, and suppress sections
+    - GeneralConfig, OutputConfig, SuppressConfig dataclasses
+    - ConfigError exception with line number support
+  - `tests/core/test_config.py` - 23 tests for configuration loading
+- **Files Modified:**
+  - `sawmill/core/__init__.py` - Export config classes
+- **Tests:** 248 passing (225 + 23 new)
 
 ### Session 14 (completed)
 - **Started:** 2026-01-18

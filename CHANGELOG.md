@@ -62,6 +62,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 5.1: TOML Configuration Loader
+
+### Added
+- `sawmill/core/config.py` - Configuration loading and parsing
+  - `ConfigLoader` class for reading TOML configuration files
+  - `Config` dataclass with general, output, and suppress sections
+  - `GeneralConfig` dataclass with default_plugin setting
+  - `OutputConfig` dataclass with color and format settings
+  - `SuppressConfig` dataclass with patterns and message_ids lists
+  - `ConfigError` exception with line number support for TOML parse errors
+- `tests/core/test_config.py` - 23 tests for configuration functionality
+- Updated `sawmill/core/__init__.py` to export all config classes
+
+### Features
+- Load configuration from TOML files with full validation
+- Sensible defaults for all missing configuration keys
+- Clear error messages with line numbers for malformed TOML
+- Support for [general], [output], and [suppress] configuration sections
+- Suppress section supports patterns (regex list) and message_ids (ID list)
+- Load defaults when no config file specified (ConfigLoader.load(None))
+
+### Notes
+- Uses tomli for TOML parsing (Python 3.10 compatible)
+- Suppressions are for display filtering, distinct from waivers (CI acceptance)
+- Total tests: 248 (225 existing + 23 new)
+
+---
+
 ## [2026-01-18] Task 4.4: CLI Integration Tests
 
 ### Added
