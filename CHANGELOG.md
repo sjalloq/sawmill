@@ -62,6 +62,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 6.3: Waiver Generation
+
+### Added
+- `sawmill/core/waiver.py` - Added `WaiverGenerator` class
+  - `generate(messages, tool)` method returning valid TOML string
+  - Support for generating waivers from errors/warnings/critical_warnings
+  - Uses type="id" for messages with message_id
+  - Uses type="hash" (SHA-256) for messages without message_id
+- `tests/test_waiver_generation.py` - 27 tests for waiver generation
+- Updated `sawmill/core/__init__.py` to export WaiverGenerator
+
+### CLI
+- Added `--generate-waivers` option to CLI
+  - Outputs valid waiver TOML to stdout
+  - Can be redirected to file: `sawmill log --generate-waivers > waivers.toml`
+  - Error messages go to stderr to keep stdout clean for TOML
+
+### Features
+- Generated waivers include:
+  - Metadata section with tool name and generation date
+  - Placeholder author and reason for user to fill in
+  - Comments with severity, content preview, and line number
+- TOML escaping for special characters in patterns
+- Filters out INFO messages by default (configurable)
+
+---
+
 ## [2026-01-18] Task 6.2: Waiver Matching Engine
 
 ### Added

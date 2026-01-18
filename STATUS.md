@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 18 - Task 6.2 Complete
+> **Last Agent Session:** Session 19 - Task 6.3 Complete
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `6.3` |
-| **task_name** | Waiver Generation |
-| **stage** | Stage 6: Waiver System |
+| **current_task** | `7.1` |
+| **task_name** | Exit Code Logic |
+| **stage** | Stage 7: CI Mode |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
 
@@ -48,7 +48,7 @@
 ### Stage 6: Waiver System (Ralph Loop)
 - [x] **Task 6.1:** Waiver Data Model and Parser
 - [x] **Task 6.2:** Waiver Matching Engine
-- [ ] **Task 6.3:** Waiver Generation
+- [x] **Task 6.3:** Waiver Generation
 
 ### Stage 7: CI Mode (Ralph Loop)
 - [ ] **Task 7.1:** Exit Code Logic
@@ -64,21 +64,22 @@
 
 ## Current Task Details
 
-### Task 6.3: Waiver Generation
+### Task 7.1: Exit Code Logic
 
-**Objective:** Generate waiver file from current log messages.
+**Objective:** Implement CI mode with pass/fail exit codes.
 
 **Deliverables:**
-- [ ] CLI option: `--generate-waivers`
-- [ ] Output valid waiver TOML to stdout
-- [ ] Include message metadata for review
+- [ ] CLI option: `--ci` to enable CI mode
+- [ ] Exit 0 if no errors/critical warnings
+- [ ] Exit 1 if errors or critical warnings present
+- [ ] `--strict` to also fail on regular warnings
 
 **Success Criteria:**
-- [ ] Generates valid TOML waiver file
-- [ ] Includes all unwaived errors/warnings
-- [ ] User can redirect to file: `sawmill log --generate-waivers > waivers.toml`
+- [ ] `sawmill --ci log` exits 0 on clean log
+- [ ] `sawmill --ci log` exits 1 on errors
+- [ ] `sawmill --ci --strict log` exits 1 on warnings
 
-**Test Files:** `tests/test_waiver_generation.py`
+**Test Files:** `tests/test_ci_mode.py`
 
 ---
 
@@ -90,17 +91,12 @@
 
 ## Hints for Next Session
 
-- Task 6.2 (Waiver Matching Engine) is complete
-- WaiverMatcher class is in sawmill/core/waiver.py
-- WaiverLoader class is in sawmill/core/waiver.py
-- Waiver data model is in sawmill/models/waiver.py
-- For Task 6.3, add --generate-waivers CLI option
-- Output should be valid TOML that can be parsed by WaiverLoader
-- Include all errors/warnings/critical_warnings from the log
-- Generate waivers of type "id" for messages with message_id
-- For messages without message_id, generate type "hash" with SHA-256
-- Include author placeholder and current date
-- See TASKS.md Task 6.3 for test examples
+- Stage 6 (Waiver System) is complete!
+- For Task 7.1, add --ci and --strict CLI options
+- CI mode should exit 0 on clean logs, 1 on errors/critical_warnings
+- With --strict, also exit 1 on regular warnings
+- Waiver system can be used in Task 7.2 to accept waived issues
+- See TASKS.md Task 7.1 for test examples
 
 ### Architecture Reminder
 
@@ -116,6 +112,18 @@
 ---
 
 ## Session Log
+
+### Session 19 (completed)
+- **Started:** 2026-01-18
+- **Task:** 6.3 - Waiver Generation
+- **Outcome:** Complete
+- **Files Created:**
+  - `tests/test_waiver_generation.py` - 27 tests for waiver generation
+- **Files Modified:**
+  - `sawmill/core/waiver.py` - Added WaiverGenerator class with generate() method
+  - `sawmill/core/__init__.py` - Export WaiverGenerator
+  - `sawmill/__main__.py` - Added --generate-waivers CLI option
+- **Tests:** 360 passing (333 + 27 new)
 
 ### Session 18 (completed)
 - **Started:** 2026-01-18
