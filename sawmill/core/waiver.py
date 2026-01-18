@@ -455,3 +455,171 @@ class WaiverMatcher:
             return bool(re.fullmatch(regex_pattern, file_path))
         except re.error:
             return False
+
+
+class WaiverGenerator:
+    """Generates waiver TOML from log messages.
+
+    This class creates valid waiver TOML files from a list of messages,
+    suitable for CI acceptance workflows. Generated waivers include
+    placeholder values for author and reason that users should review
+    and update.
+
+    Generated waivers use:
+    - type="id" for messages that have a message_id
+    - type="hash" for messages without a message_id (SHA-256 of raw_text)
+
+    Example usage:
+        generator = WaiverGenerator()
+        toml_content = generator.generate(messages)
+        print(toml_content)  # Redirect to waivers.toml
+    """
+
+    # Severity levels that typically require waivers in CI
+    WAIVER_SEVERITIES = frozenset({"error", "critical_warning", "warning"})
+
+    def __init__(
+        self,
+        author: str = "<author>",
+        reason: str = "<reason - explain why this is acceptable>",
+        include_info: bool = False,
+    ):
+        """Initialize the waiver generator.
+
+        Args:
+            author: Default author to use in generated waivers.
+            reason: Default reason placeholder for generated waivers.
+            include_info: If True, include INFO messages in output.
+                         By default, only error/warning/critical_warning are included.
+        """
+        self._author = author
+        self._reason = reason
+        self._include_info = include_info
+
+    def generate(self, messages: list[Message], tool: Optional[str] = None) -> str:
+        """Generate waiver TOML content from messages.
+
+        Only includes messages with severity in WAIVER_SEVERITIES
+        (error, critical_warning, warning) unless include_info=True.
+
+        Args:
+            messages: List of parsed log messages.
+            tool: Optional tool name to include in metadata.
+
+        Returns:
+            Valid TOML content as a string.
+        """
+        from datetime import date
+
+        lines: list[str] = []
+
+        # Add header comment
+        lines.append("# Sawmill generated waiver file")
+        lines.append("# Review each waiver and update the reason before use")
+        lines.append("")
+
+        # Add metadata section
+        lines.append("[metadata]")
+        if tool:
+            lines.append(f'tool = "{self._escape_toml_string(tool)}"')
+        lines.append(f'generated = "{date.today().isoformat()}"')
+        lines.append("")
+
+        # Filter messages by severity
+        filtered = self._filter_messages(messages)
+
+        # Generate waiver entries
+        for msg in filtered:
+            lines.extend(self._generate_waiver_entry(msg))
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _filter_messages(self, messages: list[Message]) -> list[Message]:
+        """Filter messages to those that need waivers.
+
+        Args:
+            messages: All parsed messages.
+
+        Returns:
+            Messages that need waivers based on severity.
+        """
+        result: list[Message] = []
+        for msg in messages:
+            if msg.severity is None:
+                continue
+            severity = msg.severity.lower()
+            if severity in self.WAIVER_SEVERITIES:
+                result.append(msg)
+            elif self._include_info and severity == "info":
+                result.append(msg)
+        return result
+
+    def _generate_waiver_entry(self, message: Message) -> list[str]:
+        """Generate a single waiver entry for a message.
+
+        Args:
+            message: The message to generate a waiver for.
+
+        Returns:
+            List of TOML lines for this waiver entry.
+        """
+        from datetime import date
+
+        lines: list[str] = []
+        lines.append("[[waiver]]")
+
+        # Determine waiver type and pattern
+        if message.message_id:
+            waiver_type = "id"
+            pattern = message.message_id
+        else:
+            waiver_type = "hash"
+            pattern = hashlib.sha256(message.raw_text.encode("utf-8")).hexdigest()
+
+        lines.append(f'type = "{waiver_type}"')
+        lines.append(f'pattern = "{self._escape_toml_string(pattern)}"')
+        lines.append(f'reason = "{self._escape_toml_string(self._reason)}"')
+        lines.append(f'author = "{self._escape_toml_string(self._author)}"')
+        lines.append(f'date = "{date.today().isoformat()}"')
+
+        # Add comment with message context
+        lines.append(f"# Severity: {message.severity or 'unknown'}")
+        if message.content:
+            # Truncate long content for readability
+            content = message.content[:80]
+            if len(message.content) > 80:
+                content += "..."
+            lines.append(f"# Content: {self._escape_comment(content)}")
+        lines.append(f"# Line: {message.start_line}")
+
+        return lines
+
+    def _escape_toml_string(self, value: str) -> str:
+        """Escape a string for use in TOML.
+
+        Args:
+            value: The string to escape.
+
+        Returns:
+            Escaped string safe for TOML basic strings.
+        """
+        # Escape backslashes first, then quotes and other special chars
+        result = value.replace("\\", "\\\\")
+        result = result.replace('"', '\\"')
+        result = result.replace("\n", "\\n")
+        result = result.replace("\r", "\\r")
+        result = result.replace("\t", "\\t")
+        return result
+
+    def _escape_comment(self, value: str) -> str:
+        """Escape a string for use in a TOML comment.
+
+        Args:
+            value: The string to escape.
+
+        Returns:
+            String safe for TOML comments (no newlines).
+        """
+        # Replace newlines with spaces for comments
+        return value.replace("\n", " ").replace("\r", "")

@@ -10,6 +10,7 @@ from rich.table import Table
 
 from sawmill.core.filter import FilterEngine
 from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
+from sawmill.core.waiver import WaiverGenerator
 from sawmill.plugins.vivado import VivadoPlugin
 
 click.rich_click.TEXT_MARKUP = "rich"
@@ -221,6 +222,21 @@ def _process_log_file(
         ]
 
     # Output based on format
+    _output_messages(console, messages, output_format)
+
+
+def _output_messages(
+    console: Console,
+    messages: list,
+    output_format: str,
+) -> None:
+    """Output messages in the specified format.
+
+    Args:
+        console: Rich console for output.
+        messages: List of messages to output.
+        output_format: Output format (text, json, count).
+    """
     if output_format.lower() == "json":
         # JSONL format: one JSON object per line
         for msg in messages:
@@ -274,6 +290,70 @@ def _process_log_file(
                 console.print(msg.raw_text, style=style, markup=False)
             else:
                 console.print(msg.raw_text, markup=False)
+
+
+def _generate_waivers(
+    ctx: click.Context,
+    console: Console,
+    logfile: str,
+    plugin_name: str | None,
+) -> None:
+    """Generate waiver TOML from a log file's errors/warnings.
+
+    Args:
+        ctx: Click context.
+        console: Rich console for error output.
+        logfile: Path to the log file.
+        plugin_name: Specific plugin to use (or None for auto-detect).
+    """
+    import sys
+
+    # Use stderr console for error messages to keep stdout clean for TOML
+    stderr_console = Console(file=sys.stderr)
+
+    manager = _get_plugin_manager()
+    path = Path(logfile)
+
+    # Select plugin (same logic as _process_log_file)
+    if plugin_name:
+        plugin = manager.get_plugin(plugin_name)
+        if plugin is None:
+            stderr_console.print(f"[red]Error:[/red] Plugin '{plugin_name}' not found.")
+            stderr_console.print("\nAvailable plugins:")
+            for name in manager.list_plugins():
+                stderr_console.print(f"  - {name}")
+            ctx.exit(1)
+    else:
+        try:
+            detected_name = manager.auto_detect(path)
+            plugin = manager.get_plugin(detected_name)
+        except NoPluginFoundError as e:
+            stderr_console.print(f"[red]Error:[/red] No plugin can handle this file.")
+            stderr_console.print(f"  {e}")
+            stderr_console.print("\nInstalled plugins:")
+            for name in manager.list_plugins():
+                stderr_console.print(f"  - {name}")
+            stderr_console.print("\nUse --plugin to specify a plugin manually.")
+            ctx.exit(1)
+        except PluginConflictError as e:
+            stderr_console.print(f"[red]Error:[/red] {e}")
+            ctx.exit(1)
+
+    if plugin is None:
+        stderr_console.print("[red]Error:[/red] Plugin not found.")
+        ctx.exit(1)
+
+    # Load and parse the file using the plugin
+    messages = plugin.load_and_parse(path)
+
+    # Generate waiver TOML
+    # Get tool name from plugin if available
+    tool_name = getattr(plugin, "name", None)
+    generator = WaiverGenerator()
+    toml_content = generator.generate(messages, tool=tool_name)
+
+    # Output to stdout (raw print to allow redirection)
+    print(toml_content)
 
 
 @click.command()
@@ -340,6 +420,11 @@ def _process_log_file(
     multiple=True,
     help="Category to include (e.g., 'synth', 'timing'). Can be repeated."
 )
+@click.option(
+    "--generate-waivers",
+    is_flag=True,
+    help="Generate waiver TOML from errors/warnings in the log. Output to stdout."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -355,6 +440,7 @@ def cli(
     output_format: str,
     id_patterns: tuple[str, ...],
     categories: tuple[str, ...],
+    generate_waivers: bool,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -451,6 +537,11 @@ def cli(
 
     if logfile is None:
         click.echo(ctx.get_help())
+        return
+
+    # Handle waiver generation mode
+    if generate_waivers:
+        _generate_waivers(ctx, console, logfile, plugin)
         return
 
     # Process the log file
