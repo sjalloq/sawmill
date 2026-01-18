@@ -62,20 +62,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
-<!--
-Each completed task should add an entry below in this format:
-
-## [YYYY-MM-DD] Task X.Y: Task Name
+## [2026-01-18] Task 1.0: Test Infrastructure
 
 ### Added
-- New files created
-
-### Changed
-- Files modified
+- `tests/__init__.py` - Test package marker
+- `tests/conftest.py` - Shared pytest fixtures
+  - `project_root` - Returns project root directory
+  - `vivado_log` - Path to example Vivado log file
+  - `small_log` - Minimal multi-format log for unit tests
+  - `empty_log` - Empty log file
+  - `large_log` - 100k line log for performance tests
+  - Pytest markers: `slow`, `integration`
+- `tests/test_fixtures.py` - Verification tests for fixtures
 
 ### Notes
-- Any implementation decisions or issues encountered
--->
+- All fixtures use Path objects for cross-platform compatibility
+- large_log fixture creates file at test time (not stored in repo)
+- Markers allow selective test execution (`pytest -m "not slow"`)
 
 ---
 
