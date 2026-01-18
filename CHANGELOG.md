@@ -62,6 +62,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Development Log
 
+## [2026-01-18] Task 3.1: Basic Regex Filter Engine
+
+### Added
+- `sawmill/core/filter.py` - FilterEngine class for regex filtering
+  - `apply_filter(pattern, messages)` - Single filter matching
+  - `apply_filters(filters, messages, mode)` - Multi-filter with AND/OR modes
+  - `apply_suppressions(patterns, messages)` - Remove matching messages
+- `tests/core/test_filter.py` - 23 tests for filter functionality
+- Updated `sawmill/core/__init__.py` to export FilterEngine
+
+### Features
+- Single filter matches against message raw_text
+- Case-sensitive and case-insensitive matching
+- AND mode requires all enabled filters to match
+- OR mode requires any enabled filter to match
+- Disabled filters are ignored in multi-filter mode
+- Suppression patterns remove matching messages from results
+- Invalid regex patterns are handled gracefully (return empty/skip)
+- Preserves original message order in results
+
+### Notes
+- FilterEngine operates on list[Message] provided by plugins
+- FilterDefinition validation ensures only valid regex patterns at model level
+- Suppressions are for display filtering, distinct from waivers (CI acceptance)
+
+---
+
 ## [2026-01-18] Task 2.5: Plugin Discovery CLI
 
 ### Added

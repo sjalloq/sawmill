@@ -1,7 +1,7 @@
 # Sawmill Development Status
 
 > **Last Updated:** 2026-01-18
-> **Last Agent Session:** Session 8 - Task 2.5 Complete
+> **Last Agent Session:** Session 9 - Task 3.1 Complete
 
 ---
 
@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|-------|
-| **current_task** | `3.1` |
-| **task_name** | Basic Regex Filter Engine |
+| **current_task** | `3.2` |
+| **task_name** | Filter Statistics |
 | **stage** | Stage 3: Filter Engine |
 | **tests_passing** | `true` |
 | **blocked** | `false` |
@@ -32,7 +32,7 @@
 - [x] **Task 2.5:** Plugin Discovery CLI
 
 ### Stage 3: Filter Engine (Ralph Loop)
-- [ ] **Task 3.1:** Basic Regex Filter Engine
+- [x] **Task 3.1:** Basic Regex Filter Engine
 - [ ] **Task 3.2:** Filter Statistics
 
 ### Stage 4: CLI Streaming Interface (Ralph Loop)
@@ -64,24 +64,21 @@
 
 ## Current Task Details
 
-### Task 3.1: Basic Regex Filter Engine
+### Task 3.2: Filter Statistics
 
-**Objective:** Implement the core filtering logic that operates on plugin output.
+**Objective:** Track and report filter match statistics.
 
 **Deliverables:**
-- [ ] `sawmill/core/filter.py` with `FilterEngine` class
-- [ ] Method: `apply_filter(pattern, messages) -> list[Message]`
-- [ ] Method: `apply_filters(filters, messages, mode='AND'|'OR') -> list[Message]`
-- [ ] Method: `apply_suppressions(patterns, messages) -> list[Message]`
+- [ ] `FilterStats` dataclass with `total_messages`, `matched_messages`, `match_percentage`
+- [ ] Method: `FilterEngine.get_stats(filters, messages) -> FilterStats`
+- [ ] Per-filter match counts
 
 **Success Criteria:**
-- [ ] Single filter correctly matches messages
-- [ ] AND mode requires all filters to match
-- [ ] OR mode requires any filter to match
-- [ ] Suppressions remove matching messages
-- [ ] Invalid regex returns empty results with error flag
+- [ ] Correctly counts total and matched messages
+- [ ] Calculates accurate percentages
+- [ ] Provides per-filter breakdown
 
-**Test Files:** `tests/core/test_filter.py`
+**Test Files:** `tests/core/test_filter_stats.py`
 
 ---
 
@@ -93,14 +90,12 @@
 
 ## Hints for Next Session
 
-- Stage 2 (Plugin System) is complete
-- CLI now has `--list-plugins` and `--plugin <name> --show-info` options
-- `_get_plugin_manager()` in `sawmill/__main__.py` handles plugin setup
-- For Task 3.1, create `sawmill/core/filter.py` with `FilterEngine` class
-- FilterEngine operates on `list[Message]` provided by plugins
-- Message model has `matches_filter(pattern)` method already
-- Look at tests in TASKS.md for expected behavior (AND/OR modes, suppressions)
-- FilterDefinition is in `sawmill/models/filter_def.py`
+- Stage 3.1 (Filter Engine) is complete
+- `sawmill/core/filter.py` has `FilterEngine` class with `apply_filter`, `apply_filters`, `apply_suppressions`
+- FilterEngine is exported from `sawmill.core`
+- For Task 3.2, add `FilterStats` dataclass and `get_stats()` method to filter.py
+- FilterStats should include `per_filter` dict mapping filter IDs to match counts
+- Look at tests in TASKS.md for expected behavior
 
 ### Architecture Reminder
 
@@ -116,6 +111,17 @@
 ---
 
 ## Session Log
+
+### Session 9 (completed)
+- **Started:** 2026-01-18
+- **Task:** 3.1 - Basic Regex Filter Engine
+- **Outcome:** Complete
+- **Files Created:**
+  - `sawmill/core/filter.py` - FilterEngine class with apply_filter, apply_filters, apply_suppressions
+  - `tests/core/test_filter.py` - 23 tests for filter functionality
+- **Files Modified:**
+  - `sawmill/core/__init__.py` - Export FilterEngine
+- **Tests:** 127 passing
 
 ### Session 8 (completed)
 - **Started:** 2026-01-18
