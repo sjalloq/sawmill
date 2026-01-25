@@ -36,6 +36,9 @@ class Message(BaseModel):
         message_id: Tool-specific message ID (e.g., "Vivado 12-3523").
         category: Optional category for grouping (e.g., "timing", "drc").
         file_ref: Optional reference to source file mentioned in message.
+        metadata: Plugin-specific metadata for custom grouping/filtering.
+            Plugins can populate this with tool-specific fields like
+            "hierarchy", "phase", "clock_domain", etc.
     """
 
     model_config = ConfigDict(frozen=False)
@@ -48,6 +51,7 @@ class Message(BaseModel):
     message_id: Optional[str] = None
     category: Optional[str] = None
     file_ref: Optional[FileRef] = None
+    metadata: dict[str, str] = {}
 
     def matches_filter(self, pattern: str, case_sensitive: bool = True) -> bool:
         """Check if this message matches the given regex pattern.
@@ -66,3 +70,33 @@ class Message(BaseModel):
             return bool(re.search(pattern, self.raw_text, flags))
         except re.error:
             return False
+
+    def get_field_value(self, field_id: str) -> str | None:
+        """Get the value of a field by its ID.
+
+        This method supports both builtin fields and metadata fields,
+        allowing plugins to define custom grouping dimensions.
+
+        Args:
+            field_id: The field identifier. Can be:
+                - "severity", "message_id", "category" (builtin)
+                - "file" (uses file_ref.path)
+                - Any key in the metadata dict
+
+        Returns:
+            The field value as a string, or None if not set.
+        """
+        # Builtin fields
+        if field_id == "severity":
+            return self.severity
+        elif field_id == "message_id" or field_id == "id":
+            return self.message_id
+        elif field_id == "category":
+            return self.category
+        elif field_id == "file":
+            return self.file_ref.path if self.file_ref else None
+        # Metadata fields
+        elif field_id in self.metadata:
+            return self.metadata[field_id]
+        else:
+            return None

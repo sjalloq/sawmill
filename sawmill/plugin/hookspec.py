@@ -88,3 +88,68 @@ class SawmillHookSpec:
         Returns:
             FileRef if a reference is found, None otherwise.
         """
+
+    @hookspec
+    def get_severity_levels(self) -> list[dict]:
+        """Get severity levels supported by this plugin.
+
+        Plugins should return their severity levels in order from most
+        to least severe. This allows the base app to properly order
+        and style messages regardless of the tool's naming conventions.
+
+        Returns:
+            List of severity definitions, ordered from most to least severe:
+            [
+                {
+                    "id": "fatal",       # Internal identifier (lowercase)
+                    "name": "Fatal",     # Display name
+                    "style": "red bold", # Rich style for display
+                    "level": 3,          # Numeric level for filtering (higher = more severe)
+                },
+                {
+                    "id": "error",
+                    "name": "Error",
+                    "style": "red",
+                    "level": 2,
+                },
+                ...
+            ]
+
+        If not implemented, the base app uses default severity levels:
+        critical (3), error (2), warning (1), info (0).
+        """
+
+    @hookspec
+    def get_grouping_fields(self) -> list[dict]:
+        """Get fields available for grouping and sorting.
+
+        Plugins can declare what dimensions are available for grouping
+        messages. This includes both standard fields (severity, id, file)
+        and custom metadata fields populated by the plugin.
+
+        Returns:
+            List of field definitions:
+            [
+                {
+                    "id": "severity",     # Field identifier
+                    "name": "Severity",   # Display name
+                    "type": "builtin",    # "builtin", "metadata", or "file_ref"
+                    "description": "Group by message severity level",
+                },
+                {
+                    "id": "hierarchy",
+                    "name": "Design Hierarchy",
+                    "type": "metadata",   # Uses Message.metadata["hierarchy"]
+                    "description": "Group by RTL hierarchy path",
+                },
+                ...
+            ]
+
+        Standard field types:
+        - "builtin": Uses Message attributes (severity, message_id, category)
+        - "metadata": Uses Message.metadata[field_id]
+        - "file_ref": Uses Message.file_ref.path
+
+        If not implemented, the base app provides default groupings:
+        severity, id, file, category.
+        """

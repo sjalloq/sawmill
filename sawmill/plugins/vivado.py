@@ -194,6 +194,78 @@ class VivadoPlugin(SawmillPlugin):
         return messages
 
     @hookimpl
+    def get_severity_levels(self) -> list[dict]:
+        """Get Vivado severity levels.
+
+        Vivado uses: CRITICAL WARNING, ERROR, WARNING, INFO
+
+        Returns:
+            List of severity level definitions.
+        """
+        return [
+            {
+                "id": "critical_warning",
+                "name": "Critical Warning",
+                "level": 3,
+                "style": "red bold",
+            },
+            {
+                "id": "error",
+                "name": "Error",
+                "level": 2,
+                "style": "red",
+            },
+            {
+                "id": "warning",
+                "name": "Warning",
+                "level": 1,
+                "style": "yellow",
+            },
+            {
+                "id": "info",
+                "name": "Info",
+                "level": 0,
+                "style": "cyan",
+            },
+        ]
+
+    @hookimpl
+    def get_grouping_fields(self) -> list[dict]:
+        """Get available grouping fields for Vivado logs.
+
+        Vivado logs can be grouped by standard fields plus category.
+
+        Returns:
+            List of grouping field definitions.
+        """
+        return [
+            {
+                "id": "severity",
+                "name": "Severity",
+                "field_type": "builtin",
+                "description": "Group by message severity (Error, Warning, Info)",
+            },
+            {
+                "id": "id",
+                "name": "Message ID",
+                "field_type": "builtin",
+                "description": "Group by Vivado message ID (e.g., Synth 8-6157)",
+            },
+            {
+                "id": "category",
+                "name": "Category",
+                "field_type": "builtin",
+                "description": "Group by message category (synth, timing, drc, etc.)",
+            },
+            {
+                "id": "file",
+                "name": "Source File",
+                "field_type": "file_ref",
+                "description": "Group by source file path",
+            },
+        ]
+
+    @hookimpl
     def get_filters(self) -> list[FilterDefinition]:
         """Get filter definitions for Vivado logs.
 

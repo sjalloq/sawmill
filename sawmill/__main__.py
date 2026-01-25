@@ -2,6 +2,7 @@
 
 import fnmatch
 import json
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import rich_click as click
 from rich.console import Console
 from rich.table import Table
 
+from sawmill.core.aggregation import Aggregator, SEVERITY_ORDER
 from sawmill.core.filter import FilterEngine
 from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
 from sawmill.core.waiver import WaiverGenerator, WaiverLoader, WaiverMatcher, WaiverValidationError
@@ -316,6 +318,9 @@ def _process_log_file(
     id_patterns: tuple[str, ...],
     categories: tuple[str, ...],
     output_format: str,
+    summary: bool = False,
+    group_by: str | None = None,
+    top_n: int = 5,
 ) -> list:
     """Process a log file with the specified filters.
 
@@ -331,6 +336,9 @@ def _process_log_file(
         id_patterns: Message ID patterns to include (supports wildcards).
         categories: Categories to include.
         output_format: Output format (text, json, count).
+        summary: If True, show summary view instead of messages.
+        group_by: Group output by this field (severity, id, file, category).
+        top_n: Limit messages per group when using group_by.
 
     Returns:
         List of filtered messages.
@@ -414,8 +422,13 @@ def _process_log_file(
             if msg.category and msg.category.lower() in category_set
         ]
 
-    # Output based on format
-    _output_messages(console, messages, output_format)
+    # Output based on mode
+    if summary:
+        _print_summary(console, messages)
+    elif group_by:
+        _print_grouped(console, messages, group_by, top_n)
+    else:
+        _output_messages(console, messages, output_format)
 
     return messages
 
@@ -487,6 +500,158 @@ def _output_messages(
                 console.print(msg.raw_text, markup=False)
 
 
+def _print_summary(
+    console: Console,
+    messages: list,
+) -> None:
+    """Print summary statistics grouped by severity with ID breakdown.
+
+    Similar to hal_log_parser.py's print_summary() function.
+
+    Args:
+        console: Rich console for output.
+        messages: List of messages to summarize.
+    """
+    aggregator = Aggregator()
+    summary = aggregator.get_summary(messages)
+
+    if not summary:
+        console.print("[dim]No messages to summarize.[/dim]")
+        return
+
+    # Sort summary by severity order
+    sorted_summary = aggregator.sorted_summary(summary)
+
+    console.print()
+    console.print("=" * 70)
+    console.print("Log Analysis Summary")
+    console.print("=" * 70)
+
+    for sev, stats in sorted_summary:
+        sev_display = sev.title().replace("_", " ")
+        console.print(f"\n {sev_display:16s} : ({stats.total})")
+
+        # Sort IDs by count descending
+        sorted_ids = sorted(stats.by_id.items(), key=lambda x: (-x[1], x[0]))
+
+        # Print IDs in columns (4 per row like HAL)
+        for i in range(0, len(sorted_ids), 4):
+            row = sorted_ids[i:i+4]
+            formatted = [f"  {msg_id} ({count})" for msg_id, count in row]
+            # Right-pad each item to 16 chars for columnar display
+            line = "".join(f"{item:18s}" for item in formatted)
+            console.print(line)
+
+    console.print()
+    console.print("=" * 70)
+    console.print(f"Total: {len(messages)} messages")
+    console.print("=" * 70)
+
+
+def _print_grouped(
+    console: Console,
+    messages: list,
+    group_by: str,
+    top_n: int = 0,
+) -> None:
+    """Print messages grouped by the specified field.
+
+    Similar to hal_log_parser.py's print_details() and print_by_file().
+
+    Args:
+        console: Rich console for output.
+        messages: List of messages to group.
+        group_by: Field to group by ("severity", "id", "file", "category").
+        top_n: Maximum number of messages to show per group (0 = no limit).
+    """
+    aggregator = Aggregator()
+    groups = aggregator.group_by(messages, group_by)
+
+    if not groups:
+        console.print("[dim]No messages to display.[/dim]")
+        return
+
+    # Sort groups by count descending
+    sorted_groups = aggregator.sorted_groups(groups, by_count=True)
+
+    console.print()
+    console.print("=" * 70)
+    console.print(f"Log Analysis - Grouped by {group_by.title()}")
+    console.print("=" * 70)
+
+    for key, stats in sorted_groups:
+        console.print()
+        console.print("-" * 70)
+
+        # Show group header with severity info
+        if group_by == "severity":
+            header = f" {key.title().replace('_', ' ')} ({stats.count} messages)"
+        elif group_by == "id":
+            sev_display = stats.severity.title() if stats.severity else "Unknown"
+            header = f" {key} [{sev_display}] ({stats.count} messages)"
+        elif group_by == "file":
+            header = f" {key} ({stats.count} messages)"
+            # Count by severity for file groups
+            sev_counts: dict[str, int] = {}
+            for msg in stats.messages:
+                sev = msg.severity.lower() if msg.severity else "other"
+                sev_counts[sev] = sev_counts.get(sev, 0) + 1
+            sev_parts = [f"{s.title()}: {c}" for s, c in sorted(sev_counts.items())]
+            if sev_parts:
+                console.print(f" File: {key}")
+                console.print(f" Total: {stats.count} ({', '.join(sev_parts)})")
+                header = None  # Already printed
+        else:  # category
+            header = f" {key.title()} ({stats.count} messages)"
+
+        if header:
+            console.print(header)
+
+        if stats.files_affected and group_by != "file":
+            console.print(f" Files affected: {len(stats.files_affected)}")
+
+        console.print("-" * 70)
+
+        # Show sample messages
+        msgs_to_show = stats.messages[:top_n] if top_n > 0 else stats.messages
+
+        for msg in msgs_to_show:
+            # Format location
+            if msg.file_ref:
+                loc = f"{msg.file_ref.path}"
+                if msg.file_ref.line:
+                    loc += f":{msg.file_ref.line}"
+            else:
+                loc = "(no location)"
+
+            # Format severity tag
+            sev_tag = msg.severity.title() if msg.severity else "?"
+            msg_id = msg.message_id or ""
+
+            style = _get_severity_style(msg.severity)
+            line = f"  {sev_tag:8s} {msg_id:20s} @ {loc}"
+            if style:
+                console.print(line, style=style)
+            else:
+                console.print(line)
+            
+            # Wrap content with 2-space indent (align with severity)
+            indent = "  "
+            width = (console.width or 80) - len(indent)
+            wrapped = textwrap.fill(msg.content, width=width)
+            for wrapped_line in wrapped.split("\n"):
+                console.print(f"{indent}{wrapped_line}", markup=False)
+            console.print()
+
+        # Show "and N more" if truncated
+        if top_n > 0 and len(stats.messages) > top_n:
+            remaining = len(stats.messages) - top_n
+            console.print(f"  ... and {remaining} more")
+
+    console.print()
+    console.print("=" * 70)
+
+
 def _generate_waivers(
     ctx: click.Context,
     console: Console,
@@ -551,7 +716,7 @@ def _generate_waivers(
     print(toml_content)
 
 
-@click.command()
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("logfile", required=False, type=click.Path(exists=True))
 @click.option("--version", is_flag=True, help="Show version and exit.")
 @click.option(
@@ -568,6 +733,11 @@ def _generate_waivers(
     "--show-info",
     is_flag=True,
     help="Show detailed information about a plugin (requires --plugin)."
+)
+@click.option(
+    "--list-groupings",
+    is_flag=True,
+    help="List available grouping fields from the plugin and exit."
 )
 @click.option(
     "--severity",
@@ -651,6 +821,24 @@ def _generate_waivers(
     type=click.Path(),
     help="Write JSON summary report to this file."
 )
+@click.option(
+    "--summary",
+    is_flag=True,
+    help="Show summary counts by severity and message ID (like hal_log_parser.py)."
+)
+@click.option(
+    "--group-by",
+    "group_by",
+    type=click.Choice(["severity", "id", "file", "category"], case_sensitive=False),
+    help="Group output by the specified field with sample messages."
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=5,
+    help="Limit messages shown per group when using --group-by (default: 5, 0 = no limit)."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -659,6 +847,7 @@ def cli(
     list_plugins: bool,
     plugin: str | None,
     show_info: bool,
+    list_groupings: bool,
     severity: str | None,
     filter_pattern: str | None,
     suppress_patterns: tuple[str, ...],
@@ -673,6 +862,9 @@ def cli(
     show_waived: bool,
     report_unused: bool,
     report_file: str | None,
+    summary: bool,
+    group_by: str | None,
+    top_n: int,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -767,6 +959,55 @@ def cli(
         console.print()
         return
 
+    if list_groupings:
+        # List available grouping fields from the plugin
+        manager = _get_plugin_manager()
+
+        # Determine which plugin to query
+        if plugin:
+            plugin_instance = manager.get_plugin(plugin)
+            if plugin_instance is None:
+                console.print(f"[red]Error:[/red] Plugin '{plugin}' not found.")
+                ctx.exit(1)
+        else:
+            console.print("[yellow]Note:[/yellow] No plugin specified. Showing default groupings.")
+            console.print("Use --plugin <name> to see plugin-specific groupings.\n")
+            plugin_instance = None
+
+        # Get grouping fields from plugin or use defaults
+        if plugin_instance and hasattr(plugin_instance, "get_grouping_fields"):
+            try:
+                grouping_dicts = plugin_instance.get_grouping_fields()
+                from sawmill.models.plugin_api import grouping_fields_from_dicts
+                grouping_fields = grouping_fields_from_dicts(grouping_dicts)
+            except Exception:
+                grouping_fields = None
+        else:
+            grouping_fields = None
+
+        if grouping_fields is None:
+            from sawmill.models.plugin_api import DEFAULT_GROUPING_FIELDS
+            grouping_fields = DEFAULT_GROUPING_FIELDS
+
+        # Display the grouping fields
+        table = Table(title="Available Grouping Fields")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Name", style="green")
+        table.add_column("Type")
+        table.add_column("Description")
+
+        for field in grouping_fields:
+            table.add_row(
+                field.id,
+                field.name,
+                field.field_type,
+                field.description,
+            )
+
+        console.print(table)
+        console.print("\nUse --group-by <id> to group messages by a field.")
+        return
+
     if logfile is None:
         click.echo(ctx.get_help())
         return
@@ -806,6 +1047,9 @@ def cli(
         id_patterns,
         categories,
         output_format,
+        summary,
+        group_by,
+        top_n,
     )
 
     # Apply waivers if loaded
