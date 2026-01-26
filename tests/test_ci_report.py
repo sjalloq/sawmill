@@ -28,7 +28,7 @@ class TestCIReportGeneration:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         assert report_file.exists()
@@ -57,17 +57,17 @@ class TestCIReportGeneration:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
 
         summary = report["summary"]
         assert summary["total"] == 7
-        assert summary["errors"] == 2
-        assert summary["critical_warnings"] == 1
-        assert summary["warnings"] == 3
-        assert summary["info"] == 1
+        assert summary["by_severity"]["error"] == 2
+        assert summary["by_severity"]["critical_warning"] == 1
+        assert summary["by_severity"]["warning"] == 3
+        assert summary["by_severity"]["info"] == 1
 
     def test_ci_report_includes_unwaived_issues(self, tmp_path):
         """Report should include list of unwaived issues."""
@@ -84,7 +84,7 @@ class TestCIReportGeneration:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
@@ -101,7 +101,7 @@ class TestCIReportGeneration:
             assert "line" in issue
 
     def test_ci_report_exit_code_zero(self, tmp_path):
-        """Report shows exit_code 0 when no errors/critical warnings."""
+        """Report shows exit_code 0 when no errors (with --fail-on error)."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
             "# Vivado v2025.2\n"
@@ -112,9 +112,10 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
+        # Use --fail-on error since default now fails on warning+
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--fail-on", "error", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
@@ -122,7 +123,7 @@ class TestCIReportGeneration:
         assert report["exit_code"] == 0
 
     def test_ci_report_exit_code_with_strict(self, tmp_path):
-        """Report shows exit_code 1 in strict mode with warnings."""
+        """Report shows exit_code 1 with --fail-on warning."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
             "# Vivado v2025.2\n"
@@ -136,8 +137,9 @@ class TestCIReportGeneration:
         result = runner.invoke(
             cli,
             [
-                "--ci",
-                "--strict",
+                "--check",
+                "--fail-on",
+                "warning",
                 "--plugin",
                 "vivado",
                 "--report",
@@ -148,7 +150,7 @@ class TestCIReportGeneration:
 
         report = json.loads(report_file.read_text())
 
-        assert report["exit_code"] == 1  # Strict mode, warnings cause failure
+        assert report["exit_code"] == 1  # --fail-on warning, warnings cause failure
 
     def test_ci_report_with_waivers(self, tmp_path):
         """Report should show waived and unwaived counts separately."""
@@ -175,7 +177,7 @@ class TestCIReportGeneration:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--waivers",
@@ -189,7 +191,8 @@ class TestCIReportGeneration:
         report = json.loads(report_file.read_text())
 
         assert report["summary"]["waived"] == 1
-        assert report["summary"]["unwaived_errors"] == 1
+        # by_severity counts unwaived messages only
+        assert report["summary"]["by_severity"]["error"] == 1
 
     def test_ci_report_includes_waived_list(self, tmp_path):
         """Report should include list of waived messages."""
@@ -215,7 +218,7 @@ class TestCIReportGeneration:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--waivers",
@@ -247,7 +250,7 @@ class TestReportFileCreation:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         assert report_file.exists()
@@ -262,7 +265,7 @@ class TestReportFileCreation:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         # Should not raise json.JSONDecodeError
@@ -289,7 +292,7 @@ class TestReportWithFilters:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--severity",
@@ -304,9 +307,9 @@ class TestReportWithFilters:
 
         # Only error and warning should be counted
         assert report["summary"]["total"] == 2
-        assert report["summary"]["errors"] == 1
-        assert report["summary"]["warnings"] == 1
-        assert report["summary"]["info"] == 0
+        assert report["summary"]["by_severity"]["error"] == 1
+        assert report["summary"]["by_severity"]["warning"] == 1
+        assert report["summary"]["by_severity"]["info"] == 0
 
     def test_report_respects_suppress_id(self, tmp_path):
         """Report should not count suppressed messages."""
@@ -323,7 +326,7 @@ class TestReportWithFilters:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--suppress-id",
@@ -337,7 +340,7 @@ class TestReportWithFilters:
         report = json.loads(report_file.read_text())
 
         assert report["summary"]["total"] == 1
-        assert report["summary"]["errors"] == 1
+        assert report["summary"]["by_severity"]["error"] == 1
 
 
 class TestReportMetadata:
@@ -353,7 +356,7 @@ class TestReportMetadata:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
@@ -372,7 +375,7 @@ class TestReportMetadata:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
@@ -381,10 +384,10 @@ class TestReportMetadata:
 
 
 class TestReportWithoutCI:
-    """Test --report behavior without --ci flag."""
+    """Test --report behavior without --check flag."""
 
     def test_report_works_without_ci(self, tmp_path):
-        """Report can be generated even without --ci mode."""
+        """Report can be generated even without --check mode."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
             "# Vivado v2025.2\n"
@@ -408,7 +411,7 @@ class TestReportWithoutCI:
         assert report["exit_code"] == 1  # Has error
 
     def test_report_without_ci_doesnt_affect_exit_code(self, tmp_path):
-        """Without --ci, CLI exit code should be 0 even with errors."""
+        """Without --check, CLI exit code should be 0 even with errors."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
             "# Vivado v2025.2\n"
@@ -423,7 +426,7 @@ class TestReportWithoutCI:
             ["--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
-        # CLI exit code is 0 (no --ci)
+        # CLI exit code is 0 (no --check)
         assert result.exit_code == 0
 
         # But report shows what would be the CI exit code
@@ -444,7 +447,7 @@ class TestReportEdgeCases:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
@@ -466,13 +469,13 @@ class TestReportEdgeCases:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--ci", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
 
         report = json.loads(report_file.read_text())
 
         assert report["summary"]["total"] == 2
-        assert report["summary"]["errors"] == 0
+        assert report["summary"]["by_severity"]["error"] == 0
         assert report["exit_code"] == 0
 
     def test_report_all_errors_waived(self, tmp_path):
@@ -498,7 +501,7 @@ class TestReportEdgeCases:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--waivers",
@@ -512,7 +515,8 @@ class TestReportEdgeCases:
         report = json.loads(report_file.read_text())
 
         assert report["summary"]["waived"] == 1
-        assert report["summary"]["unwaived_errors"] == 0
+        # by_severity counts unwaived messages, so errors should be 0
+        assert report["summary"]["by_severity"]["error"] == 0
         assert report["exit_code"] == 0
 
 
@@ -547,7 +551,7 @@ class TestReportUnusedWaivers:
         result = runner.invoke(
             cli,
             [
-                "--ci",
+                "--check",
                 "--plugin",
                 "vivado",
                 "--waivers",

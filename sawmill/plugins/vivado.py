@@ -204,14 +204,14 @@ class VivadoPlugin(SawmillPlugin):
         """
         return [
             {
-                "id": "critical_warning",
-                "name": "Critical Warning",
+                "id": "error",
+                "name": "Error",
                 "level": 3,
                 "style": "red bold",
             },
             {
-                "id": "error",
-                "name": "Error",
+                "id": "critical_warning",
+                "name": "Critical Warning",
                 "level": 2,
                 "style": "red",
             },

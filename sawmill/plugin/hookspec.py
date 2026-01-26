@@ -91,20 +91,28 @@ class SawmillHookSpec:
 
     @hookspec
     def get_severity_levels(self) -> list[dict]:
-        """Get severity levels supported by this plugin.
+        """REQUIRED: Get severity levels supported by this plugin.
 
-        Plugins should return their severity levels in order from most
-        to least severe. This allows the base app to properly order
-        and style messages regardless of the tool's naming conventions.
+        Plugins MUST implement this hook to define their severity levels.
+        The base app uses these levels for:
+        - Filtering messages by severity (--severity, --fail-on)
+        - Sorting and grouping messages
+        - Styling output (colors in terminal)
+        - Determining pass/fail in --check mode
+
+        Level numbering contract:
+            Plugins MUST use consecutive integers starting at 0.
+            Level 0 is the lowest severity (informational/note).
+            Higher numbers indicate more severe levels.
 
         Returns:
-            List of severity definitions, ordered from most to least severe:
+            List of severity definitions with these fields:
             [
                 {
                     "id": "fatal",       # Internal identifier (lowercase)
                     "name": "Fatal",     # Display name
                     "style": "red bold", # Rich style for display
-                    "level": 3,          # Numeric level for filtering (higher = more severe)
+                    "level": 3,          # Numeric level (0 = lowest, higher = more severe)
                 },
                 {
                     "id": "error",
@@ -112,11 +120,26 @@ class SawmillHookSpec:
                     "style": "red",
                     "level": 2,
                 },
-                ...
+                {
+                    "id": "warning",
+                    "name": "Warning",
+                    "style": "yellow",
+                    "level": 1,
+                },
+                {
+                    "id": "note",
+                    "name": "Note",
+                    "style": "cyan",
+                    "level": 0,          # Level 0 = lowest (informational)
+                },
             ]
 
-        If not implemented, the base app uses default severity levels:
-        critical (3), error (2), warning (1), info (0).
+        The numeric "level" field is used for threshold comparisons:
+        - --check defaults to failing on the second-lowest level and above
+        - --fail-on <severity> sets the threshold to that severity's level
+
+        Raises:
+            NotImplementedError: If not implemented by the plugin.
         """
 
     @hookspec

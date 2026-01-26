@@ -43,10 +43,21 @@ class SawmillPlugin:
     """Base class for sawmill plugins.
 
     Plugins should inherit from this class and override the hooks they implement.
-    The base class provides default implementations that opt-out (return empty/None).
+    The base class provides default implementations for optional hooks and raises
+    NotImplementedError for required hooks.
 
     Subclasses must define:
         name: Unique identifier for the plugin (str)
+
+    Required hooks (must override):
+        get_severity_levels(): Define the tool's severity levels
+
+    Optional hooks (have defaults):
+        can_handle(): Detection (default: 0.0)
+        load_and_parse(): Parsing (default: empty list)
+        get_filters(): Pre-defined filters (default: empty list)
+        get_grouping_fields(): Grouping options (default: standard fields)
+        extract_file_reference(): File ref extraction (default: None)
 
     Optional attributes:
         version: Plugin version string (str)
@@ -62,6 +73,15 @@ class SawmillPlugin:
             def can_handle(self, path):
                 # Check if this is a Vivado log
                 ...
+
+            @hookimpl
+            def get_severity_levels(self):
+                # REQUIRED: Define severity levels (0 = lowest, N-1 = highest)
+                return [
+                    {"id": "error", "name": "Error", "level": 2, "style": "red bold"},
+                    {"id": "warning", "name": "Warning", "level": 1, "style": "yellow"},
+                    {"id": "info", "name": "Info", "level": 0, "style": "cyan"},
+                ]
     """
 
     name: str = "base"
@@ -121,3 +141,87 @@ class SawmillPlugin:
             None by default.
         """
         return None
+
+    @hookimpl
+    def get_severity_levels(self) -> list[dict]:
+        """REQUIRED: Return the severity levels for this tool.
+
+        Plugins MUST override this method to define their severity levels.
+        The base app uses these levels for filtering, sorting, and display.
+
+        Level numbering contract:
+            Levels MUST be consecutive integers starting at 0.
+            Level 0 is the lowest severity (informational/note).
+            Higher numbers indicate more severe levels.
+
+        Returns:
+            List of severity level dictionaries, each containing:
+            - id: Internal identifier (lowercase, e.g., "error", "warning")
+            - name: Human-readable display name (e.g., "Error", "Warning")
+            - level: Numeric level for comparison (0 = lowest, higher = more severe)
+            - style: Rich style string for terminal display (e.g., "red bold")
+
+        Raises:
+            NotImplementedError: If not overridden by subclass.
+
+        Example:
+            return [
+                {"id": "error", "name": "Error", "level": 2, "style": "red bold"},
+                {"id": "warning", "name": "Warning", "level": 1, "style": "yellow"},
+                {"id": "info", "name": "Info", "level": 0, "style": "cyan"},
+            ]
+        """
+        raise NotImplementedError(
+            f"Plugin '{self.name}' must implement get_severity_levels(). "
+            "This hook is required to define the tool's severity levels."
+        )
+
+    @hookimpl
+    def get_grouping_fields(self) -> list[dict]:
+        """Return available grouping fields for this tool.
+
+        Plugins can override this to provide custom grouping options.
+        The default implementation provides standard fields: severity, id, file, category.
+
+        Returns:
+            List of grouping field dictionaries, each containing:
+            - id: Field identifier (used in --group-by)
+            - name: Human-readable display name
+            - field_type: "builtin", "metadata", or "file_ref"
+            - description: Help text for the field
+
+        Example:
+            return [
+                {"id": "severity", "name": "Severity", "field_type": "builtin",
+                 "description": "Group by message severity level"},
+                {"id": "hierarchy", "name": "Design Hierarchy", "field_type": "metadata",
+                 "description": "Group by RTL hierarchy path"},
+            ]
+        """
+        # Default grouping fields available for all plugins
+        return [
+            {
+                "id": "severity",
+                "name": "Severity",
+                "field_type": "builtin",
+                "description": "Group by message severity level",
+            },
+            {
+                "id": "id",
+                "name": "Message ID",
+                "field_type": "builtin",
+                "description": "Group by tool-specific message ID",
+            },
+            {
+                "id": "file",
+                "name": "Source File",
+                "field_type": "file_ref",
+                "description": "Group by source file path",
+            },
+            {
+                "id": "category",
+                "name": "Category",
+                "field_type": "builtin",
+                "description": "Group by message category",
+            },
+        ]

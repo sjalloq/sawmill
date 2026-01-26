@@ -10,27 +10,26 @@ import rich_click as click
 from rich.console import Console
 from rich.table import Table
 
-from sawmill.core.aggregation import Aggregator, SEVERITY_ORDER
+from sawmill.core.aggregation import Aggregator
 from sawmill.core.filter import FilterEngine
 from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
 from sawmill.core.waiver import WaiverGenerator, WaiverLoader, WaiverMatcher, WaiverValidationError
 from sawmill.models.waiver import Waiver
-from sawmill.plugins.vivado import VivadoPlugin
 
 click.rich_click.TEXT_MARKUP = "rich"
 click.rich_click.SHOW_ARGUMENTS = True
 
 
 def _get_plugin_manager() -> PluginManager:
-    """Create and configure the plugin manager with built-in plugins.
+    """Create and configure the plugin manager.
+
+    Discovers plugins via entry points (including built-in plugins
+    registered in pyproject.toml).
 
     Returns:
         Configured PluginManager instance.
     """
     manager = PluginManager()
-    # Register built-in plugins
-    manager.register(VivadoPlugin())
-    # Discover external plugins via entry points
     manager.discover()
     return manager
 
@@ -59,32 +58,82 @@ def _get_implemented_hooks(plugin) -> list[str]:
     return hooks
 
 
-def _get_severity_style(severity: str | None) -> str:
+def _get_severity_levels(plugin):
+    """Get severity levels from plugin.
+
+    Args:
+        plugin: The plugin instance to get levels from.
+
+    Returns:
+        List of SeverityLevel objects.
+
+    Raises:
+        RuntimeError: If plugin doesn't implement get_severity_levels().
+    """
+    from sawmill.models.plugin_api import severity_levels_from_dicts
+
+    if plugin and hasattr(plugin, "get_severity_levels"):
+        severity_dicts = plugin.get_severity_levels()
+        return severity_levels_from_dicts(severity_dicts)
+    else:
+        raise RuntimeError(
+            f"Plugin must implement get_severity_levels(). "
+            "This hook is required for all plugins."
+        )
+
+
+def _get_severity_style_map(plugin) -> dict[str, str]:
+    """Build a severity style map from plugin's severity levels.
+
+    Args:
+        plugin: The plugin instance to get levels from.
+
+    Returns:
+        Dictionary mapping severity ID to Rich style string.
+    """
+    severity_levels = _get_severity_levels(plugin)
+    return {level.id.lower(): level.style or "" for level in severity_levels}
+
+
+def _get_severity_style(severity: str | None, style_map: dict[str, str]) -> str:
     """Get the Rich style for a given severity level.
 
     Args:
-        severity: The severity level (info, warning, error, critical).
+        severity: The severity level.
+        style_map: Dictionary mapping severity ID to style string.
 
     Returns:
         Rich style string for the severity.
     """
-    styles = {
-        "info": "cyan",
-        "warning": "yellow",
-        "error": "red",
-        "critical": "red bold",
-    }
     if severity:
-        return styles.get(severity.lower(), "")
+        return style_map.get(severity.lower(), "")
     return ""
 
 
-def _severity_at_or_above(message_severity: str | None, min_severity: str) -> bool:
+def _get_severity_level_map(plugin) -> dict[str, int]:
+    """Build a severity level map from plugin's severity levels.
+
+    Args:
+        plugin: The plugin instance to get levels from.
+
+    Returns:
+        Dictionary mapping severity ID to level number.
+    """
+    severity_levels = _get_severity_levels(plugin)
+    return {level.id.lower(): level.level for level in severity_levels}
+
+
+def _severity_at_or_above(
+    message_severity: str | None,
+    min_severity: str,
+    level_map: dict[str, int],
+) -> bool:
     """Check if message severity is at or above the minimum level.
 
     Args:
         message_severity: The message's severity (may be None).
         min_severity: The minimum severity level to show.
+        level_map: Dictionary mapping severity ID to level number.
 
     Returns:
         True if the message should be shown.
@@ -92,35 +141,66 @@ def _severity_at_or_above(message_severity: str | None, min_severity: str) -> bo
     if message_severity is None:
         return False
 
-    levels = {"info": 0, "warning": 1, "error": 2, "critical": 3}
-    msg_level = levels.get(message_severity.lower(), -1)
-    min_level = levels.get(min_severity.lower(), 0)
+    msg_level = level_map.get(message_severity.lower(), -1)
+    min_level = level_map.get(min_severity.lower(), 0)
     return msg_level >= min_level
 
 
-def _has_ci_failures(messages: list, strict: bool) -> bool:
-    """Check if messages contain CI-failing severities.
+def _has_check_failures(messages: list, plugin, min_level: int = 1) -> bool:
+    """Check if messages contain severities at or above the threshold.
 
-    In normal CI mode, errors and critical warnings cause failure.
-    In strict mode, regular warnings also cause failure.
+    Used by --check mode to determine exit code.
 
     Args:
-        messages: List of messages to check.
-        strict: If True, also fail on regular warnings.
+        messages: List of unwaived messages to check.
+        plugin: Plugin instance to get severity level map from.
+        min_level: Minimum severity level that causes failure.
 
     Returns:
-        True if there are CI-failing messages.
+        True if there are messages at or above the threshold.
     """
-    failing_severities = {"error", "critical_warning"}
-    if strict:
-        failing_severities.add("warning")
+    level_map = _get_severity_level_map(plugin)
 
     for msg in messages:
         if msg.severity:
-            sev = msg.severity.lower()
-            if sev in failing_severities:
+            msg_level = level_map.get(msg.severity.lower(), 0)
+            if msg_level >= min_level:
                 return True
     return False
+
+
+def _get_fail_on_level(fail_on: str | None, plugin) -> int:
+    """Get the numeric level for --fail-on severity.
+
+    Args:
+        fail_on: Severity name from --fail-on option, or None for default.
+        plugin: Plugin instance to get severity levels from.
+
+    Returns:
+        Numeric level threshold. Default: second-lowest severity level
+        from the plugin (i.e., everything above the lowest info-like level).
+
+    Raises:
+        click.BadParameter: If fail_on is not a valid severity for the plugin.
+    """
+    level_map = _get_severity_level_map(plugin)
+
+    if fail_on is None:
+        # Default: fail on everything above the lowest severity level
+        severity_levels = _get_severity_levels(plugin)
+        sorted_levels = sorted(severity_levels, key=lambda s: s.level)
+        if len(sorted_levels) >= 2:
+            return sorted_levels[1].level
+        return sorted_levels[0].level if sorted_levels else 0
+
+    fail_on_lower = fail_on.lower()
+    if fail_on_lower not in level_map:
+        valid = sorted(level_map.keys(), key=lambda x: -level_map[x])
+        raise click.BadParameter(
+            f"Unknown severity '{fail_on}'. Valid options for this plugin: {', '.join(valid)}",
+            param_hint="'--fail-on'",
+        )
+    return level_map[fail_on_lower]
 
 
 def _apply_waivers(
@@ -153,37 +233,38 @@ def _apply_waivers(
     return unwaived, waived, used_waivers
 
 
-def _generate_ci_report(
+def _generate_check_report(
     messages: list,
     waived_messages: list,
     used_waivers: list[Waiver],
     all_waivers: list[Waiver],
-    strict: bool,
+    plugin,
+    min_level: int,
     log_file: str,
     plugin_name: str,
 ) -> dict:
-    """Generate a CI summary report as a dictionary.
+    """Generate a check summary report as a dictionary.
 
     Args:
         messages: List of unwaived messages.
         waived_messages: List of (message, waiver) tuples for waived messages.
         used_waivers: List of waivers that matched messages.
         all_waivers: All waivers that were loaded.
-        strict: If True, warnings also cause CI failure.
+        plugin: Plugin instance to get severity levels from.
+        min_level: Minimum severity level that causes failure.
         log_file: Path to the log file being analyzed.
         plugin_name: Name of the plugin used.
 
     Returns:
-        Dictionary containing the CI report.
+        Dictionary containing the check report.
     """
-    # Count messages by severity
-    counts: dict[str, int] = {
-        "error": 0,
-        "critical_warning": 0,
-        "warning": 0,
-        "info": 0,
-        "other": 0,
-    }
+    # Build severity counts dynamically from plugin
+    severity_levels = _get_severity_levels(plugin)
+    counts: dict[str, int] = {level.id: 0 for level in severity_levels}
+    counts["other"] = 0
+
+    level_map = {level.id: level.level for level in severity_levels}
+
     for msg in messages:
         if msg.severity:
             sev = msg.severity.lower()
@@ -195,13 +276,9 @@ def _generate_ci_report(
             counts["other"] += 1
 
     # Count waived messages by severity
-    waived_counts: dict[str, int] = {
-        "error": 0,
-        "critical_warning": 0,
-        "warning": 0,
-        "info": 0,
-        "other": 0,
-    }
+    waived_counts: dict[str, int] = {level.id: 0 for level in severity_levels}
+    waived_counts["other"] = 0
+
     for msg, waiver in waived_messages:
         if msg.severity:
             sev = msg.severity.lower()
@@ -212,16 +289,12 @@ def _generate_ci_report(
         else:
             waived_counts["other"] += 1
 
-    # Calculate exit code based on unwaived messages
+    # Calculate exit code based on unwaived messages and threshold
     exit_code = 0
-    failing_severities = {"error", "critical_warning"}
-    if strict:
-        failing_severities.add("warning")
-
     for msg in messages:
         if msg.severity:
-            sev = msg.severity.lower()
-            if sev in failing_severities:
+            msg_level = level_map.get(msg.severity.lower(), 0)
+            if msg_level >= min_level:
                 exit_code = 1
                 break
 
@@ -259,25 +332,23 @@ def _generate_ci_report(
                 "reason": waiver.reason,
             })
 
-    # Build the report
+    # Build the report with dynamic severity counts
+    summary = {
+        "total": len(messages) + len(waived_messages),
+        "waived": len(waived_messages),
+        "by_severity": counts,
+        "waived_by_severity": waived_counts,
+    }
+
     report = {
         "metadata": {
             "log_file": log_file,
             "plugin": plugin_name,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "fail_on_level": min_level,
         },
         "exit_code": exit_code,
-        "summary": {
-            "total": len(messages) + len(waived_messages),
-            "errors": counts["error"],
-            "critical_warnings": counts["critical_warning"],
-            "warnings": counts["warning"],
-            "info": counts["info"],
-            "waived": len(waived_messages),
-            "unwaived_errors": counts["error"],
-            "unwaived_critical_warnings": counts["critical_warning"],
-            "unwaived_warnings": counts["warning"],
-        },
+        "summary": summary,
         "issues": issues,
         "waived": waived_list,
         "unused_waivers": unused_waivers,
@@ -321,7 +392,7 @@ def _process_log_file(
     summary: bool = False,
     group_by: str | None = None,
     top_n: int = 5,
-) -> list:
+) -> tuple[list, dict[str, str]]:
     """Process a log file with the specified filters.
 
     Args:
@@ -341,7 +412,7 @@ def _process_log_file(
         top_n: Limit messages per group when using group_by.
 
     Returns:
-        List of filtered messages.
+        Tuple of (filtered messages, severity style map).
     """
     manager = _get_plugin_manager()
     path = Path(logfile)
@@ -376,6 +447,36 @@ def _process_log_file(
         console.print("[red]Error:[/red] Plugin not found.")
         ctx.exit(1)
 
+    # Get severity level and style maps from plugin
+    severity_level_map = _get_severity_level_map(plugin)
+    severity_style_map = _get_severity_style_map(plugin)
+
+    # Handle numeric severity input (map level number to ID)
+    if severity:
+        try:
+            level_num = int(severity)
+            # Find the severity ID with this level number
+            level_to_id = {v: k for k, v in severity_level_map.items()}
+            if level_num in level_to_id:
+                severity = level_to_id[level_num]
+            else:
+                valid_nums = sorted(level_to_id.keys())
+                console.print(f"[red]Error:[/red] Unknown severity level '{level_num}'.")
+                console.print(f"\nValid severity levels: {valid_nums}")
+                console.print("Use --list-severity to see all available levels.")
+                ctx.exit(1)
+        except ValueError:
+            # Not a number, validate as ID
+            if severity.lower() not in severity_level_map:
+                valid_levels = sorted(severity_level_map.keys(), key=lambda x: -severity_level_map[x])
+                console.print(f"[red]Error:[/red] Unknown severity level '{severity}'.")
+                console.print(f"\nValid severity levels for this plugin:")
+                for level_id in valid_levels:
+                    level_num = severity_level_map[level_id]
+                    console.print(f"  - {level_id} ({level_num})")
+                console.print("\nUse --list-severity to see all available levels.")
+                ctx.exit(1)
+
     # Load and parse the file using the plugin
     messages = plugin.load_and_parse(path)
 
@@ -383,7 +484,7 @@ def _process_log_file(
     if severity:
         messages = [
             msg for msg in messages
-            if _severity_at_or_above(msg.severity, severity)
+            if _severity_at_or_above(msg.severity, severity, severity_level_map)
         ]
 
     # Apply regex filter if specified
@@ -422,21 +523,27 @@ def _process_log_file(
             if msg.category and msg.category.lower() in category_set
         ]
 
+    # Get severity levels from plugin for aggregation and count format
+    severity_levels = _get_severity_levels(plugin)
+    severity_ids = [level.id for level in severity_levels]
+
     # Output based on mode
     if summary:
-        _print_summary(console, messages)
+        _print_summary(console, messages, severity_style_map, severity_levels)
     elif group_by:
-        _print_grouped(console, messages, group_by, top_n)
+        _print_grouped(console, messages, group_by, top_n, severity_style_map, severity_levels)
     else:
-        _output_messages(console, messages, output_format)
+        _output_messages(console, messages, output_format, severity_style_map, severity_ids)
 
-    return messages
+    return messages, severity_style_map
 
 
 def _output_messages(
     console: Console,
     messages: list,
     output_format: str,
+    style_map: dict[str, str],
+    severity_ids: list[str] | None = None,
 ) -> None:
     """Output messages in the specified format.
 
@@ -444,6 +551,8 @@ def _output_messages(
         console: Rich console for output.
         messages: List of messages to output.
         output_format: Output format (text, json, count).
+        style_map: Dictionary mapping severity ID to Rich style string.
+        severity_ids: List of severity IDs from plugin (for count format).
     """
     if output_format.lower() == "json":
         # JSONL format: one JSON object per line
@@ -467,13 +576,13 @@ def _output_messages(
 
     elif output_format.lower() == "count":
         # Count format: summary statistics by severity
-        counts: dict[str, int] = {
-            "error": 0,
-            "critical_warning": 0,
-            "warning": 0,
-            "info": 0,
-            "other": 0,
-        }
+        # Build counts dynamically from plugin's severity IDs
+        if severity_ids:
+            counts: dict[str, int] = {sev_id: 0 for sev_id in severity_ids}
+        else:
+            counts = {}
+        counts["other"] = 0
+
         for msg in messages:
             if msg.severity:
                 sev = msg.severity.lower()
@@ -484,16 +593,21 @@ def _output_messages(
             else:
                 counts["other"] += 1
 
-        # Output the summary
+        # Output the summary with dynamic severity names
         total = len(messages)
-        console.print(f"total={total} errors={counts['error']} critical_warnings={counts['critical_warning']} warnings={counts['warning']} info={counts['info']}")
+        parts = [f"total={total}"]
+        for sev_id in (severity_ids or []):
+            parts.append(f"{sev_id}={counts.get(sev_id, 0)}")
+        if counts["other"] > 0:
+            parts.append(f"other={counts['other']}")
+        console.print(" ".join(parts))
 
     else:
         # Text format (default): human-readable with colors
         # Note: We use markup=False to prevent Rich from interpreting
         # log content like [/path/to/file:line] as markup tags.
         for msg in messages:
-            style = _get_severity_style(msg.severity)
+            style = _get_severity_style(msg.severity, style_map)
             if style:
                 console.print(msg.raw_text, style=style, markup=False)
             else:
@@ -503,6 +617,8 @@ def _output_messages(
 def _print_summary(
     console: Console,
     messages: list,
+    style_map: dict[str, str],
+    severity_levels: list,
 ) -> None:
     """Print summary statistics grouped by severity with ID breakdown.
 
@@ -511,8 +627,10 @@ def _print_summary(
     Args:
         console: Rich console for output.
         messages: List of messages to summarize.
+        style_map: Dictionary mapping severity ID to Rich style string.
+        severity_levels: List of SeverityLevel objects from plugin.
     """
-    aggregator = Aggregator()
+    aggregator = Aggregator(severity_levels=severity_levels)
     summary = aggregator.get_summary(messages)
 
     if not summary:
@@ -552,7 +670,9 @@ def _print_grouped(
     console: Console,
     messages: list,
     group_by: str,
-    top_n: int = 0,
+    top_n: int,
+    style_map: dict[str, str],
+    severity_levels: list,
 ) -> None:
     """Print messages grouped by the specified field.
 
@@ -563,8 +683,10 @@ def _print_grouped(
         messages: List of messages to group.
         group_by: Field to group by ("severity", "id", "file", "category").
         top_n: Maximum number of messages to show per group (0 = no limit).
+        style_map: Dictionary mapping severity ID to Rich style string.
+        severity_levels: List of SeverityLevel objects from plugin.
     """
-    aggregator = Aggregator()
+    aggregator = Aggregator(severity_levels=severity_levels)
     groups = aggregator.group_by(messages, group_by)
 
     if not groups:
@@ -628,7 +750,7 @@ def _print_grouped(
             sev_tag = msg.severity.title() if msg.severity else "?"
             msg_id = msg.message_id or ""
 
-            style = _get_severity_style(msg.severity)
+            style = _get_severity_style(msg.severity, style_map)
             line = f"  {sev_tag:8s} {msg_id:20s} @ {loc}"
             if style:
                 console.print(line, style=style)
@@ -657,6 +779,7 @@ def _generate_waivers(
     console: Console,
     logfile: str,
     plugin_name: str | None,
+    min_waiver_level: int = 1,
 ) -> None:
     """Generate waiver TOML from a log file's errors/warnings.
 
@@ -665,6 +788,9 @@ def _generate_waivers(
         console: Rich console for error output.
         logfile: Path to the log file.
         plugin_name: Specific plugin to use (or None for auto-detect).
+        min_waiver_level: Minimum severity level to include in waivers.
+            Messages with severity.level >= min_waiver_level are included.
+            Level 0 is informational; level 1+ are actionable. Default: 1.
     """
     import sys
 
@@ -706,10 +832,16 @@ def _generate_waivers(
     # Load and parse the file using the plugin
     messages = plugin.load_and_parse(path)
 
+    # Get severity levels from plugin
+    severity_levels = _get_severity_levels(plugin)
+
     # Generate waiver TOML
     # Get tool name from plugin if available
     tool_name = getattr(plugin, "name", None)
-    generator = WaiverGenerator()
+    generator = WaiverGenerator(
+        severity_levels=severity_levels,
+        min_waiver_level=min_waiver_level,
+    )
     toml_content = generator.generate(messages, tool=tool_name)
 
     # Output to stdout (raw print to allow redirection)
@@ -740,8 +872,13 @@ def _generate_waivers(
     help="List available grouping fields from the plugin and exit."
 )
 @click.option(
+    "--list-severity",
+    is_flag=True,
+    help="List available severity levels from the plugin and exit."
+)
+@click.option(
     "--severity",
-    type=click.Choice(["info", "warning", "error", "critical"], case_sensitive=False),
+    type=str,
     help="Filter to show only messages at or above this severity level."
 )
 @click.option(
@@ -791,14 +928,22 @@ def _generate_waivers(
     help="Generate waiver TOML from errors/warnings in the log. Output to stdout."
 )
 @click.option(
-    "--ci",
-    is_flag=True,
-    help="CI mode: exit 1 if errors or critical warnings are found."
+    "--waiver-level",
+    "waiver_level",
+    type=int,
+    default=1,
+    help="Minimum severity level for waiver generation. Use --list-severity to see plugin levels. Default: 1."
 )
 @click.option(
-    "--strict",
+    "--check",
     is_flag=True,
-    help="With --ci, also fail on regular warnings."
+    help="Check mode: exit 1 if unwaived messages above the lowest severity level are found."
+)
+@click.option(
+    "--fail-on",
+    "fail_on",
+    type=str,
+    help="With --check, set minimum severity that causes failure. Use --list-severity to see available levels. Default: second-lowest level."
 )
 @click.option(
     "--waivers",
@@ -848,6 +993,7 @@ def cli(
     plugin: str | None,
     show_info: bool,
     list_groupings: bool,
+    list_severity: bool,
     severity: str | None,
     filter_pattern: str | None,
     suppress_patterns: tuple[str, ...],
@@ -856,8 +1002,9 @@ def cli(
     id_patterns: tuple[str, ...],
     categories: tuple[str, ...],
     generate_waivers: bool,
-    ci: bool,
-    strict: bool,
+    waiver_level: int,
+    check: bool,
+    fail_on: str | None,
     waivers: str | None,
     show_waived: bool,
     report_unused: bool,
@@ -1008,13 +1155,64 @@ def cli(
         console.print("\nUse --group-by <id> to group messages by a field.")
         return
 
+    if list_severity:
+        # List available severity levels from the plugin
+        manager = _get_plugin_manager()
+
+        # Determine which plugin to query
+        if plugin:
+            plugin_instance = manager.get_plugin(plugin)
+            if plugin_instance is None:
+                console.print(f"[red]Error:[/red] Plugin '{plugin}' not found.")
+                ctx.exit(1)
+        else:
+            plugin_instance = None
+
+        # Get severity levels from plugin or use defaults
+        if plugin_instance and hasattr(plugin_instance, "get_severity_levels"):
+            try:
+                severity_dicts = plugin_instance.get_severity_levels()
+                from sawmill.models.plugin_api import severity_levels_from_dicts
+                severity_levels = severity_levels_from_dicts(severity_dicts)
+            except Exception:
+                severity_levels = None
+        else:
+            severity_levels = None
+
+        if severity_levels is None:
+            console.print("[yellow]No severity levels available.[/yellow]")
+            console.print(
+                "Severity levels are provided by plugins. Use --plugin <name> to see "
+                "plugin-specific severity levels."
+            )
+            return
+
+        # Display the severity levels (sorted by level descending - most severe first)
+        table = Table(title="Available Severity Levels")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Name", style="green")
+        table.add_column("Level", justify="right")
+        table.add_column("Style")
+
+        for level in sorted(severity_levels, key=lambda x: -x.level):
+            table.add_row(
+                level.id,
+                level.name,
+                str(level.level),
+                level.style or "",
+            )
+
+        console.print(table)
+        console.print("\nUse --severity <id> to filter messages at or above that level.")
+        return
+
     if logfile is None:
         click.echo(ctx.get_help())
         return
 
     # Handle waiver generation mode
     if generate_waivers:
-        _generate_waivers(ctx, console, logfile, plugin)
+        _generate_waivers(ctx, console, logfile, plugin, waiver_level)
         return
 
     # Load waivers if specified
@@ -1035,7 +1233,7 @@ def cli(
             ctx.exit(1)
 
     # Process the log file
-    messages = _process_log_file(
+    messages, severity_style_map = _process_log_file(
         ctx,
         console,
         logfile,
@@ -1062,7 +1260,7 @@ def cli(
     if show_waived and waived_messages:
         console.print("\n[bold cyan]Waived Messages:[/bold cyan]")
         for msg, waiver in waived_messages:
-            style = _get_severity_style(msg.severity)
+            style = _get_severity_style(msg.severity, severity_style_map)
             console.print(f"  [dim]Waived by:[/dim] {waiver.pattern} ({waiver.type})")
             console.print(f"  [dim]Reason:[/dim] {waiver.reason}")
             if style:
@@ -1079,36 +1277,57 @@ def cli(
             for waiver in unused_waivers:
                 console.print(f"  - {waiver.pattern} ({waiver.type}): {waiver.reason}")
 
-    # Determine the plugin name used (for report metadata)
-    used_plugin_name = plugin if plugin else "vivado"  # Default to vivado for auto-detect
-    if not plugin:
-        try:
-            manager = _get_plugin_manager()
-            used_plugin_name = manager.auto_detect(Path(logfile))
-        except (NoPluginFoundError, PluginConflictError):
-            pass  # Keep default
+    # Get plugin for report and check mode
+    report_plugin = None
+    used_plugin_name = plugin if plugin else "unknown"
+    if report_file or check:
+        manager = _get_plugin_manager()
+        if plugin:
+            report_plugin = manager.get_plugin(plugin)
+            used_plugin_name = plugin
+        else:
+            try:
+                detected_name = manager.auto_detect(Path(logfile))
+                report_plugin = manager.get_plugin(detected_name)
+                used_plugin_name = detected_name
+            except (NoPluginFoundError, PluginConflictError):
+                pass
 
-    # Generate CI report if requested
+    # Get fail-on level (default: second-lowest severity from plugin)
+    min_level = 1
+    if report_plugin:
+        min_level = _get_fail_on_level(fail_on, report_plugin)
+
+    # Generate check report if requested
     if report_file:
-        report = _generate_ci_report(
-            messages=messages,
-            waived_messages=waived_messages,
-            used_waivers=used_waivers,
-            all_waivers=all_waivers,
-            strict=strict,
-            log_file=logfile,
-            plugin_name=used_plugin_name,
-        )
+        if report_plugin:
+            report = _generate_check_report(
+                messages=messages,
+                waived_messages=waived_messages,
+                used_waivers=used_waivers,
+                all_waivers=all_waivers,
+                plugin=report_plugin,
+                min_level=min_level,
+                log_file=logfile,
+                plugin_name=used_plugin_name,
+            )
 
-        # Write the report to file
-        report_path = Path(report_file)
-        # Create parent directories if they don't exist
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, indent=2))
+            # Write the report to file
+            report_path = Path(report_file)
+            # Create parent directories if they don't exist
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(json.dumps(report, indent=2))
+        else:
+            console.print("[yellow]Warning:[/yellow] Cannot generate report without a valid plugin.")
 
-    # Check CI exit codes (only on unwaived messages)
-    if ci and _has_ci_failures(messages, strict):
-        ctx.exit(1)
+    # Check exit codes (only on unwaived messages)
+    if check:
+        if report_plugin:
+            if _has_check_failures(messages, report_plugin, min_level):
+                ctx.exit(1)
+        else:
+            console.print("[yellow]Warning:[/yellow] Cannot check failures without a valid plugin.")
+            ctx.exit(1)
 
 
 if __name__ == "__main__":

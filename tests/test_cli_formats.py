@@ -130,7 +130,7 @@ class TestCountFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
-        assert "errors=3" in result.output
+        assert "error=3" in result.output
 
     def test_count_format_counts_warnings(self, tmp_path):
         """Count format correctly counts warnings."""
@@ -145,7 +145,7 @@ class TestCountFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
-        assert "warnings=2" in result.output
+        assert "warning=2" in result.output
 
     def test_count_format_mixed_severities(self, tmp_path):
         """Count format shows all severity counts."""
@@ -162,8 +162,8 @@ class TestCountFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
-        assert "errors=1" in result.output
-        assert "warnings=1" in result.output
+        assert "error=1" in result.output
+        assert "warning=1" in result.output
         assert "info=2" in result.output
 
     def test_count_format_total(self, tmp_path):
@@ -194,7 +194,7 @@ class TestCountFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
-        assert "critical_warnings=1" in result.output
+        assert "critical_warning=1" in result.output
 
     def test_count_format_case_insensitive(self, tmp_path):
         """--format COUNT should work (case insensitive)."""
@@ -304,7 +304,7 @@ class TestFormatWithFilters:
 
         assert result.exit_code == 0
         assert "total=1" in result.output
-        assert "errors=1" in result.output
+        assert "error=1" in result.output
 
     def test_json_with_suppress(self, tmp_path):
         """JSON format respects suppression patterns."""

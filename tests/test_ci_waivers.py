@@ -26,7 +26,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -50,7 +50,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -74,7 +74,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -109,7 +109,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -137,7 +137,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -161,7 +161,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--strict', '--plugin', 'vivado',
+            '--check', '--fail-on', 'warning', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -188,7 +188,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -202,7 +202,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(tmp_path / "nonexistent.toml"),
             str(log_file)
         ])
@@ -220,7 +220,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -249,7 +249,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--show-waived',
             str(log_file)
@@ -286,7 +286,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--show-waived',
             str(log_file)
@@ -303,7 +303,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--show-waived',
             str(log_file)
         ])
@@ -329,7 +329,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--show-waived',
             str(log_file)
@@ -359,7 +359,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--report-unused',
             str(log_file)
@@ -385,7 +385,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--report-unused',
             str(log_file)
@@ -422,7 +422,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             '--report-unused',
             str(log_file)
@@ -438,7 +438,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--report-unused',
             str(log_file)
         ])
@@ -471,7 +471,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--severity', 'error',
             '--waivers', str(waiver_file),
             str(log_file)
@@ -501,7 +501,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--suppress', 'second error',
             '--waivers', str(waiver_file),
             str(log_file)
@@ -515,7 +515,7 @@ class TestWaiverEdgeCases:
     """Edge cases for waiver integration."""
 
     def test_waiver_without_ci_mode(self, tmp_path):
-        """--waivers should work without --ci mode."""
+        """--waivers should work without --check mode."""
         log_file = tmp_path / "test.log"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error\n")
 
@@ -561,7 +561,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -578,7 +578,7 @@ date = "2026-01-18"
 
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             '--waivers', str(waiver_file),
             str(log_file)
         ])
@@ -593,7 +593,7 @@ date = "2026-01-18"
         # No waiver file provided
         runner = CliRunner()
         result = runner.invoke(cli, [
-            '--ci', '--plugin', 'vivado',
+            '--check', '--plugin', 'vivado',
             str(log_file)
         ])
 

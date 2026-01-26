@@ -25,8 +25,8 @@ class TestFullPipeline:
 
         assert result.exit_code == 0
         assert "total=" in result.output
-        assert "errors=" in result.output
-        assert "warnings=" in result.output
+        assert "error=" in result.output
+        assert "warning=" in result.output
 
     @pytest.mark.integration
     def test_vivado_log_auto_detect(self, vivado_log):
@@ -82,8 +82,26 @@ class TestSeverityFilter:
         lines = [line for line in result.output.strip().split("\n") if line.strip()]
         for line in lines:
             obj = json.loads(line)
-            # Error filter means severity should be error or critical
-            assert obj["severity"] in ("error", "critical")
+            # Error is highest severity, so only errors should appear
+            assert obj["severity"] == "error"
+
+    @pytest.mark.integration
+    def test_vivado_severity_critical_warning(self, vivado_log):
+        """Filtering by critical_warning severity should show critical_warning and error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "critical_warning", "--format", "json"]
+        )
+
+        assert result.exit_code == 0
+
+        lines = [line for line in result.output.strip().split("\n") if line.strip()]
+        # Should have some critical warnings in the example log
+        assert len(lines) > 0
+        for line in lines:
+            obj = json.loads(line)
+            # critical_warning filter means severity should be critical_warning or error
+            assert obj["severity"] in ("critical_warning", "error")
 
     @pytest.mark.integration
     def test_vivado_severity_warning(self, vivado_log):
@@ -98,8 +116,8 @@ class TestSeverityFilter:
         lines = [line for line in result.output.strip().split("\n") if line.strip()]
         for line in lines:
             obj = json.loads(line)
-            # Warning filter means severity should be warning, error, critical, or critical_warning
-            assert obj["severity"] in ("warning", "error", "critical", "critical_warning")
+            # Warning filter means severity should be warning, critical_warning, or error
+            assert obj["severity"] in ("warning", "critical_warning", "error")
 
     @pytest.mark.integration
     def test_vivado_severity_info(self, vivado_log):
@@ -112,6 +130,49 @@ class TestSeverityFilter:
         assert result.exit_code == 0
         # Should have some messages
         assert "total=" in result.output
+
+    @pytest.mark.integration
+    def test_vivado_severity_numeric(self, vivado_log):
+        """Numeric severity should work using plugin's level values."""
+        runner = CliRunner()
+        # Level 1 = warning in Vivado plugin
+        result_numeric = runner.invoke(
+            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "1", "--format", "count"]
+        )
+        result_named = runner.invoke(
+            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "warning", "--format", "count"]
+        )
+
+        assert result_numeric.exit_code == 0
+        assert result_named.exit_code == 0
+        # Both should produce identical output
+        assert result_numeric.output == result_named.output
+
+    @pytest.mark.integration
+    def test_vivado_invalid_severity(self, vivado_log):
+        """Invalid severity should show error with valid options."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "critical"]
+        )
+
+        assert result.exit_code == 1
+        assert "Unknown severity level 'critical'" in result.output
+        assert "critical_warning" in result.output  # Should list valid options
+
+    @pytest.mark.integration
+    def test_list_severity_vivado(self, vivado_log):
+        """--list-severity should show plugin severity levels."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--list-severity", "--plugin", "vivado"]
+        )
+
+        assert result.exit_code == 0
+        assert "error" in result.output
+        assert "critical_warning" in result.output
+        assert "warning" in result.output
+        assert "info" in result.output
 
 
 class TestFilterPatterns:
@@ -503,11 +564,11 @@ class TestOutputFormat:
         )
 
         assert result.exit_code == 0
-        # Should contain all count fields
+        # Should contain all count fields (using plugin severity IDs)
         assert "total=" in result.output
-        assert "errors=" in result.output
-        assert "critical_warnings=" in result.output
-        assert "warnings=" in result.output
+        assert "error=" in result.output
+        assert "critical_warning=" in result.output
+        assert "warning=" in result.output
         assert "info=" in result.output
 
 

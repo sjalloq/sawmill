@@ -15,26 +15,58 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Footer, Header, Static, DataTable, Input, Label
 from textual.reactive import reactive
 
+from sawmill.models.plugin_api import SeverityLevel
+
 if TYPE_CHECKING:
     from sawmill.models.message import Message
 
 
 class MessageStats(Static):
-    """Widget displaying message statistics."""
+    """Widget displaying message statistics.
+
+    Dynamically displays counts for each severity level defined by the plugin.
+    """
 
     total: reactive[int] = reactive(0)
-    errors: reactive[int] = reactive(0)
-    warnings: reactive[int] = reactive(0)
-    info: reactive[int] = reactive(0)
+
+    def __init__(
+        self,
+        severity_levels: list[SeverityLevel] | None = None,
+        *args,
+        **kwargs,
+    ):
+        """Initialize the stats widget.
+
+        Args:
+            severity_levels: Severity level definitions from plugin.
+                If None, only total count is shown.
+        """
+        super().__init__(*args, **kwargs)
+        self._severity_levels = list(severity_levels) if severity_levels else []
+        self._counts: dict[str, int] = {}
+
+    @property
+    def counts(self) -> dict[str, int]:
+        """Get severity counts."""
+        return self._counts.copy()
+
+    @counts.setter
+    def counts(self, value: dict[str, int]) -> None:
+        """Set severity counts and refresh display."""
+        self._counts = value
+        self.refresh()
 
     def render(self) -> str:
-        """Render the stats display."""
-        return (
-            f"Total: {self.total} | "
-            f"[red]Errors: {self.errors}[/red] | "
-            f"[yellow]Warnings: {self.warnings}[/yellow] | "
-            f"[cyan]Info: {self.info}[/cyan]"
-        )
+        """Render the stats display with plugin-driven severity counts."""
+        parts = [f"Total: {self.total}"]
+        # Display severity counts sorted by level descending (most severe first)
+        for level in sorted(self._severity_levels, key=lambda s: -s.level):
+            count = self._counts.get(level.id, 0)
+            if level.style:
+                parts.append(f"[{level.style}]{level.name}: {count}[/{level.style}]")
+            else:
+                parts.append(f"{level.name}: {count}")
+        return " | ".join(parts)
 
 
 class LogViewer(DataTable):
@@ -108,23 +140,6 @@ class SawmillApp(App):
     FilterInput {
         width: 100%;
     }
-
-    .severity-error {
-        color: red;
-    }
-
-    .severity-warning {
-        color: yellow;
-    }
-
-    .severity-critical {
-        color: red;
-        text-style: bold;
-    }
-
-    .severity-info {
-        color: cyan;
-    }
     """
 
     BINDINGS = [
@@ -133,16 +148,16 @@ class SawmillApp(App):
         Binding("/", "focus_filter", "Filter"),
         Binding("s", "toggle_summary", "Summary"),
         Binding("1", "filter_all", "All"),
-        Binding("2", "filter_warning", "Warning+"),
-        Binding("3", "filter_error", "Error+"),
+        Binding("f", "open_filter", "Filter"),
     ]
 
     # Reactive properties
     filter_pattern: reactive[str] = reactive("")
-    min_severity: reactive[str | None] = reactive(None)
+    severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True)
 
     def __init__(
         self,
+        severity_levels: list[SeverityLevel],
         log_file: Path | None = None,
         messages: list[Message] | None = None,
         plugin_name: str | None = None,
@@ -152,15 +167,22 @@ class SawmillApp(App):
         """Initialize the application.
 
         Args:
+            severity_levels: Severity level definitions from plugin (required).
             log_file: Path to the log file to analyze.
             messages: Pre-loaded list of messages (optional).
             plugin_name: Name of plugin to use (optional).
         """
         super().__init__(*args, **kwargs)
+        if not severity_levels:
+            raise ValueError("severity_levels is required and cannot be empty")
         self.log_file = log_file
         self._messages: list[Message] = messages or []
         self._filtered_messages: list[Message] = []
         self._plugin_name = plugin_name
+        self._severity_levels = list(severity_levels)
+        self._severity_level_map: dict[str, int] = {
+            level.id: level.level for level in self._severity_levels
+        }
         self._stats_widget: MessageStats | None = None
         self._log_viewer: LogViewer | None = None
         self._filter_input: FilterInput | None = None
@@ -184,7 +206,7 @@ class SawmillApp(App):
     def compose(self) -> ComposeResult:
         """Create the UI layout."""
         yield Header()
-        yield MessageStats(id="stats-bar")
+        yield MessageStats(severity_levels=self._severity_levels, id="stats-bar")
         yield LogViewer(id="log-viewer")
         yield Container(
             FilterInput(id="filter-input"),
@@ -218,10 +240,9 @@ class SawmillApp(App):
             return
 
         from sawmill.core.plugin import PluginManager, NoPluginFoundError, PluginConflictError
-        from sawmill.plugins.vivado import VivadoPlugin
+        from sawmill.models.plugin_api import severity_levels_from_dicts
 
         manager = PluginManager()
-        manager.register(VivadoPlugin())
         manager.discover()
 
         try:
@@ -233,6 +254,17 @@ class SawmillApp(App):
 
             if plugin:
                 self._messages = plugin.load_and_parse(self.log_file)
+
+                # Get severity levels from plugin
+                if hasattr(plugin, "get_severity_levels"):
+                    try:
+                        severity_dicts = plugin.get_severity_levels()
+                        self._severity_levels = severity_levels_from_dicts(severity_dicts)
+                        self._severity_level_map = {
+                            level.id: level.level for level in self._severity_levels
+                        }
+                    except Exception:
+                        pass  # Keep defaults if plugin fails
         except (NoPluginFoundError, PluginConflictError) as e:
             self.notify(f"Error loading log: {e}", severity="error")
 
@@ -242,13 +274,11 @@ class SawmillApp(App):
 
         filtered = self._messages.copy()
 
-        # Apply severity filter
-        if self.min_severity:
-            severity_levels = {"info": 0, "warning": 1, "error": 2, "critical": 3}
-            min_level = severity_levels.get(self.min_severity.lower(), 0)
+        # Apply per-severity toggle filter
+        if self.severity_filter:
             filtered = [
                 m for m in filtered
-                if m.severity and severity_levels.get(m.severity.lower(), -1) >= min_level
+                if m.severity is None or self.severity_filter.get(m.severity.lower(), True)
             ]
 
         # Apply regex filter
@@ -264,26 +294,20 @@ class SawmillApp(App):
         self._populate_table()
 
     def _update_stats(self) -> None:
-        """Update the stats widget."""
+        """Update the stats widget with per-severity counts from plugin."""
         if not self._stats_widget:
             return
 
         self._stats_widget.total = len(self._filtered_messages)
 
-        errors = warnings = info = 0
+        counts: dict[str, int] = {level.id: 0 for level in self._severity_levels}
         for msg in self._filtered_messages:
             if msg.severity:
                 sev = msg.severity.lower()
-                if sev in ("error", "critical", "critical_warning"):
-                    errors += 1
-                elif sev == "warning":
-                    warnings += 1
-                elif sev == "info":
-                    info += 1
+                if sev in counts:
+                    counts[sev] += 1
 
-        self._stats_widget.errors = errors
-        self._stats_widget.warnings = warnings
-        self._stats_widget.info = info
+        self._stats_widget.counts = counts
 
     def _populate_table(self) -> None:
         """Populate the log viewer table with filtered messages."""
@@ -309,7 +333,7 @@ class SawmillApp(App):
         """React to filter pattern changes."""
         self._apply_filters()
 
-    def watch_min_severity(self, severity: str | None) -> None:
+    def watch_severity_filter(self, value: dict[str, bool]) -> None:
         """React to severity filter changes."""
         self._apply_filters()
 
@@ -327,7 +351,7 @@ class SawmillApp(App):
         if self._filter_input:
             self._filter_input.value = ""
         self.filter_pattern = ""
-        self.min_severity = None
+        self.severity_filter = {}
 
     def action_focus_filter(self) -> None:
         """Focus the filter input."""
@@ -339,29 +363,57 @@ class SawmillApp(App):
         self.notify("Summary view: coming soon!", severity="information")
 
     def action_filter_all(self) -> None:
-        """Show all messages."""
-        self.min_severity = None
+        """Show all messages (reset severity filter)."""
+        self.severity_filter = {}
         self.notify("Showing all messages")
 
-    def action_filter_warning(self) -> None:
-        """Filter to warnings and above."""
-        self.min_severity = "warning"
-        self.notify("Showing warnings and above")
+    def action_open_filter(self) -> None:
+        """Open the filter modal dialog."""
+        from sawmill.tui.widgets.filter_modal import FilterModal
 
-    def action_filter_error(self) -> None:
-        """Filter to errors and above."""
-        self.min_severity = "error"
-        self.notify("Showing errors only")
+        current_filter = {
+            "severity_filter": self.severity_filter.copy() if self.severity_filter else {
+                level.id: True for level in self._severity_levels
+            },
+            "pattern": self.filter_pattern,
+        }
+        self.push_screen(
+            FilterModal(self._severity_levels, current_filter),
+            callback=self._on_filter_modal_result,
+        )
+
+    def _on_filter_modal_result(self, result: dict | None) -> None:
+        """Handle the result from the filter modal.
+
+        Args:
+            result: Filter settings dict, or None if cancelled.
+        """
+        if result is None:
+            return
+        self.severity_filter = result.get("severity_filter", {})
+        pattern = result.get("pattern", "")
+        if self._filter_input:
+            self._filter_input.value = pattern
+        self.filter_pattern = pattern
 
 
-def run_tui(log_file: Path | None = None, plugin_name: str | None = None) -> None:
+def run_tui(
+    log_file: Path | None = None,
+    plugin_name: str | None = None,
+    severity_levels: list[SeverityLevel] | None = None,
+) -> None:
     """Run the TUI application.
 
     Args:
         log_file: Path to the log file to analyze.
         plugin_name: Name of plugin to use.
+        severity_levels: Severity level definitions from plugin.
     """
-    app = SawmillApp(log_file=log_file, plugin_name=plugin_name)
+    app = SawmillApp(
+        log_file=log_file,
+        plugin_name=plugin_name,
+        severity_levels=severity_levels,
+    )
     app.run()
 
 

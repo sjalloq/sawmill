@@ -322,3 +322,96 @@ class TestCombinedFilters:
         assert "DRC check passed" in result.output
         assert "DRC real error" in result.output
         assert "noisy" not in result.output
+
+
+class TestPluginEntryPointDiscovery:
+    """Tests for plugin discovery via entry points."""
+
+    def test_plugin_manager_discovers_vivado(self):
+        """PluginManager.discover() should find vivado via entry point."""
+        from sawmill.core.plugin import PluginManager
+
+        manager = PluginManager()
+        discovered = manager.discover()
+        assert "vivado" in discovered
+
+    def test_get_plugin_manager_has_vivado(self):
+        """_get_plugin_manager() should have vivado registered."""
+        from sawmill.__main__ import _get_plugin_manager
+
+        manager = _get_plugin_manager()
+        assert "vivado" in manager.list_plugins()
+
+    def test_no_direct_vivado_import(self):
+        """__main__.py should not directly import VivadoPlugin."""
+        import inspect
+        import sawmill.__main__ as main_module
+
+        source = inspect.getsource(main_module)
+        assert "from sawmill.plugins.vivado import" not in source
+
+
+class TestGetFailOnLevel:
+    """Tests for _get_fail_on_level() with various severity schemes."""
+
+    def test_default_returns_second_lowest(self):
+        """Default should return second-lowest severity level."""
+        from sawmill.__main__ import _get_fail_on_level
+        from sawmill.plugins.vivado import VivadoPlugin
+
+        plugin = VivadoPlugin()
+        level = _get_fail_on_level(None, plugin)
+        # Vivado: info=0, warning=1, critical_warning=2, error=3
+        # Second-lowest is warning (level 1)
+        assert level == 1
+
+    def test_default_with_custom_scheme(self):
+        """Default should work with non-Vivado severity schemes."""
+        from sawmill.__main__ import _get_fail_on_level
+
+        class FakePlugin:
+            def get_severity_levels(self):
+                return [
+                    {"id": "fatal", "name": "Fatal", "level": 2, "style": "red"},
+                    {"id": "major", "name": "Major", "level": 1, "style": "yellow"},
+                    {"id": "note", "name": "Note", "level": 0, "style": "dim"},
+                ]
+
+        plugin = FakePlugin()
+        level = _get_fail_on_level(None, plugin)
+        # Sorted: note=0, major=1, fatal=2
+        # Second-lowest is major (level 1)
+        assert level == 1
+
+    def test_default_with_single_level(self):
+        """Default with single severity should return that level."""
+        from sawmill.__main__ import _get_fail_on_level
+
+        class FakePlugin:
+            def get_severity_levels(self):
+                return [
+                    {"id": "only", "name": "Only", "level": 1, "style": ""},
+                ]
+
+        plugin = FakePlugin()
+        level = _get_fail_on_level(None, plugin)
+        assert level == 1
+
+    def test_explicit_fail_on(self):
+        """Explicit --fail-on should return that severity's level."""
+        from sawmill.__main__ import _get_fail_on_level
+        from sawmill.plugins.vivado import VivadoPlugin
+
+        plugin = VivadoPlugin()
+        level = _get_fail_on_level("error", plugin)
+        assert level == 3
+
+    def test_invalid_fail_on_raises(self):
+        """Invalid --fail-on should raise click.BadParameter."""
+        import click
+        from sawmill.__main__ import _get_fail_on_level
+        from sawmill.plugins.vivado import VivadoPlugin
+
+        plugin = VivadoPlugin()
+        with pytest.raises(click.BadParameter, match="Unknown severity"):
+            _get_fail_on_level("nonexistent", plugin)

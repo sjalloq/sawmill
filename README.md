@@ -53,8 +53,12 @@ sawmill vivado.log --group-by id
 sawmill vivado.log --group-by file
 sawmill vivado.log --group-by category
 
-# Filter by severity level
+# Filter by severity level (name or number)
 sawmill vivado.log --severity warning
+sawmill vivado.log --severity 1  # Same as above
+
+# List available severity levels for a plugin
+sawmill --list-severity --plugin vivado
 
 # Filter with regex pattern
 sawmill vivado.log --filter "timing"
@@ -71,7 +75,8 @@ sawmill vivado.log --suppress-id "Synth 8-7129"
 | `--summary` | Show summary counts by severity and message ID |
 | `--group-by` | Group output by `severity`, `id`, `file`, or `category` |
 | `--top N` | Limit messages per group (default: 5, 0 = no limit) |
-| `--severity` | Filter to severity level and above |
+| `--severity` | Filter to severity level and above (name or number) |
+| `--list-severity` | List available severity levels from the plugin |
 | `--filter` | Regex pattern to include messages |
 | `--suppress` | Regex pattern to exclude messages |
 | `--suppress-id` | Exclude specific message IDs |
@@ -96,6 +101,9 @@ Plugins can be installed separately and auto-register with sawmill:
 ```bash
 # List available plugins
 sawmill --list-plugins
+
+# List available severity levels
+sawmill --list-severity --plugin vivado
 
 # List available grouping fields
 sawmill --list-groupings --plugin vivado

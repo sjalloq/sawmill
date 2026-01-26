@@ -44,6 +44,9 @@ dev = [
     "mypy>=1.0.0",
 ]
 
+[project.entry-points."sawmill.plugins"]
+vivado = "sawmill.plugins.vivado:VivadoPlugin"
+
 [project.scripts]
 sawmill = "sawmill.__main__:cli"
 

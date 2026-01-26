@@ -28,9 +28,16 @@ Sawmill is a terminal-based log analysis tool for EDA (Electronic Design Automat
 - Base app defines contracts (interfaces)
 - Base app discovers plugins and orchestrates data flow
 - **Plugins do ALL parsing** - loading files, detecting severity, grouping messages
+- **Plugins define severity levels** - the base app has NO hardcoded severity knowledge
 - Base app applies filters and displays results
 
-The base app does NOT parse log content, detect severity, or interpret log format.
+The base app does NOT:
+- Parse log content or detect severity
+- Interpret log format
+- Assume any specific severity names exist (no "error", "warning", "info" assumptions)
+- Use hardcoded severity styling or ordering
+
+**Severity Handling**: The base app uses numeric `level` values from `SeverityLevel.level` for all comparisons and sorting, never string IDs. This allows plugins to define any severity scheme (e.g., FATAL/ERROR/WARN/NOTE or CRITICAL/MAJOR/MINOR).
 
 ## Development Workflow
 
@@ -43,6 +50,8 @@ This project uses an autonomous development loop. Key files:
 | `PROMPT.md` | Instructions for each development iteration |
 | `STATUS.md` | Current state - **READ THIS FIRST** |
 | `CHANGELOG.md` | History of completed work |
+
+**Note**: The project uses `uv` and you should activate the local `.venv` before doing anything.
 
 ## Coding Standards
 
@@ -131,8 +140,15 @@ my_tool = "sawmill_plugin_mytool:MyToolPlugin"
 Plugins implement hooks:
 - `can_handle(path) -> float` - Detection confidence (0.0-1.0)
 - `load_and_parse(path) -> list[Message]` - **Load, parse, and group into messages**
+- `get_severity_levels() -> list[SeverityLevel]` - **REQUIRED: Define severity levels with id, name, level (int), style**
 - `get_filters() -> list[FilterDefinition]` - Filter definitions
 - `extract_file_reference(content) -> FileRef | None` - Extract file refs
+
+**Required Hook**: `get_severity_levels()` MUST be implemented by all plugins. The base app has no default severity levels. Each `SeverityLevel` has:
+- `id`: Internal identifier (e.g., "error", "warning")
+- `name`: Display name (e.g., "Error", "Warning")
+- `level`: Numeric level for comparisons (higher = more severe)
+- `style`: Rich format string for display (e.g., "red bold")
 
 **Note:** Plugins do ALL parsing and grouping. Base app receives a flat `list[Message]`.
 
@@ -193,6 +209,7 @@ CRITICAL WARNING: [Constraints 18-4427] Constraint override warning
 4. **Large Files**: Plugins should use generators/lazy loading for files > 100k lines
 5. **Plugin Timeouts**: Always set timeouts when calling external plugins
 6. **Vivado Multi-line**: Tables use `|` borders and `-` separators; group these together
+7. **Severity Levels**: NEVER hardcode severity names ("error", "warning", etc.) in base app code. Always use `SeverityLevel.level` (numeric) for comparisons and get severity info from plugins via `get_severity_levels()`. The base app must work with ANY severity scheme a plugin defines.
 
 ## File Locations
 

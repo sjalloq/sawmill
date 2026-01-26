@@ -17,29 +17,25 @@ if TYPE_CHECKING:
     from sawmill.models.plugin_api import GroupingField, SeverityLevel
 
 
-# Default severity ordering for display (most severe first)
-# Used when plugin doesn't provide custom levels
-DEFAULT_SEVERITY_ORDER = ["critical", "critical_warning", "error", "warning", "info"]
-
-
 def make_severity_sort_key(
-    severity_levels: list[SeverityLevel] | None = None,
+    severity_levels: list[SeverityLevel],
 ):
     """Create a severity sort key function.
 
     Args:
-        severity_levels: Optional list of severity levels from plugin.
-            If None, uses DEFAULT_SEVERITY_ORDER.
+        severity_levels: List of severity levels from plugin. Required.
 
     Returns:
         A function that returns a sort key for a severity string.
+
+    Raises:
+        ValueError: If severity_levels is empty.
     """
-    if severity_levels:
-        # Build order from plugin-provided levels (highest level = most severe = lowest sort key)
-        level_map = {s.id.lower(): -s.level for s in severity_levels}
-    else:
-        # Use default order (index = sort key)
-        level_map = {s: i for i, s in enumerate(DEFAULT_SEVERITY_ORDER)}
+    if not severity_levels:
+        raise ValueError("severity_levels is required and cannot be empty")
+
+    # Build order from plugin-provided levels (highest level = most severe = lowest sort key)
+    level_map = {s.id.lower(): -s.level for s in severity_levels}
 
     def sort_key(severity: str | None) -> int:
         if severity is None:
@@ -99,25 +95,30 @@ class Aggregator:
     """Aggregate messages for summary and grouped views.
 
     This class provides methods to group messages by various fields and
-    compute statistics for display. It can be configured with plugin-provided
-    severity levels and grouping fields for tool-specific customization.
+    compute statistics for display. It must be configured with plugin-provided
+    severity levels for proper severity ordering and styling.
 
     Attributes:
-        severity_levels: List of severity level definitions from plugin.
+        severity_levels: List of severity level definitions from plugin. Required.
         grouping_fields: List of grouping field definitions from plugin.
     """
 
     def __init__(
         self,
-        severity_levels: list[SeverityLevel] | None = None,
+        severity_levels: list[SeverityLevel],
         grouping_fields: list[GroupingField] | None = None,
     ):
         """Initialize the aggregator.
 
         Args:
-            severity_levels: Optional list of severity levels from plugin.
+            severity_levels: List of severity levels from plugin. Required.
             grouping_fields: Optional list of grouping fields from plugin.
+
+        Raises:
+            ValueError: If severity_levels is empty.
         """
+        if not severity_levels:
+            raise ValueError("severity_levels is required and cannot be empty")
         self.severity_levels = severity_levels
         self.grouping_fields = grouping_fields
         self._severity_sort_key = make_severity_sort_key(severity_levels)
@@ -154,21 +155,12 @@ class Aggregator:
             severity: The severity level.
 
         Returns:
-            Rich style string, or empty string if not found.
+            Rich style string from plugin, or empty string if not found.
         """
-        if self.severity_levels:
-            for s in self.severity_levels:
-                if s.id.lower() == severity.lower():
-                    return s.style
-        # Default styles
-        default_styles = {
-            "critical": "red bold",
-            "critical_warning": "red",
-            "error": "red",
-            "warning": "yellow",
-            "info": "cyan",
-        }
-        return default_styles.get(severity.lower(), "")
+        for s in self.severity_levels:
+            if s.id.lower() == severity.lower():
+                return s.style or ""
+        return ""
 
     def get_severity_name(self, severity: str) -> str:
         """Get the display name for a severity level.
@@ -403,17 +395,3 @@ class Aggregator:
             summary.items(),
             key=lambda x: self._severity_sort_key(x[0]),
         )
-
-
-# Backward compatibility: export these for existing code
-SEVERITY_ORDER = DEFAULT_SEVERITY_ORDER
-
-
-def _severity_sort_key(severity: str | None) -> int:
-    """Get sort key for severity (lower = more severe).
-
-    This is a backward-compatible function for code that doesn't use
-    the Aggregator class. For new code, use make_severity_sort_key()
-    or Aggregator with plugin-provided severity levels.
-    """
-    return make_severity_sort_key()(severity)

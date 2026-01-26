@@ -17,6 +17,7 @@ from textual.widgets.tree import TreeNode
 
 if TYPE_CHECKING:
     from sawmill.models.message import Message as LogMessage
+    from sawmill.models.plugin_api import SeverityLevel
 
 from sawmill.core.aggregation import Aggregator
 
@@ -82,23 +83,6 @@ class GroupedMessageList(Static):
     MessageTree {
         height: 100%;
     }
-
-    .severity-critical {
-        color: red;
-        text-style: bold;
-    }
-
-    .severity-error {
-        color: red;
-    }
-
-    .severity-warning {
-        color: yellow;
-    }
-
-    .severity-info {
-        color: cyan;
-    }
     """
 
     # Reactive properties
@@ -107,6 +91,7 @@ class GroupedMessageList(Static):
 
     def __init__(
         self,
+        severity_levels: list[SeverityLevel],
         messages: list[LogMessage] | None = None,
         group_by: str = "severity",
         max_per_group: int = 5,
@@ -116,12 +101,19 @@ class GroupedMessageList(Static):
         """Initialize the widget.
 
         Args:
+            severity_levels: List of severity levels from plugin. Required.
             messages: Initial list of messages to display.
             group_by: Field to group by (severity, id, file, category).
             max_per_group: Maximum messages to show per group.
+
+        Raises:
+            ValueError: If severity_levels is empty.
         """
+        if not severity_levels:
+            raise ValueError("severity_levels is required and cannot be empty")
         # Initialize _tree before super().__init__ to avoid reactive watcher issues
         self._tree: MessageTree | None = None
+        self._severity_levels = severity_levels
         self._messages: list[LogMessage] = messages or []
         self._group_by = group_by
         self._max_per_group = max_per_group
@@ -170,7 +162,7 @@ class GroupedMessageList(Static):
             return
 
         # Group messages
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=self._severity_levels)
         groups = aggregator.group_by(self._messages, self.group_by)
         sorted_groups = aggregator.sorted_groups(groups, by_count=True)
 

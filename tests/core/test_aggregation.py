@@ -6,10 +6,22 @@ from sawmill.core.aggregation import (
     Aggregator,
     MessageStats,
     SeverityStats,
-    SEVERITY_ORDER,
-    _severity_sort_key,
+    make_severity_sort_key,
 )
+from sawmill.models.plugin_api import SeverityLevel
 from sawmill.models.message import FileRef, Message
+
+
+# Module-level fixture for standard severity levels
+@pytest.fixture
+def severity_levels():
+    """Standard Vivado-like severity levels for tests."""
+    return [
+        SeverityLevel(id="error", name="Error", level=3, style="red bold"),
+        SeverityLevel(id="critical_warning", name="Critical Warning", level=2, style="red"),
+        SeverityLevel(id="warning", name="Warning", level=1, style="yellow"),
+        SeverityLevel(id="info", name="Info", level=0, style="cyan"),
+    ]
 
 
 # Helper to create test messages
@@ -106,54 +118,76 @@ class TestSeverityStats:
         assert stats.by_id == {"WARN-1": 5, "WARN-2": 5}
 
 
-class TestSeveritySortKey:
-    """Tests for severity sort key function."""
+class TestMakeSeveritySortKey:
+    """Tests for make_severity_sort_key function."""
 
-    def test_known_severities_order(self):
+    def test_requires_severity_levels(self):
+        """Test that severity_levels is required."""
+        with pytest.raises(ValueError, match="severity_levels is required"):
+            make_severity_sort_key([])
+
+    def test_known_severities_order(self, severity_levels):
         """Test that known severities are ordered correctly."""
-        # critical < critical_warning < error < warning < info
-        assert _severity_sort_key("critical") < _severity_sort_key("critical_warning")
-        assert _severity_sort_key("critical_warning") < _severity_sort_key("error")
-        assert _severity_sort_key("error") < _severity_sort_key("warning")
-        assert _severity_sort_key("warning") < _severity_sort_key("info")
+        sort_key = make_severity_sort_key(severity_levels)
+        # error < critical_warning < warning < info (lower sort key = higher severity)
+        assert sort_key("error") < sort_key("critical_warning")
+        assert sort_key("critical_warning") < sort_key("warning")
+        assert sort_key("warning") < sort_key("info")
 
-    def test_case_insensitive(self):
+    def test_case_insensitive(self, severity_levels):
         """Test that sorting is case insensitive."""
-        assert _severity_sort_key("ERROR") == _severity_sort_key("error")
-        assert _severity_sort_key("Warning") == _severity_sort_key("warning")
+        sort_key = make_severity_sort_key(severity_levels)
+        assert sort_key("ERROR") == sort_key("error")
+        assert sort_key("Warning") == sort_key("warning")
 
-    def test_none_sorts_last(self):
+    def test_none_sorts_last(self, severity_levels):
         """Test that None sorts after all known severities."""
-        assert _severity_sort_key(None) > _severity_sort_key("info")
+        sort_key = make_severity_sort_key(severity_levels)
+        assert sort_key(None) > sort_key("info")
 
-    def test_unknown_severity(self):
+    def test_unknown_severity(self, severity_levels):
         """Test that unknown severities sort before None."""
-        unknown_key = _severity_sort_key("unknown")
-        assert unknown_key < _severity_sort_key(None)
-        assert unknown_key > _severity_sort_key("info")
+        sort_key = make_severity_sort_key(severity_levels)
+        unknown_key = sort_key("unknown")
+        assert unknown_key < sort_key(None)
+        assert unknown_key > sort_key("info")
+
+
+class TestAggregatorInit:
+    """Tests for Aggregator initialization."""
+
+    def test_requires_severity_levels(self):
+        """Test that severity_levels is required."""
+        with pytest.raises(ValueError, match="severity_levels is required"):
+            Aggregator(severity_levels=[])
+
+    def test_accepts_severity_levels(self, severity_levels):
+        """Test that Aggregator accepts valid severity_levels."""
+        aggregator = Aggregator(severity_levels=severity_levels)
+        assert aggregator.severity_levels == severity_levels
 
 
 class TestAggregatorGetSummary:
     """Tests for Aggregator.get_summary()."""
 
-    def test_empty_messages(self):
+    def test_empty_messages(self, severity_levels):
         """Test summary with no messages."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         summary = aggregator.get_summary([])
         assert summary == {}
 
-    def test_single_message(self):
+    def test_single_message(self, severity_levels):
         """Test summary with one message."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("Error", severity="error", message_id="E-001")]
         summary = aggregator.get_summary(messages)
         assert "error" in summary
         assert summary["error"].total == 1
         assert summary["error"].by_id == {"E-001": 1}
 
-    def test_multiple_severities(self):
+    def test_multiple_severities(self, severity_levels):
         """Test summary groups by severity."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Error 1", severity="error", message_id="E-001"),
             make_message("Warning 1", severity="warning", message_id="W-001"),
@@ -164,9 +198,9 @@ class TestAggregatorGetSummary:
         assert summary["warning"].total == 1
         assert summary["error"].by_id == {"E-001": 2}
 
-    def test_multiple_ids_same_severity(self):
+    def test_multiple_ids_same_severity(self, severity_levels):
         """Test summary counts multiple IDs within severity."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Error 1", severity="error", message_id="E-001"),
             make_message("Error 2", severity="error", message_id="E-002"),
@@ -176,18 +210,18 @@ class TestAggregatorGetSummary:
         assert summary["error"].total == 3
         assert summary["error"].by_id == {"E-001": 2, "E-002": 1}
 
-    def test_no_id_messages(self):
+    def test_no_id_messages(self, severity_levels):
         """Test summary handles messages without IDs."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Error without ID", severity="error"),
         ]
         summary = aggregator.get_summary(messages)
         assert summary["error"].by_id == {"(no id)": 1}
 
-    def test_no_severity_messages(self):
+    def test_no_severity_messages(self, severity_levels):
         """Test summary handles messages without severity."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Message without severity"),
         ]
@@ -199,15 +233,15 @@ class TestAggregatorGetSummary:
 class TestAggregatorGroupBySeverity:
     """Tests for Aggregator.group_by_severity()."""
 
-    def test_empty_messages(self):
+    def test_empty_messages(self, severity_levels):
         """Test grouping empty list."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         groups = aggregator.group_by_severity([])
         assert groups == {}
 
-    def test_groups_by_severity(self):
+    def test_groups_by_severity(self, severity_levels):
         """Test messages are grouped by severity."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Error 1", severity="error"),
             make_message("Warning 1", severity="warning"),
@@ -219,9 +253,9 @@ class TestAggregatorGroupBySeverity:
         assert groups["error"].count == 2
         assert groups["warning"].count == 1
 
-    def test_no_severity_grouped_as_other(self):
+    def test_no_severity_grouped_as_other(self, severity_levels):
         """Test messages without severity go to 'other'."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("No severity")]
         groups = aggregator.group_by_severity(messages)
         assert "other" in groups
@@ -231,9 +265,9 @@ class TestAggregatorGroupBySeverity:
 class TestAggregatorGroupById:
     """Tests for Aggregator.group_by_id()."""
 
-    def test_groups_by_id(self):
+    def test_groups_by_id(self, severity_levels):
         """Test messages are grouped by ID."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Msg 1", message_id="ID-001", severity="error"),
             make_message("Msg 2", message_id="ID-002", severity="warning"),
@@ -245,9 +279,9 @@ class TestAggregatorGroupById:
         assert groups["ID-001"].count == 2
         assert groups["ID-002"].count == 1
 
-    def test_preserves_first_severity(self):
+    def test_preserves_first_severity(self, severity_levels):
         """Test group uses severity from first message."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Msg 1", message_id="ID-001", severity="error"),
             make_message("Msg 2", message_id="ID-001", severity="warning"),
@@ -256,9 +290,9 @@ class TestAggregatorGroupById:
         # First message was error, so group severity should be error
         assert groups["ID-001"].severity == "error"
 
-    def test_no_id_grouped(self):
+    def test_no_id_grouped(self, severity_levels):
         """Test messages without ID are grouped together."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("No ID 1"),
             make_message("No ID 2"),
@@ -271,9 +305,9 @@ class TestAggregatorGroupById:
 class TestAggregatorGroupByFile:
     """Tests for Aggregator.group_by_file()."""
 
-    def test_groups_by_file(self):
+    def test_groups_by_file(self, severity_levels):
         """Test messages are grouped by file."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Msg 1", file_path="/src/a.v"),
             make_message("Msg 2", file_path="/src/b.v"),
@@ -285,9 +319,9 @@ class TestAggregatorGroupByFile:
         assert groups["/src/a.v"].count == 2
         assert groups["/src/b.v"].count == 1
 
-    def test_no_file_grouped(self):
+    def test_no_file_grouped(self, severity_levels):
         """Test messages without file refs are grouped together."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("No file 1"),
             make_message("No file 2"),
@@ -300,9 +334,9 @@ class TestAggregatorGroupByFile:
 class TestAggregatorGroupByCategory:
     """Tests for Aggregator.group_by_category()."""
 
-    def test_groups_by_category(self):
+    def test_groups_by_category(self, severity_levels):
         """Test messages are grouped by category."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Msg 1", category="timing"),
             make_message("Msg 2", category="drc"),
@@ -314,9 +348,9 @@ class TestAggregatorGroupByCategory:
         assert groups["timing"].count == 2
         assert groups["drc"].count == 1
 
-    def test_category_case_insensitive(self):
+    def test_category_case_insensitive(self, severity_levels):
         """Test categories are normalized to lowercase."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("Msg 1", category="Timing"),
             make_message("Msg 2", category="TIMING"),
@@ -325,9 +359,9 @@ class TestAggregatorGroupByCategory:
         assert "timing" in groups
         assert groups["timing"].count == 2
 
-    def test_no_category_grouped(self):
+    def test_no_category_grouped(self, severity_levels):
         """Test messages without category are grouped together."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [
             make_message("No category 1"),
             make_message("No category 2"),
@@ -340,37 +374,37 @@ class TestAggregatorGroupByCategory:
 class TestAggregatorGroupBy:
     """Tests for Aggregator.group_by() dispatcher."""
 
-    def test_group_by_severity(self):
+    def test_group_by_severity(self, severity_levels):
         """Test group_by dispatches to group_by_severity."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("Test", severity="error")]
         groups = aggregator.group_by(messages, "severity")
         assert "error" in groups
 
-    def test_group_by_id(self):
+    def test_group_by_id(self, severity_levels):
         """Test group_by dispatches to group_by_id."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("Test", message_id="ID-001")]
         groups = aggregator.group_by(messages, "id")
         assert "ID-001" in groups
 
-    def test_group_by_file(self):
+    def test_group_by_file(self, severity_levels):
         """Test group_by dispatches to group_by_file."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("Test", file_path="/src/test.v")]
         groups = aggregator.group_by(messages, "file")
         assert "/src/test.v" in groups
 
-    def test_group_by_category(self):
+    def test_group_by_category(self, severity_levels):
         """Test group_by dispatches to group_by_category."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         messages = [make_message("Test", category="timing")]
         groups = aggregator.group_by(messages, "category")
         assert "timing" in groups
 
-    def test_group_by_unknown_raises(self):
+    def test_group_by_unknown_raises(self, severity_levels):
         """Test group_by raises for unknown field."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         with pytest.raises(ValueError, match="Unknown grouping field"):
             aggregator.group_by([], "unknown")
 
@@ -378,9 +412,9 @@ class TestAggregatorGroupBy:
 class TestAggregatorSortedGroups:
     """Tests for Aggregator.sorted_groups()."""
 
-    def test_sort_by_count(self):
+    def test_sort_by_count(self, severity_levels):
         """Test sorting by count descending."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         groups = {
             "a": MessageStats(key="a", count=5),
             "b": MessageStats(key="b", count=10),
@@ -390,9 +424,9 @@ class TestAggregatorSortedGroups:
         keys = [k for k, v in sorted_list]
         assert keys == ["b", "a", "c"]
 
-    def test_sort_by_key(self):
+    def test_sort_by_key(self, severity_levels):
         """Test sorting by key alphabetically."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         groups = {
             "zebra": MessageStats(key="zebra", count=1),
             "apple": MessageStats(key="apple", count=100),
@@ -402,9 +436,9 @@ class TestAggregatorSortedGroups:
         keys = [k for k, v in sorted_list]
         assert keys == ["apple", "mango", "zebra"]
 
-    def test_sort_by_count_tiebreaker(self):
+    def test_sort_by_count_tiebreaker(self, severity_levels):
         """Test that ties in count are broken by key."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         groups = {
             "b": MessageStats(key="b", count=5),
             "a": MessageStats(key="a", count=5),
@@ -418,22 +452,22 @@ class TestAggregatorSortedGroups:
 class TestAggregatorSortedSummary:
     """Tests for Aggregator.sorted_summary()."""
 
-    def test_sorts_by_severity_order(self):
+    def test_sorts_by_severity_order(self, severity_levels):
         """Test summary is sorted by severity order."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         summary = {
             "info": SeverityStats(severity="info", total=1),
             "error": SeverityStats(severity="error", total=1),
             "warning": SeverityStats(severity="warning", total=1),
-            "critical": SeverityStats(severity="critical", total=1),
+            "critical_warning": SeverityStats(severity="critical_warning", total=1),
         }
         sorted_list = aggregator.sorted_summary(summary)
         severities = [s for s, _ in sorted_list]
-        assert severities == ["critical", "error", "warning", "info"]
+        assert severities == ["error", "critical_warning", "warning", "info"]
 
-    def test_unknown_severity_sorts_near_end(self):
+    def test_unknown_severity_sorts_near_end(self, severity_levels):
         """Test unknown severities sort after known ones."""
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=severity_levels)
         summary = {
             "info": SeverityStats(severity="info", total=1),
             "unknown": SeverityStats(severity="unknown", total=1),

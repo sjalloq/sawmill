@@ -18,10 +18,15 @@ class SeverityLevel(BaseModel):
     most to least severe. This allows the base app to properly order
     and style messages regardless of the tool's naming conventions.
 
+    Level numbering contract:
+        Levels MUST be consecutive integers starting at 0.
+        Level 0 is the lowest severity (informational/note).
+        Higher numbers indicate more severe levels.
+
     Attributes:
         id: Internal identifier (lowercase, e.g., "error", "warning").
         name: Human-readable display name (e.g., "Error", "Warning").
-        level: Numeric level for comparison (higher = more severe).
+        level: Numeric level for comparison (0 = lowest, higher = more severe).
         style: Rich style string for terminal display.
     """
 
@@ -57,16 +62,6 @@ class GroupingField(BaseModel):
     field_type: Literal["builtin", "metadata", "file_ref"] = "builtin"
     description: str = ""
     sort_order: Optional[list[str]] = None
-
-
-# Default severity levels used when plugin doesn't provide any
-DEFAULT_SEVERITY_LEVELS = [
-    SeverityLevel(id="critical", name="Critical", level=4, style="red bold"),
-    SeverityLevel(id="critical_warning", name="Critical Warning", level=3, style="red"),
-    SeverityLevel(id="error", name="Error", level=2, style="red"),
-    SeverityLevel(id="warning", name="Warning", level=1, style="yellow"),
-    SeverityLevel(id="info", name="Info", level=0, style="cyan"),
-]
 
 
 # Default grouping fields used when plugin doesn't provide any

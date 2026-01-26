@@ -369,8 +369,8 @@ class TestIdFilterWithOtherFilters:
 
         assert result.exit_code == 0
         assert "total=3" in result.output
-        assert "warnings=2" in result.output
-        assert "errors=1" in result.output
+        assert "warning=2" in result.output
+        assert "error=1" in result.output
 
 
 class TestHelp:

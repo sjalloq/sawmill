@@ -12,7 +12,6 @@ from sawmill.core.aggregation import (
     Aggregator,
     MessageStats,
     SeverityStats,
-    SEVERITY_ORDER,
 )
 from sawmill.core.config import (
     Config,
@@ -45,7 +44,6 @@ __all__ = [
     "PluginConflictError",
     "PluginError",
     "PluginManager",
-    "SEVERITY_ORDER",
     "SeverityStats",
     "SuppressConfig",
     "WaiverGenerator",

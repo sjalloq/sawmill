@@ -16,6 +16,7 @@ from typing import Optional
 import tomli
 
 from sawmill.models.message import Message
+from sawmill.models.plugin_api import SeverityLevel
 from sawmill.models.waiver import Waiver, WaiverFile
 
 
@@ -469,38 +470,56 @@ class WaiverGenerator:
     - type="id" for messages that have a message_id
     - type="hash" for messages without a message_id (SHA-256 of raw_text)
 
+    The generator filters messages by severity level. By default, only messages
+    with level >= 1 (above the lowest informational level 0) are included.
+    This behavior can be customized via the min_waiver_level parameter, or
+    all messages can be included by setting include_all=True.
+
     Example usage:
-        generator = WaiverGenerator()
+        generator = WaiverGenerator(severity_levels=plugin_levels)
         toml_content = generator.generate(messages)
         print(toml_content)  # Redirect to waivers.toml
     """
-
-    # Severity levels that typically require waivers in CI
-    WAIVER_SEVERITIES = frozenset({"error", "critical_warning", "warning"})
 
     def __init__(
         self,
         author: str = "<author>",
         reason: str = "<reason - explain why this is acceptable>",
-        include_info: bool = False,
+        severity_levels: list[SeverityLevel] | None = None,
+        min_waiver_level: int = 1,
+        include_all: bool = False,
     ):
         """Initialize the waiver generator.
 
         Args:
             author: Default author to use in generated waivers.
             reason: Default reason placeholder for generated waivers.
-            include_info: If True, include INFO messages in output.
-                         By default, only error/warning/critical_warning are included.
+            severity_levels: List of severity levels from the plugin.
+                If provided, used for level-based filtering.
+                If None, all non-None severity messages are included when include_all=True,
+                otherwise no filtering can be applied and a warning is logged.
+            min_waiver_level: Minimum severity level to include in waivers.
+                Messages with severity.level >= min_waiver_level are included.
+                Level 0 is informational; level 1+ are actionable. Default: 1.
+            include_all: If True, include all severity levels regardless of min_waiver_level.
         """
         self._author = author
         self._reason = reason
-        self._include_info = include_info
+        self._severity_levels = severity_levels
+        self._min_waiver_level = min_waiver_level
+        self._include_all = include_all
+
+        # Build lookup dict from severity id to level for efficient filtering
+        self._severity_level_map: dict[str, int] = {}
+        if severity_levels:
+            for level in severity_levels:
+                self._severity_level_map[level.id.lower()] = level.level
 
     def generate(self, messages: list[Message], tool: Optional[str] = None) -> str:
         """Generate waiver TOML content from messages.
 
-        Only includes messages with severity in WAIVER_SEVERITIES
-        (error, critical_warning, warning) unless include_info=True.
+        Only includes messages with severity level >= min_waiver_level
+        (default 1, above informational level 0), unless include_all=True.
 
         Args:
             messages: List of parsed log messages.
@@ -538,21 +557,41 @@ class WaiverGenerator:
     def _filter_messages(self, messages: list[Message]) -> list[Message]:
         """Filter messages to those that need waivers.
 
+        Filtering is based on numeric severity level comparison. Messages
+        with severity.level >= min_waiver_level are included, unless
+        include_all=True which includes all severities.
+
+        When severity_levels is not provided, all messages with a severity
+        are included (no filtering possible without level information).
+
         Args:
             messages: All parsed messages.
 
         Returns:
-            Messages that need waivers based on severity.
+            Messages that need waivers based on severity level.
         """
         result: list[Message] = []
         for msg in messages:
             if msg.severity is None:
                 continue
-            severity = msg.severity.lower()
-            if severity in self.WAIVER_SEVERITIES:
+
+            # If include_all is set, include all messages with a severity
+            if self._include_all:
                 result.append(msg)
-            elif self._include_info and severity == "info":
+                continue
+
+            severity_id = msg.severity.lower()
+
+            # Use level-based filtering if severity_levels were provided
+            if self._severity_level_map:
+                level = self._severity_level_map.get(severity_id)
+                if level is not None and level >= self._min_waiver_level:
+                    result.append(msg)
+            else:
+                # No severity_levels provided - include all messages
+                # Caller should provide severity_levels for proper filtering
                 result.append(msg)
+
         return result
 
     def _generate_waiver_entry(self, message: Message) -> list[str]:

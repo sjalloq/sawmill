@@ -17,8 +17,9 @@ from textual.widgets.tree import TreeNode
 
 if TYPE_CHECKING:
     from sawmill.models.message import Message as LogMessage
+    from sawmill.models.plugin_api import SeverityLevel
 
-from sawmill.core.aggregation import Aggregator, SEVERITY_ORDER
+from sawmill.core.aggregation import Aggregator
 
 
 class SeveritySelected(Message):
@@ -88,35 +89,31 @@ class SummaryPanel(Static):
     SummaryTree {
         height: 100%;
     }
-
-    .severity-critical {
-        color: red;
-        text-style: bold;
-    }
-
-    .severity-error {
-        color: red;
-    }
-
-    .severity-warning {
-        color: yellow;
-    }
-
-    .severity-info {
-        color: cyan;
-    }
     """
 
     # Reactive properties
     total_count: reactive[int] = reactive(0)
 
-    def __init__(self, messages: list[LogMessage] | None = None, *args, **kwargs):
+    def __init__(
+        self,
+        severity_levels: list[SeverityLevel],
+        messages: list[LogMessage] | None = None,
+        *args,
+        **kwargs,
+    ):
         """Initialize the panel.
 
         Args:
+            severity_levels: List of severity levels from plugin. Required.
             messages: Initial list of messages to summarize.
+
+        Raises:
+            ValueError: If severity_levels is empty.
         """
+        if not severity_levels:
+            raise ValueError("severity_levels is required and cannot be empty")
         super().__init__(*args, **kwargs)
+        self._severity_levels = severity_levels
         self._messages: list[LogMessage] = messages or []
         self._tree: SummaryTree | None = None
 
@@ -156,7 +153,7 @@ class SummaryPanel(Static):
             return
 
         # Get summary using Aggregator
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=self._severity_levels)
         summary = aggregator.get_summary(self._messages)
         sorted_summary = aggregator.sorted_summary(summary)
 
@@ -168,9 +165,6 @@ class SummaryPanel(Static):
             # Format severity label with count
             sev_display = severity.title().replace("_", " ")
             sev_label = f"{sev_display} ({stats.total})"
-
-            # Add severity color class
-            severity_class = f"severity-{severity.replace('_', '-')}"
 
             # Add severity node
             sev_node = self._tree.root.add(sev_label, expand=False)
@@ -204,7 +198,7 @@ class SummaryPanel(Static):
         Returns:
             Dictionary mapping severity to count.
         """
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=self._severity_levels)
         summary = aggregator.get_summary(self._messages)
         return {sev: stats.total for sev, stats in summary.items()}
 
@@ -217,7 +211,7 @@ class SummaryPanel(Static):
         Returns:
             Dictionary mapping message ID to count.
         """
-        aggregator = Aggregator()
+        aggregator = Aggregator(severity_levels=self._severity_levels)
         summary = aggregator.get_summary(self._messages)
 
         if severity:

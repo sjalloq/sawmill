@@ -8,7 +8,6 @@ from sawmill.models.message import Message, FileRef
 from sawmill.models.plugin_api import (
     SeverityLevel,
     GroupingField,
-    DEFAULT_SEVERITY_LEVELS,
     DEFAULT_GROUPING_FIELDS,
     severity_levels_from_dicts,
     grouping_fields_from_dicts,
@@ -74,16 +73,8 @@ class TestGroupingField:
         assert field.sort_order == ["critical", "error", "warning", "info"]
 
 
-class TestDefaultLevelsAndFields:
-    """Tests for default severity levels and grouping fields."""
-
-    def test_default_severity_levels(self):
-        """Test default severity levels are defined correctly."""
-        assert len(DEFAULT_SEVERITY_LEVELS) >= 4
-        ids = [s.id for s in DEFAULT_SEVERITY_LEVELS]
-        assert "error" in ids
-        assert "warning" in ids
-        assert "info" in ids
+class TestDefaultGroupingFields:
+    """Tests for default grouping fields."""
 
     def test_default_grouping_fields(self):
         """Test default grouping fields are defined correctly."""
@@ -212,11 +203,14 @@ class TestAggregatorWithPluginMetadata:
 
     def test_aggregator_with_grouping_fields(self):
         """Test Aggregator with custom grouping fields."""
+        custom_levels = [
+            SeverityLevel(id="error", name="Error", level=3, style="red bold"),
+        ]
         custom_fields = [
             GroupingField(id="severity", name="Severity", field_type="builtin"),
             GroupingField(id="hierarchy", name="Hierarchy", field_type="metadata"),
         ]
-        aggregator = Aggregator(grouping_fields=custom_fields)
+        aggregator = Aggregator(severity_levels=custom_levels, grouping_fields=custom_fields)
         assert aggregator.get_available_groupings() == ["severity", "hierarchy"]
 
     def test_get_severity_style_from_plugin(self):
@@ -251,10 +245,13 @@ class TestAggregatorWithPluginMetadata:
                 metadata={"hierarchy": "top/fifo"},
             ),
         ]
+        custom_levels = [
+            SeverityLevel(id="error", name="Error", level=3, style="red bold"),
+        ]
         custom_fields = [
             GroupingField(id="hierarchy", name="Hierarchy", field_type="metadata"),
         ]
-        aggregator = Aggregator(grouping_fields=custom_fields)
+        aggregator = Aggregator(severity_levels=custom_levels, grouping_fields=custom_fields)
         groups = aggregator.group_by(messages, "hierarchy")
 
         assert "top/fifo" in groups
@@ -266,12 +263,27 @@ class TestAggregatorWithPluginMetadata:
 class TestMakeSeveritySortKey:
     """Tests for make_severity_sort_key function."""
 
-    def test_default_severity_order(self):
-        """Test default severity ordering."""
-        sort_key = make_severity_sort_key()
+    @pytest.fixture
+    def severity_levels(self):
+        """Standard Vivado-like severity levels."""
+        return [
+            SeverityLevel(id="error", name="Error", level=3, style="red bold"),
+            SeverityLevel(id="critical_warning", name="Critical Warning", level=2, style="red"),
+            SeverityLevel(id="warning", name="Warning", level=1, style="yellow"),
+            SeverityLevel(id="info", name="Info", level=0, style="cyan"),
+        ]
+
+    def test_requires_severity_levels(self):
+        """Test that severity_levels is required."""
+        with pytest.raises(ValueError, match="severity_levels is required"):
+            make_severity_sort_key([])
+
+    def test_severity_ordering(self, severity_levels):
+        """Test severity ordering with explicit levels."""
+        sort_key = make_severity_sort_key(severity_levels)
         # More severe = lower sort key
-        assert sort_key("critical") < sort_key("error")
-        assert sort_key("error") < sort_key("warning")
+        assert sort_key("error") < sort_key("critical_warning")
+        assert sort_key("critical_warning") < sort_key("warning")
         assert sort_key("warning") < sort_key("info")
 
     def test_custom_severity_order(self):
@@ -286,14 +298,14 @@ class TestMakeSeveritySortKey:
         assert sort_key("fatal") < sort_key("error")
         assert sort_key("error") < sort_key("note")
 
-    def test_none_sorts_last(self):
+    def test_none_sorts_last(self, severity_levels):
         """Test None severity sorts last."""
-        sort_key = make_severity_sort_key()
+        sort_key = make_severity_sort_key(severity_levels)
         assert sort_key(None) > sort_key("info")
 
-    def test_unknown_severity(self):
+    def test_unknown_severity(self, severity_levels):
         """Test unknown severity sorts before None."""
-        sort_key = make_severity_sort_key()
+        sort_key = make_severity_sort_key(severity_levels)
         assert sort_key("unknown") < sort_key(None)
         assert sort_key("unknown") > sort_key("info")
 
