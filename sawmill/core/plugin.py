@@ -6,7 +6,6 @@ via Python entry points and registration with pluggy.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -92,15 +91,9 @@ class PluginManager:
         """
         discovered = []
 
-        if sys.version_info >= (3, 10):
-            from importlib.metadata import entry_points
+        from importlib.metadata import entry_points
 
-            eps = entry_points(group=ENTRY_POINT_GROUP)
-        else:
-            from importlib.metadata import entry_points
-
-            all_eps = entry_points()
-            eps = all_eps.get(ENTRY_POINT_GROUP, [])
+        eps = entry_points(group=ENTRY_POINT_GROUP)
 
         for ep in eps:
             try:
@@ -170,9 +163,7 @@ class PluginManager:
             PluginConflictError: If multiple plugins have confidence >= 0.5.
         """
         if not self._plugins:
-            raise NoPluginFoundError(
-                f"No plugins registered. Cannot detect plugin for {path}"
-            )
+            raise NoPluginFoundError(f"No plugins registered. Cannot detect plugin for {path}")
 
         # Collect confidence scores from all plugins
         scores: list[tuple[str, float]] = []
@@ -186,9 +177,7 @@ class PluginManager:
                 pass
 
         if not scores:
-            raise NoPluginFoundError(
-                f"No plugin could analyze {path}"
-            )
+            raise NoPluginFoundError(f"No plugin could analyze {path}")
 
         # Find plugins with confidence >= 0.5
         high_confidence = [(name, score) for name, score in scores if score >= 0.5]
@@ -202,9 +191,7 @@ class PluginManager:
 
         if len(high_confidence) > 1:
             # Multiple plugins claim high confidence - this is a conflict
-            conflict_info = ", ".join(
-                f"{name} ({score:.2f})" for name, score in high_confidence
-            )
+            conflict_info = ", ".join(f"{name} ({score:.2f})" for name, score in high_confidence)
             raise PluginConflictError(
                 f"Multiple plugins claim confidence >= 0.5 for {path}: {conflict_info}. "
                 f"Use --plugin to specify which plugin to use."

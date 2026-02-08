@@ -42,6 +42,8 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "mypy>=1.0.0",
+    "ruff>=0.4.0",
+    "pre-commit>=3.0.0",
 ]
 
 [project.entry-points."sawmill.plugins"]
@@ -69,3 +71,24 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "UP",   # pyupgrade (modernize syntax)
+    "B",    # bugbear (common pitfalls)
+    "SIM",  # simplify
+    "RUF",  # ruff-specific rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+"sawmill/tui/**" = ["RUF012"]  # Textual uses mutable class attrs (BINDINGS, CSS_PATH, etc.)
+
+[tool.ruff.lint.isort]
+known-first-party = ["sawmill"]

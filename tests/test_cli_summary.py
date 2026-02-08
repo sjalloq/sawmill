@@ -179,7 +179,9 @@ class TestCombinedOptions:
 
     def test_group_by_with_suppress(self, runner, vivado_log):
         """Test --group-by with --suppress."""
-        result = runner.invoke(cli, [str(vivado_log), "--group-by", "severity", "--suppress", "INFO:"])
+        result = runner.invoke(
+            cli, [str(vivado_log), "--group-by", "severity", "--suppress", "INFO:"]
+        )
         assert result.exit_code == 0
         assert "Grouped by Severity" in result.output
 

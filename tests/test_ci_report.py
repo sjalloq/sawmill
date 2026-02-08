@@ -1,9 +1,7 @@
 """Tests for CI summary report generation (Task 7.3)."""
 
 import json
-from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from sawmill.__main__ import cli
@@ -26,7 +24,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -55,7 +53,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -82,7 +80,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -113,9 +111,18 @@ class TestCIReportGeneration:
 
         runner = CliRunner()
         # Use --fail-on error since default now fails on warning+
-        result = runner.invoke(
+        runner.invoke(
             cli,
-            ["--check", "--fail-on", "error", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
+            [
+                "--check",
+                "--fail-on",
+                "error",
+                "--plugin",
+                "vivado",
+                "--report",
+                str(report_file),
+                str(log_file),
+            ],
         )
 
         report = json.loads(report_file.read_text())
@@ -134,7 +141,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             [
                 "--check",
@@ -174,7 +181,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             [
                 "--check",
@@ -198,9 +205,7 @@ class TestCIReportGeneration:
         """Report should include list of waived messages."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] waived error\n"
-            "ERROR: [Route 35-1] another error\n"
+            "# Vivado v2025.2\nERROR: [Synth 8-1] waived error\nERROR: [Route 35-1] another error\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
@@ -215,7 +220,7 @@ class TestCIReportGeneration:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             [
                 "--check",
@@ -248,7 +253,7 @@ class TestReportFileCreation:
         report_file = tmp_path / "subdir" / "nested" / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -263,7 +268,7 @@ class TestReportFileCreation:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -289,7 +294,7 @@ class TestReportWithFilters:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             [
                 "--check",
@@ -315,15 +320,13 @@ class TestReportWithFilters:
         """Report should not count suppressed messages."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] error1\n"
-            "ERROR: [Route 35-1] error2\n"
+            "# Vivado v2025.2\nERROR: [Synth 8-1] error1\nERROR: [Route 35-1] error2\n"
         )
 
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             [
                 "--check",
@@ -354,7 +357,7 @@ class TestReportMetadata:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -373,7 +376,7 @@ class TestReportMetadata:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -390,15 +393,13 @@ class TestReportWithoutCI:
         """Report can be generated even without --check mode."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] error\n"
-            "INFO: [Common 17-1] info\n"
+            "# Vivado v2025.2\nERROR: [Synth 8-1] error\nINFO: [Common 17-1] info\n"
         )
 
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        _result = runner.invoke(
             cli,
             ["--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -413,10 +414,7 @@ class TestReportWithoutCI:
     def test_report_without_ci_doesnt_affect_exit_code(self, tmp_path):
         """Without --check, CLI exit code should be 0 even with errors."""
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: [Synth 8-1] error\n")
 
         report_file = tmp_path / "report.json"
 
@@ -445,7 +443,7 @@ class TestReportEdgeCases:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        _result = runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -459,15 +457,13 @@ class TestReportEdgeCases:
         """Report handles logs with only info messages."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Common 17-1] info1\n"
-            "INFO: [Common 17-2] info2\n"
+            "# Vivado v2025.2\nINFO: [Common 17-1] info1\nINFO: [Common 17-2] info2\n"
         )
 
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        _result = runner.invoke(
             cli,
             ["--check", "--plugin", "vivado", "--report", str(report_file), str(log_file)],
         )
@@ -481,10 +477,7 @@ class TestReportEdgeCases:
     def test_report_all_errors_waived(self, tmp_path):
         """When all errors are waived, exit_code should be 0."""
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: [Synth 8-1] error\n")
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
@@ -498,7 +491,7 @@ class TestReportEdgeCases:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        _result = runner.invoke(
             cli,
             [
                 "--check",
@@ -526,10 +519,7 @@ class TestReportUnusedWaivers:
     def test_report_includes_unused_waivers(self, tmp_path):
         """Report should include unused waivers."""
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Synth 8-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: [Synth 8-1] error\n")
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
@@ -548,7 +538,7 @@ class TestReportUnusedWaivers:
         report_file = tmp_path / "report.json"
 
         runner = CliRunner()
-        result = runner.invoke(
+        _result = runner.invoke(
             cli,
             [
                 "--check",

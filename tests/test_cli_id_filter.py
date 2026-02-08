@@ -1,6 +1,5 @@
 """Tests for message ID and category filtering CLI options (Task 4.3)."""
 
-import pytest
 from click.testing import CliRunner
 
 from sawmill.__main__ import cli
@@ -13,15 +12,11 @@ class TestExactIdFilter:
         """Filter by exact message ID."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "WARNING: [Vivado 12-3523] msg1\n"
-            "WARNING: [Vivado 12-4739] msg2\n"
+            "# Vivado v2025.2\nWARNING: [Vivado 12-3523] msg1\nWARNING: [Vivado 12-4739] msg2\n"
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "Vivado 12-3523"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "Vivado 12-3523"])
 
         assert result.exit_code == 0
         assert "12-3523" in result.output
@@ -30,15 +25,10 @@ class TestExactIdFilter:
     def test_exact_id_filter_no_match(self, tmp_path):
         """Filter with ID that doesn't match produces no output."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "WARNING: [Vivado 12-3523] msg1\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nWARNING: [Vivado 12-3523] msg1\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-1234"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-1234"])
 
         assert result.exit_code == 0
         assert "12-3523" not in result.output
@@ -54,9 +44,7 @@ class TestExactIdFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "Vivado 12-3523"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "Vivado 12-3523"])
 
         assert result.exit_code == 0
         assert "first occurrence" in result.output
@@ -78,9 +66,7 @@ class TestWildcardIdFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-*"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-*"])
 
         assert result.exit_code == 0
         assert "8-6157" in result.output
@@ -99,9 +85,7 @@ class TestWildcardIdFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "DRC 1-*"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "DRC 1-*"])
 
         assert result.exit_code == 0
         assert "DRC 1-100" in result.output
@@ -119,9 +103,7 @@ class TestWildcardIdFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-1?"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--id", "Synth 8-1?"])
 
         assert result.exit_code == 0
         assert "Synth 8-10" in result.output
@@ -177,9 +159,7 @@ class TestCategoryFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--category", "synth"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--category", "synth"])
 
         assert result.exit_code == 0
         assert "Synth 8-6157" in result.output
@@ -190,15 +170,10 @@ class TestCategoryFilter:
     def test_category_filter_case_insensitive(self, tmp_path):
         """Category filter is case-insensitive."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Synth 8-1] message\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Synth 8-1] message\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--category", "SYNTH"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--category", "SYNTH"])
 
         assert result.exit_code == 0
         assert "Synth" in result.output
@@ -235,15 +210,10 @@ class TestCategoryFilter:
     def test_category_no_match(self, tmp_path):
         """Category filter with no matches produces no output."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Synth 8-1] message\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Synth 8-1] message\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--category", "timing"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--category", "timing"])
 
         assert result.exit_code == 0
         assert "Synth" not in result.output
@@ -319,9 +289,7 @@ class TestIdFilterWithOtherFilters:
         """--id with JSON output format."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "WARNING: [Vivado 12-3523] test message\n"
-            "INFO: [Synth 8-1] other\n"
+            "# Vivado v2025.2\nWARNING: [Vivado 12-3523] test message\nINFO: [Synth 8-1] other\n"
         )
 
         runner = CliRunner()

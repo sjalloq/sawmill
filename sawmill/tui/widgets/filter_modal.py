@@ -142,7 +142,9 @@ class FilterModal(ModalScreen[dict | None]):
         pattern_input = self.query_one("#filter-pattern-input", Input)
         pattern = pattern_input.value
 
-        self.dismiss({
-            "severity_filter": severity_filter,
-            "pattern": pattern,
-        })
+        self.dismiss(
+            {
+                "severity_filter": severity_filter,
+                "pattern": pattern,
+            }
+        )

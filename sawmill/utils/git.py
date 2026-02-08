@@ -5,10 +5,9 @@ This module provides functions for detecting and working with git repositories.
 
 import os
 from pathlib import Path
-from typing import Optional
 
 
-def find_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
+def find_git_root(start_path: Path | None = None) -> Path | None:
     """Find the root directory of a git repository.
 
     Walks up from the start path (or current working directory) looking for
@@ -33,10 +32,7 @@ def find_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
         return override_path
 
     # Determine starting directory
-    if start_path is None:
-        start_path = Path.cwd()
-    else:
-        start_path = Path(start_path).resolve()
+    start_path = Path.cwd() if start_path is None else Path(start_path).resolve()
 
     # Walk up the directory tree looking for .git
     current = start_path

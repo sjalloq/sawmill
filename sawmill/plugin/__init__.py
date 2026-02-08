@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 hookimpl = pluggy.HookimplMarker("sawmill")
 
 # Export SawmillHookSpec for use by the PluginManager
-__all__ = ["SawmillPlugin", "hookimpl", "SawmillHookSpec"]
+__all__ = ["SawmillHookSpec", "SawmillPlugin", "hookimpl"]
 
 
 class SawmillPlugin:
@@ -104,7 +104,7 @@ class SawmillPlugin:
         return 0.0
 
     @hookimpl
-    def load_and_parse(self, path: Path) -> list["Message"]:
+    def load_and_parse(self, path: Path) -> list[Message]:
         """Default implementation: returns empty list.
 
         Subclasses should override this to parse the log file.
@@ -118,7 +118,7 @@ class SawmillPlugin:
         return []
 
     @hookimpl
-    def get_filters(self) -> list["FilterDefinition"]:
+    def get_filters(self) -> list[FilterDefinition]:
         """Default implementation: returns empty list.
 
         Subclasses should override this to provide pre-defined filters.
@@ -129,7 +129,7 @@ class SawmillPlugin:
         return []
 
     @hookimpl
-    def extract_file_reference(self, content: str) -> "FileRef | None":
+    def extract_file_reference(self, content: str) -> FileRef | None:
         """Default implementation: returns None.
 
         Subclasses should override this to extract file references.

@@ -90,7 +90,16 @@ class TestSeverityFilter:
         """Filtering by critical_warning severity should show critical_warning and error."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "critical_warning", "--format", "json"]
+            cli,
+            [
+                str(vivado_log),
+                "--plugin",
+                "vivado",
+                "--severity",
+                "critical_warning",
+                "--format",
+                "json",
+            ],
         )
 
         assert result.exit_code == 0
@@ -108,7 +117,8 @@ class TestSeverityFilter:
         """Filtering by warning severity should show warnings and above."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "warning", "--format", "json"]
+            cli,
+            [str(vivado_log), "--plugin", "vivado", "--severity", "warning", "--format", "json"],
         )
 
         assert result.exit_code == 0
@@ -140,7 +150,8 @@ class TestSeverityFilter:
             cli, [str(vivado_log), "--plugin", "vivado", "--severity", "1", "--format", "count"]
         )
         result_named = runner.invoke(
-            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "warning", "--format", "count"]
+            cli,
+            [str(vivado_log), "--plugin", "vivado", "--severity", "warning", "--format", "count"],
         )
 
         assert result_numeric.exit_code == 0
@@ -164,9 +175,7 @@ class TestSeverityFilter:
     def test_list_severity_vivado(self, vivado_log):
         """--list-severity should show plugin severity levels."""
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["--list-severity", "--plugin", "vivado"]
-        )
+        result = runner.invoke(cli, ["--list-severity", "--plugin", "vivado"])
 
         assert result.exit_code == 0
         assert "error" in result.output
@@ -195,7 +204,16 @@ class TestFilterPatterns:
         """Regex patterns should work correctly."""
         runner = CliRunner()
         result = runner.invoke(
-            cli, [str(vivado_log), "--plugin", "vivado", "--filter", r"IP_Flow.*Generating", "--format", "json"]
+            cli,
+            [
+                str(vivado_log),
+                "--plugin",
+                "vivado",
+                "--filter",
+                r"IP_Flow.*Generating",
+                "--format",
+                "json",
+            ],
         )
 
         assert result.exit_code == 0
@@ -239,11 +257,15 @@ class TestSuppressionPatterns:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--suppress", "IP_Flow",
-                "--suppress", "Synth",
-                "--format", "count"
-            ]
+                "--plugin",
+                "vivado",
+                "--suppress",
+                "IP_Flow",
+                "--suppress",
+                "Synth",
+                "--format",
+                "count",
+            ],
         )
 
         assert result.exit_code == 0
@@ -270,10 +292,13 @@ class TestSuppressIdFilter:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--suppress-id", "IP_Flow 19-234",
-                "--format", "count"
-            ]
+                "--plugin",
+                "vivado",
+                "--suppress-id",
+                "IP_Flow 19-234",
+                "--format",
+                "count",
+            ],
         )
         assert result_suppressed.exit_code == 0
         total_suppressed = int(result_suppressed.output.split("total=")[1].split()[0])
@@ -290,13 +315,7 @@ class TestIdFilter:
         """ID filter should include only matching message IDs."""
         runner = CliRunner()
         result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--id", "Synth *",
-                "--format", "json"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--id", "Synth *", "--format", "json"]
         )
 
         assert result.exit_code == 0
@@ -313,13 +332,7 @@ class TestIdFilter:
         """ID filter with wildcards should work correctly."""
         runner = CliRunner()
         result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--id", "Vivado *",
-                "--format", "count"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--id", "Vivado *", "--format", "count"]
         )
 
         assert result.exit_code == 0
@@ -333,11 +346,15 @@ class TestIdFilter:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--id", "Synth *",
-                "--id", "IP_Flow *",
-                "--format", "json"
-            ]
+                "--plugin",
+                "vivado",
+                "--id",
+                "Synth *",
+                "--id",
+                "IP_Flow *",
+                "--format",
+                "json",
+            ],
         )
 
         assert result.exit_code == 0
@@ -359,13 +376,7 @@ class TestCategoryFilter:
         """Category filter should include only matching categories."""
         runner = CliRunner()
         result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--category", "synth",
-                "--format", "count"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--category", "synth", "--format", "count"]
         )
 
         assert result.exit_code == 0
@@ -383,11 +394,15 @@ class TestCombinedFilters:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--severity", "warning",
-                "--filter", "timing",
-                "--format", "count"
-            ]
+                "--plugin",
+                "vivado",
+                "--severity",
+                "warning",
+                "--filter",
+                "timing",
+                "--format",
+                "count",
+            ],
         )
 
         assert result.exit_code == 0
@@ -401,11 +416,15 @@ class TestCombinedFilters:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--id", "Vivado *",
-                "--severity", "warning",
-                "--format", "json"
-            ]
+                "--plugin",
+                "vivado",
+                "--id",
+                "Vivado *",
+                "--severity",
+                "warning",
+                "--format",
+                "json",
+            ],
         )
 
         assert result.exit_code == 0
@@ -426,13 +445,19 @@ class TestCombinedFilters:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--severity", "info",
-                "--filter", "Flow",
-                "--suppress", "Refreshing",
-                "--id", "IP_Flow *",
-                "--format", "json"
-            ]
+                "--plugin",
+                "vivado",
+                "--severity",
+                "info",
+                "--filter",
+                "Flow",
+                "--suppress",
+                "Refreshing",
+                "--id",
+                "IP_Flow *",
+                "--format",
+                "json",
+            ],
         )
 
         assert result.exit_code == 0
@@ -460,10 +485,13 @@ class TestEdgeCases:
             cli,
             [
                 str(vivado_log),
-                "--plugin", "vivado",
-                "--filter", "XYZZY_NONEXISTENT_PATTERN_12345",
-                "--format", "count"
-            ]
+                "--plugin",
+                "vivado",
+                "--filter",
+                "XYZZY_NONEXISTENT_PATTERN_12345",
+                "--format",
+                "count",
+            ],
         )
 
         assert result.exit_code == 0
@@ -475,12 +503,7 @@ class TestEdgeCases:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--id", "NonExistent *",
-                "--format", "count"
-            ]
+            [str(vivado_log), "--plugin", "vivado", "--id", "NonExistent *", "--format", "count"],
         )
 
         assert result.exit_code == 0
@@ -493,24 +516,12 @@ class TestEdgeCases:
 
         # Lowercase
         result_lower = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--category", "synth",
-                "--format", "count"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--category", "synth", "--format", "count"]
         )
 
         # Uppercase
         result_upper = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--category", "SYNTH",
-                "--format", "count"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--category", "SYNTH", "--format", "count"]
         )
 
         assert result_lower.exit_code == 0
@@ -527,13 +538,7 @@ class TestOutputFormat:
         """JSON output should include all expected fields."""
         runner = CliRunner()
         result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--severity", "error",
-                "--format", "json"
-            ]
+            cli, [str(vivado_log), "--plugin", "vivado", "--severity", "error", "--format", "json"]
         )
 
         assert result.exit_code == 0
@@ -554,14 +559,7 @@ class TestOutputFormat:
     def test_count_output_format(self, vivado_log):
         """Count format should show all severity counts."""
         runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--format", "count"
-            ]
-        )
+        result = runner.invoke(cli, [str(vivado_log), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
         # Should contain all count fields (using plugin severity IDs)
@@ -579,14 +577,7 @@ class TestPluginSelection:
     def test_force_plugin(self, vivado_log):
         """Forced plugin should be used even if auto-detect would work."""
         runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "vivado",
-                "--format", "count"
-            ]
-        )
+        result = runner.invoke(cli, [str(vivado_log), "--plugin", "vivado", "--format", "count"])
 
         assert result.exit_code == 0
         assert "total=" in result.output
@@ -596,12 +587,7 @@ class TestPluginSelection:
         """Invalid plugin name should produce error."""
         runner = CliRunner()
         result = runner.invoke(
-            cli,
-            [
-                str(vivado_log),
-                "--plugin", "nonexistent_plugin",
-                "--format", "count"
-            ]
+            cli, [str(vivado_log), "--plugin", "nonexistent_plugin", "--format", "count"]
         )
 
         assert result.exit_code != 0

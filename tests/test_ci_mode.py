@@ -1,6 +1,5 @@
 """Tests for check mode exit code logic."""
 
-import pytest
 from click.testing import CliRunner
 
 from sawmill.__main__ import cli
@@ -15,7 +14,7 @@ class TestCheckModeBasic:
         log_file.write_text("# Vivado v2025.2\nINFO: [Info 1-1] all good\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 0
 
@@ -25,7 +24,7 @@ class TestCheckModeBasic:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 1
 
@@ -35,7 +34,7 @@ class TestCheckModeBasic:
         log_file.write_text("# Vivado v2025.2\nCRITICAL WARNING: [Test 1-1] important\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 1
 
@@ -45,7 +44,7 @@ class TestCheckModeBasic:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         # Default is level >= 1 (warning+), so warnings cause failure
         assert result.exit_code == 1
@@ -56,7 +55,9 @@ class TestCheckModeBasic:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'error', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "error", "--plugin", "vivado", str(log_file)]
+        )
 
         # With --fail-on error, only errors cause failure
         assert result.exit_code == 0
@@ -71,7 +72,9 @@ class TestCheckModeFailOn:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "warning", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -81,7 +84,9 @@ class TestCheckModeFailOn:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'error', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "error", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -91,7 +96,9 @@ class TestCheckModeFailOn:
         log_file.write_text("# Vivado v2025.2\nCRITICAL WARNING: [Test 1-1] important\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'critical_warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "critical_warning", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -101,7 +108,9 @@ class TestCheckModeFailOn:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'critical_warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "critical_warning", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -111,7 +120,9 @@ class TestCheckModeFailOn:
         log_file.write_text("# Vivado v2025.2\nINFO: [Info 1-1] all good\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "warning", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -125,9 +136,9 @@ class TestCheckModeWithFilters:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--severity', 'error', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--severity", "error", "--plugin", "vivado", str(log_file)]
+        )
 
         # Severity filter removes warnings, so no failures
         assert result.exit_code == 0
@@ -142,9 +153,9 @@ class TestCheckModeWithFilters:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--severity', 'error', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--severity", "error", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -154,9 +165,9 @@ class TestCheckModeWithFilters:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--suppress', 'known issue', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--suppress", "known issue", "--plugin", "vivado", str(log_file)]
+        )
 
         # Error is suppressed, so should pass
         assert result.exit_code == 0
@@ -167,9 +178,9 @@ class TestCheckModeWithFilters:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--suppress-id', 'Test 1-1', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--suppress-id", "Test 1-1", "--plugin", "vivado", str(log_file)]
+        )
 
         # Error is suppressed by ID, so should pass
         assert result.exit_code == 0
@@ -184,9 +195,9 @@ class TestCheckModeWithFilters:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--category', 'Synth', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--category", "Synth", "--plugin", "vivado", str(log_file)]
+        )
 
         # Only Synth messages considered, still has a warning
         assert result.exit_code == 1
@@ -201,7 +212,7 @@ class TestCheckModeAutoDetect:
         log_file.write_text("# Vivado v2025.2\nINFO: [Info 1-1] all good\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', str(log_file)])
+        result = runner.invoke(cli, ["--check", str(log_file)])
 
         assert result.exit_code == 0
 
@@ -211,7 +222,7 @@ class TestCheckModeAutoDetect:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', str(log_file)])
+        result = runner.invoke(cli, ["--check", str(log_file)])
 
         assert result.exit_code == 1
 
@@ -230,7 +241,7 @@ class TestCheckModeMixedSeverities:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         # Default is level >= 1, so warning causes failure
         assert result.exit_code == 1
@@ -246,7 +257,9 @@ class TestCheckModeMixedSeverities:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'error', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "error", "--plugin", "vivado", str(log_file)]
+        )
 
         # With --fail-on error, warnings don't cause failure
         assert result.exit_code == 0
@@ -263,7 +276,7 @@ class TestCheckModeMixedSeverities:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 1
 
@@ -278,7 +291,7 @@ class TestCheckModeMixedSeverities:
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 1
 
@@ -292,7 +305,7 @@ class TestCheckModeEmptyLogs:
         log_file.write_text("# Vivado v2025.2\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 0
 
@@ -302,7 +315,9 @@ class TestCheckModeEmptyLogs:
         log_file.write_text("# Vivado v2025.2\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--fail-on', 'warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(
+            cli, ["--check", "--fail-on", "warning", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -316,7 +331,7 @@ class TestCheckModeOutput:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--check', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 1
         assert "ERROR:" in result.output or "something failed" in result.output
@@ -327,9 +342,9 @@ class TestCheckModeOutput:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--format', 'json', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--format", "json", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
         # Should still output JSON
@@ -341,9 +356,9 @@ class TestCheckModeOutput:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--format', 'count', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--format", "count", "--plugin", "vivado", str(log_file)]
+        )
 
         assert result.exit_code == 1
         assert "error=1" in result.output
@@ -358,7 +373,7 @@ class TestFailOnWithoutCheck:
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] minor issue\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['--fail-on', 'warning', '--plugin', 'vivado', str(log_file)])
+        result = runner.invoke(cli, ["--fail-on", "warning", "--plugin", "vivado", str(log_file)])
 
         # Without --check, exit code should be 0 (normal operation)
         assert result.exit_code == 0
@@ -371,15 +386,13 @@ class TestCheckModeEdgeCases:
         """Check mode with --id filter should only count filtered messages."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] error one\n"
-            "ERROR: [Other 2-1] error two\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] error one\nERROR: [Other 2-1] error two\n"
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--id', 'Other *', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--id", "Other *", "--plugin", "vivado", str(log_file)]
+        )
 
         # Only "Other 2-1" matches, which is an error
         assert result.exit_code == 1
@@ -388,15 +401,13 @@ class TestCheckModeEdgeCases:
         """Check mode with --id filter can result in no failures if filter matches non-errors."""
         log_file = tmp_path / "mixed.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Info 1-1] just info\n"
-            "ERROR: [Test 1-1] error one\n"
+            "# Vivado v2025.2\nINFO: [Info 1-1] just info\nERROR: [Test 1-1] error one\n"
         )
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--id', 'Info *', '--plugin', 'vivado', str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--id", "Info *", "--plugin", "vivado", str(log_file)]
+        )
 
         # Only "Info 1-1" matches, which is just info
         assert result.exit_code == 0

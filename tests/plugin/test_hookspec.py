@@ -8,7 +8,7 @@ Tests verify that:
 
 from pathlib import Path
 
-from sawmill.plugin import SawmillPlugin, hookimpl, SawmillHookSpec
+from sawmill.plugin import SawmillHookSpec, SawmillPlugin, hookimpl
 
 
 def test_hookspec_defines_required_hooks():
@@ -50,6 +50,7 @@ def test_base_plugin_extract_file_reference_default():
 
 def test_hookimpl_decorator_available():
     """hookimpl decorator should be importable and usable."""
+
     # This test verifies that hookimpl can be used as a decorator
     class TestPlugin(SawmillPlugin):
         name = "test"
@@ -64,9 +65,8 @@ def test_hookimpl_decorator_available():
 
 def test_plugin_can_override_hooks():
     """Subclasses should be able to override hook implementations."""
-    from sawmill.models.message import Message
     from sawmill.models.filter_def import FilterDefinition
-    from sawmill.models.message import FileRef
+    from sawmill.models.message import FileRef, Message
 
     class CustomPlugin(SawmillPlugin):
         name = "custom"

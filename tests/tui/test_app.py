@@ -1,13 +1,18 @@
 """Tests for the main TUI application."""
 
 import pytest
-from pathlib import Path
 
-from sawmill.models.message import Message, FileRef
+from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.tui.app import (
-    SawmillApp, LogViewer, MessageStats, FilterInput,
-    SORT_LINE, SORT_SEVERITY, SORT_ID, SORT_COUNT, SORT_MODES,
+    SORT_COUNT,
+    SORT_ID,
+    SORT_LINE,
+    SORT_SEVERITY,
+    FilterInput,
+    LogViewer,
+    MessageStats,
+    SawmillApp,
 )
 
 
@@ -234,10 +239,13 @@ class TestAppActions:
     @pytest.fixture
     def app(self, severity_levels):
         """Create a test app."""
-        return SawmillApp(severity_levels, messages=[
-            make_message("Test error", severity="error"),
-            make_message("Test warning", severity="warning"),
-        ])
+        return SawmillApp(
+            severity_levels,
+            messages=[
+                make_message("Test error", severity="error"),
+                make_message("Test warning", severity="warning"),
+            ],
+        )
 
     def test_action_clear_filter(self, app):
         """Test action_clear_filter clears all filters."""
@@ -425,8 +433,7 @@ class TestMessageStatsActive:
         stats = MessageStats(severity_levels=severity_levels)
         stats.total = 10
         stats.counts = {"error": 3, "warning": 5, "info": 2}
-        stats.active = {"error": True, "warning": True, "info": False,
-                        "critical_warning": True}
+        stats.active = {"error": True, "warning": True, "info": False, "critical_warning": True}
         output = stats.render()
         assert "[dim]Info: 2[/dim]" in output
 
@@ -435,8 +442,7 @@ class TestMessageStatsActive:
         stats = MessageStats(severity_levels=severity_levels)
         stats.total = 5
         stats.counts = {"error": 2, "warning": 3}
-        stats.active = {"error": True, "warning": True, "info": True,
-                        "critical_warning": True}
+        stats.active = {"error": True, "warning": True, "info": True, "critical_warning": True}
         output = stats.render()
         assert "[dim]" not in output
 
@@ -447,9 +453,11 @@ class TestRunTui:
     def test_run_tui_import(self):
         """Test run_tui can be imported."""
         from sawmill.tui import run_tui
+
         assert callable(run_tui)
 
     def test_sawmill_app_import(self):
         """Test SawmillApp can be imported from tui package."""
         from sawmill.tui import SawmillApp
+
         assert SawmillApp is not None

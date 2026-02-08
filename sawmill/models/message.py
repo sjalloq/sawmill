@@ -7,7 +7,6 @@ Plugins create Message instances; the base app is just an orchestrator.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,7 +17,7 @@ class FileRef(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     path: str
-    line: Optional[int] = None
+    line: int | None = None
 
 
 class Message(BaseModel):
@@ -47,10 +46,10 @@ class Message(BaseModel):
     end_line: int
     raw_text: str
     content: str
-    severity: Optional[str] = None
-    message_id: Optional[str] = None
-    category: Optional[str] = None
-    file_ref: Optional[FileRef] = None
+    severity: str | None = None
+    message_id: str | None = None
+    category: str | None = None
+    file_ref: FileRef | None = None
     metadata: dict[str, str] = {}
 
     def matches_filter(self, pattern: str, case_sensitive: bool = True) -> bool:

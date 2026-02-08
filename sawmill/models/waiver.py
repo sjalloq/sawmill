@@ -6,7 +6,7 @@ They are distinct from suppressions which are for display filtering.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -34,8 +34,8 @@ class Waiver(BaseModel):
     reason: str
     author: str
     date: str
-    expires: Optional[str] = None
-    ticket: Optional[str] = None
+    expires: str | None = None
+    ticket: str | None = None
 
 
 class WaiverFile(BaseModel):
@@ -49,6 +49,6 @@ class WaiverFile(BaseModel):
 
     model_config = ConfigDict(frozen=False)
 
-    tool: Optional[str] = None
+    tool: str | None = None
     waivers: list[Waiver] = []
-    path: Optional[str] = None
+    path: str | None = None

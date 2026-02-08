@@ -47,14 +47,11 @@ def _get_implemented_hooks(plugin) -> list[str]:
 
     # Check each hook by seeing if the plugin has a non-default implementation
     # We do this by checking if the method exists and is decorated with hookimpl
-    from sawmill.plugin import hookimpl
 
     for hook_name in ["can_handle", "load_and_parse", "get_filters", "extract_file_reference"]:
         method = getattr(plugin, hook_name, None)
-        if method is not None:
-            # Check if it's marked as a hookimpl
-            if hasattr(method, "sawmill_impl"):
-                hooks.append(hook_name)
+        if method is not None and hasattr(method, "sawmill_impl"):
+            hooks.append(hook_name)
     return hooks
 
 
@@ -77,8 +74,7 @@ def _get_severity_levels(plugin):
         return severity_levels_from_dicts(severity_dicts)
     else:
         raise RuntimeError(
-            f"Plugin must implement get_severity_levels(). "
-            "This hook is required for all plugins."
+            "Plugin must implement get_severity_levels(). This hook is required for all plugins."
         )
 
 
@@ -190,8 +186,8 @@ def _get_fail_on_level(fail_on: str | None, plugin) -> int:
         severity_levels = _get_severity_levels(plugin)
         sorted_levels = sorted(severity_levels, key=lambda s: s.level)
         if len(sorted_levels) >= 2:
-            return sorted_levels[1].level
-        return sorted_levels[0].level if sorted_levels else 0
+            return int(sorted_levels[1].level)
+        return int(sorted_levels[0].level) if sorted_levels else 0
 
     fail_on_lower = fail_on.lower()
     if fail_on_lower not in level_map:
@@ -279,7 +275,7 @@ def _generate_check_report(
     waived_counts: dict[str, int] = {level.id: 0 for level in severity_levels}
     waived_counts["other"] = 0
 
-    for msg, waiver in waived_messages:
+    for msg, _waiver in waived_messages:
         if msg.severity:
             sev = msg.severity.lower()
             if sev in waived_counts:
@@ -301,36 +297,42 @@ def _generate_check_report(
     # Build issues list (unwaived messages with CI-relevant severities)
     issues = []
     for msg in messages:
-        issues.append({
-            "message_id": msg.message_id,
-            "severity": msg.severity,
-            "content": msg.content,
-            "line": msg.start_line,
-            "raw_text": msg.raw_text,
-        })
+        issues.append(
+            {
+                "message_id": msg.message_id,
+                "severity": msg.severity,
+                "content": msg.content,
+                "line": msg.start_line,
+                "raw_text": msg.raw_text,
+            }
+        )
 
     # Build waived list
     waived_list = []
     for msg, waiver in waived_messages:
-        waived_list.append({
-            "message_id": msg.message_id,
-            "severity": msg.severity,
-            "content": msg.content,
-            "line": msg.start_line,
-            "waiver_pattern": waiver.pattern,
-            "waiver_type": waiver.type,
-            "waiver_reason": waiver.reason,
-        })
+        waived_list.append(
+            {
+                "message_id": msg.message_id,
+                "severity": msg.severity,
+                "content": msg.content,
+                "line": msg.start_line,
+                "waiver_pattern": waiver.pattern,
+                "waiver_type": waiver.type,
+                "waiver_reason": waiver.reason,
+            }
+        )
 
     # Find unused waivers
     unused_waivers = []
     for waiver in all_waivers:
         if waiver not in used_waivers:
-            unused_waivers.append({
-                "pattern": waiver.pattern,
-                "type": waiver.type,
-                "reason": waiver.reason,
-            })
+            unused_waivers.append(
+                {
+                    "pattern": waiver.pattern,
+                    "type": waiver.type,
+                    "reason": waiver.reason,
+                }
+            )
 
     # Build the report with dynamic severity counts
     summary = {
@@ -432,7 +434,7 @@ def _process_log_file(
             detected_name = manager.auto_detect(path)
             plugin = manager.get_plugin(detected_name)
         except NoPluginFoundError as e:
-            console.print(f"[red]Error:[/red] No plugin can handle this file.")
+            console.print("[red]Error:[/red] No plugin can handle this file.")
             console.print(f"  {e}")
             console.print("\nInstalled plugins:")
             for name in manager.list_plugins():
@@ -468,9 +470,11 @@ def _process_log_file(
         except ValueError:
             # Not a number, validate as ID
             if severity.lower() not in severity_level_map:
-                valid_levels = sorted(severity_level_map.keys(), key=lambda x: -severity_level_map[x])
+                valid_levels = sorted(
+                    severity_level_map.keys(), key=lambda x: -severity_level_map[x]
+                )
                 console.print(f"[red]Error:[/red] Unknown severity level '{severity}'.")
-                console.print(f"\nValid severity levels for this plugin:")
+                console.print("\nValid severity levels for this plugin:")
                 for level_id in valid_levels:
                     level_num = severity_level_map[level_id]
                     console.print(f"  - {level_id} ({level_num})")
@@ -483,7 +487,8 @@ def _process_log_file(
     # Apply severity filter
     if severity:
         messages = [
-            msg for msg in messages
+            msg
+            for msg in messages
             if _severity_at_or_above(msg.severity, severity, severity_level_map)
         ]
 
@@ -501,7 +506,8 @@ def _process_log_file(
     if suppress_ids:
         suppress_id_set = set(suppress_ids)
         messages = [
-            msg for msg in messages
+            msg
+            for msg in messages
             if msg.message_id is None or msg.message_id not in suppress_id_set
         ]
 
@@ -519,8 +525,7 @@ def _process_log_file(
     if categories:
         category_set = {c.lower() for c in categories}
         messages = [
-            msg for msg in messages
-            if msg.category and msg.category.lower() in category_set
+            msg for msg in messages if msg.category and msg.category.lower() in category_set
         ]
 
     # Get severity levels from plugin for aggregation and count format
@@ -596,7 +601,7 @@ def _output_messages(
         # Output the summary with dynamic severity names
         total = len(messages)
         parts = [f"total={total}"]
-        for sev_id in (severity_ids or []):
+        for sev_id in severity_ids or []:
             parts.append(f"{sev_id}={counts.get(sev_id, 0)}")
         if counts["other"] > 0:
             parts.append(f"other={counts['other']}")
@@ -654,7 +659,7 @@ def _print_summary(
 
         # Print IDs in columns (4 per row like HAL)
         for i in range(0, len(sorted_ids), 4):
-            row = sorted_ids[i:i+4]
+            row = sorted_ids[i : i + 4]
             formatted = [f"  {msg_id} ({count})" for msg_id, count in row]
             # Right-pad each item to 16 chars for columnar display
             line = "".join(f"{item:18s}" for item in formatted)
@@ -756,7 +761,7 @@ def _print_grouped(
                 console.print(line, style=style)
             else:
                 console.print(line)
-            
+
             # Wrap content with 2-space indent (align with severity)
             indent = "  "
             width = (console.width or 80) - len(indent)
@@ -814,7 +819,7 @@ def _generate_waivers(
             detected_name = manager.auto_detect(path)
             plugin = manager.get_plugin(detected_name)
         except NoPluginFoundError as e:
-            stderr_console.print(f"[red]Error:[/red] No plugin can handle this file.")
+            stderr_console.print("[red]Error:[/red] No plugin can handle this file.")
             stderr_console.print(f"  {e}")
             stderr_console.print("\nInstalled plugins:")
             for name in manager.list_plugins():
@@ -851,143 +856,123 @@ def _generate_waivers(
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("logfile", required=False, type=click.Path(exists=True))
 @click.option("--version", is_flag=True, help="Show version and exit.")
-@click.option(
-    "--list-plugins",
-    is_flag=True,
-    help="List all available plugins and exit."
-)
-@click.option(
-    "--plugin",
-    type=str,
-    help="Force a specific plugin (bypasses auto-detection)."
-)
+@click.option("--list-plugins", is_flag=True, help="List all available plugins and exit.")
+@click.option("--plugin", type=str, help="Force a specific plugin (bypasses auto-detection).")
 @click.option(
     "--show-info",
     is_flag=True,
-    help="Show detailed information about a plugin (requires --plugin)."
+    help="Show detailed information about a plugin (requires --plugin).",
 )
 @click.option(
     "--list-groupings",
     is_flag=True,
-    help="List available grouping fields from the plugin and exit."
+    help="List available grouping fields from the plugin and exit.",
 )
 @click.option(
-    "--list-severity",
-    is_flag=True,
-    help="List available severity levels from the plugin and exit."
+    "--list-severity", is_flag=True, help="List available severity levels from the plugin and exit."
 )
 @click.option(
-    "--severity",
-    type=str,
-    help="Filter to show only messages at or above this severity level."
+    "--severity", type=str, help="Filter to show only messages at or above this severity level."
 )
 @click.option(
-    "--filter",
-    "filter_pattern",
-    type=str,
-    help="Regex pattern to include matching messages."
+    "--filter", "filter_pattern", type=str, help="Regex pattern to include matching messages."
 )
 @click.option(
     "--suppress",
     "suppress_patterns",
     type=str,
     multiple=True,
-    help="Regex pattern to exclude matching messages (can be repeated)."
+    help="Regex pattern to exclude matching messages (can be repeated).",
 )
 @click.option(
     "--suppress-id",
     "suppress_ids",
     type=str,
     multiple=True,
-    help="Message ID to exclude (can be repeated)."
+    help="Message ID to exclude (can be repeated).",
 )
 @click.option(
     "--format",
     "output_format",
     type=click.Choice(["text", "json", "count"], case_sensitive=False),
     default="text",
-    help="Output format: text (colored), json (JSONL), or count (summary)."
+    help="Output format: text (colored), json (JSONL), or count (summary).",
 )
 @click.option(
     "--id",
     "id_patterns",
     type=str,
     multiple=True,
-    help="Message ID pattern to include (supports wildcards, e.g., 'Synth 8-*'). Can be repeated."
+    help="Message ID pattern to include (supports wildcards, e.g., 'Synth 8-*'). Can be repeated.",
 )
 @click.option(
     "--category",
     "categories",
     type=str,
     multiple=True,
-    help="Category to include (e.g., 'synth', 'timing'). Can be repeated."
+    help="Category to include (e.g., 'synth', 'timing'). Can be repeated.",
 )
 @click.option(
     "--generate-waivers",
     is_flag=True,
-    help="Generate waiver TOML from errors/warnings in the log. Output to stdout."
+    help="Generate waiver TOML from errors/warnings in the log. Output to stdout.",
 )
 @click.option(
     "--waiver-level",
     "waiver_level",
     type=int,
     default=1,
-    help="Minimum severity level for waiver generation. Use --list-severity to see plugin levels. Default: 1."
+    help="Min severity level for waiver generation. Default: 1.",
 )
 @click.option(
     "--check",
     is_flag=True,
-    help="Check mode: exit 1 if unwaived messages above the lowest severity level are found."
+    help="Check mode: exit 1 if unwaived messages above the lowest severity level are found.",
 )
 @click.option(
     "--fail-on",
     "fail_on",
     type=str,
-    help="With --check, set minimum severity that causes failure. Use --list-severity to see available levels. Default: second-lowest level."
+    help="With --check, set min failure severity. Default: second-lowest.",
 )
 @click.option(
     "--waivers",
     type=click.Path(exists=False),
-    help="Path to waiver TOML file. Waived messages don't count toward CI failure."
+    help="Path to waiver TOML file. Waived messages don't count toward CI failure.",
 )
 @click.option(
-    "--show-waived",
-    is_flag=True,
-    help="Display messages that were waived (with waiver reasons)."
+    "--show-waived", is_flag=True, help="Display messages that were waived (with waiver reasons)."
 )
 @click.option(
     "--report-unused",
     is_flag=True,
-    help="Report waivers that didn't match any messages (stale waivers)."
+    help="Report waivers that didn't match any messages (stale waivers).",
 )
 @click.option(
-    "--report",
-    "report_file",
-    type=click.Path(),
-    help="Write JSON summary report to this file."
+    "--report", "report_file", type=click.Path(), help="Write JSON summary report to this file."
 )
 @click.option(
     "--summary",
     is_flag=True,
-    help="Show summary counts by severity and message ID (like hal_log_parser.py)."
+    help="Show summary counts by severity and message ID (like hal_log_parser.py).",
 )
 @click.option(
     "--group-by",
     "group_by",
     type=click.Choice(["severity", "id", "file", "category"], case_sensitive=False),
-    help="Group output by the specified field with sample messages."
+    help="Group output by the specified field with sample messages.",
 )
 @click.option(
     "--top",
     "top_n",
     type=int,
     default=5,
-    help="Limit messages shown per group when using --group-by (default: 5, 0 = no limit)."
+    help="Limit messages shown per group when using --group-by (default: 5, 0 = no limit).",
 )
 @click.option(
     "--batch",
     is_flag=True,
-    help="Run in batch mode (no TUI). Implied by any output/filter/check flags."
+    help="Run in batch mode (no TUI). Implied by any output/filter/check flags.",
 )
 @click.pass_context
 def cli(
@@ -1027,6 +1012,7 @@ def cli(
 
     if version:
         from sawmill import __version__
+
         click.echo(f"sawmill {__version__}")
         return
 
@@ -1079,11 +1065,15 @@ def cli(
         hooks = _get_implemented_hooks(plugin_instance)
 
         # Display plugin info
+        if info is None:
+            console.print(f"[red]Error:[/red] No info available for plugin '{plugin}'.")
+            ctx.exit(1)
+            return
         console.print(f"\n[bold cyan]Plugin: {info['name']}[/bold cyan]")
         console.print(f"Version: {info.get('version', 'unknown')}")
         console.print(f"Description: {info.get('description', 'No description')}")
 
-        console.print(f"\n[bold]Implemented Hooks:[/bold]")
+        console.print("\n[bold]Implemented Hooks:[/bold]")
         if hooks:
             for hook in hooks:
                 console.print(f"  - {hook}")
@@ -1132,6 +1122,7 @@ def cli(
             try:
                 grouping_dicts = plugin_instance.get_grouping_fields()
                 from sawmill.models.plugin_api import grouping_fields_from_dicts
+
                 grouping_fields = grouping_fields_from_dicts(grouping_dicts)
             except Exception:
                 grouping_fields = None
@@ -1140,6 +1131,7 @@ def cli(
 
         if grouping_fields is None:
             from sawmill.models.plugin_api import DEFAULT_GROUPING_FIELDS
+
             grouping_fields = DEFAULT_GROUPING_FIELDS
 
         # Display the grouping fields
@@ -1179,6 +1171,7 @@ def cli(
             try:
                 severity_dicts = plugin_instance.get_severity_levels()
                 from sawmill.models.plugin_api import severity_levels_from_dicts
+
                 severity_levels = severity_levels_from_dicts(severity_dicts)
             except Exception:
                 severity_levels = None
@@ -1218,32 +1211,35 @@ def cli(
 
     # Determine if batch mode is needed.
     # Explicit --batch flag, or any output/filter/check flag implies batch.
-    is_batch = batch or any([
-        severity is not None,
-        filter_pattern is not None,
-        suppress_patterns,
-        suppress_ids,
-        id_patterns,
-        categories,
-        generate_waivers,
-        check,
-        fail_on is not None,
-        waivers is not None,
-        show_waived,
-        report_unused,
-        report_file is not None,
-        summary,
-        group_by is not None,
-    ])
+    is_batch = batch or any(
+        [
+            severity is not None,
+            filter_pattern is not None,
+            suppress_patterns,
+            suppress_ids,
+            id_patterns,
+            categories,
+            generate_waivers,
+            check,
+            fail_on is not None,
+            waivers is not None,
+            show_waived,
+            report_unused,
+            report_file is not None,
+            summary,
+            group_by is not None,
+        ]
+    )
 
     # --format explicitly provided also implies batch
     if not is_batch:
         source = ctx.get_parameter_source("output_format")
-        if source == click.core.ParameterSource.COMMANDLINE:
+        if source is not None and source.name == "COMMANDLINE":
             is_batch = True
 
     # Non-interactive environment (piped, CliRunner, etc.) implies batch
     import sys
+
     if not is_batch and not sys.stdin.isatty():
         is_batch = True
 
@@ -1255,10 +1251,7 @@ def cli(
         manager = _get_plugin_manager()
 
         try:
-            if plugin:
-                plugin_name = plugin
-            else:
-                plugin_name = manager.auto_detect(log_path)
+            plugin_name = plugin or manager.auto_detect(log_path)
 
             plugin_instance = manager.get_plugin(plugin_name)
             severity_levels = _get_severity_levels(plugin_instance)
@@ -1382,7 +1375,9 @@ def cli(
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(json.dumps(report, indent=2))
         else:
-            console.print("[yellow]Warning:[/yellow] Cannot generate report without a valid plugin.")
+            console.print(
+                "[yellow]Warning:[/yellow] Cannot generate report without a valid plugin."
+            )
 
     # Check exit codes (only on unwaived messages)
     if check:

@@ -1,15 +1,12 @@
 """Tests for Message and FileRef models."""
 
-from sawmill.models.message import Message, FileRef
+from sawmill.models.message import FileRef, Message
 
 
 def test_message_single_line():
     """Single-line message has same start and end line."""
     msg = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: [Test 1-1] error msg",
-        content="error msg"
+        start_line=1, end_line=1, raw_text="ERROR: [Test 1-1] error msg", content="error msg"
     )
     assert msg.start_line == 1
     assert msg.end_line == 1
@@ -25,7 +22,7 @@ def test_message_with_metadata():
         content="deprecated",
         severity="warning",
         message_id="Vivado 12-3523",
-        category="general"
+        category="general",
     )
     assert msg.severity == "warning"
     assert msg.message_id == "Vivado 12-3523"
@@ -36,9 +33,11 @@ def test_message_multiline():
     msg = Message(
         start_line=10,
         end_line=13,
-        raw_text="Error: timing violation\n  slack: -0.5ns\n  path: clk -> reg\n  suggestion: fix it",
+        raw_text=(
+            "Error: timing violation\n  slack: -0.5ns\n  path: clk -> reg\n  suggestion: fix it"
+        ),
         content="timing violation",
-        severity="error"
+        severity="error",
     )
     assert msg.start_line == 10
     assert msg.end_line == 13
@@ -51,7 +50,7 @@ def test_message_matches_filter():
         start_line=1,
         end_line=2,
         raw_text="Error: timing violation\n  slack: -0.5ns",
-        content="timing violation"
+        content="timing violation",
     )
     assert msg.matches_filter(r"slack.*-\d+\.\d+") is True
     assert msg.matches_filter(r"DRC violation") is False
@@ -78,7 +77,7 @@ def test_message_with_file_ref():
         end_line=1,
         raw_text="INFO: synthesizing 'top' [/src/top.v:42]",
         content="synthesizing 'top'",
-        file_ref=ref
+        file_ref=ref,
     )
     assert msg.file_ref is not None
     assert msg.file_ref.path == "/src/top.v"
@@ -87,58 +86,30 @@ def test_message_with_file_ref():
 
 def test_message_matches_filter_case_insensitive():
     """matches_filter should support case-insensitive matching."""
-    msg = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: Test message",
-        content="Test message"
-    )
+    msg = Message(start_line=1, end_line=1, raw_text="ERROR: Test message", content="Test message")
     assert msg.matches_filter(r"error", case_sensitive=False) is True
     assert msg.matches_filter(r"error", case_sensitive=True) is False
 
 
 def test_message_matches_filter_invalid_regex():
     """Invalid regex patterns should return False, not raise."""
-    msg = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="Some message",
-        content="Some message"
-    )
+    msg = Message(start_line=1, end_line=1, raw_text="Some message", content="Some message")
     assert msg.matches_filter(r"[invalid(regex") is False
 
 
 def test_message_equality():
     """Messages with same values should be equal."""
     msg1 = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: test",
-        content="test",
-        severity="error"
+        start_line=1, end_line=1, raw_text="ERROR: test", content="test", severity="error"
     )
     msg2 = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: test",
-        content="test",
-        severity="error"
+        start_line=1, end_line=1, raw_text="ERROR: test", content="test", severity="error"
     )
     assert msg1 == msg2
 
 
 def test_message_inequality():
     """Messages with different values should not be equal."""
-    msg1 = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: test1",
-        content="test1"
-    )
-    msg2 = Message(
-        start_line=1,
-        end_line=1,
-        raw_text="ERROR: test2",
-        content="test2"
-    )
+    msg1 = Message(start_line=1, end_line=1, raw_text="ERROR: test1", content="test1")
+    msg2 = Message(start_line=1, end_line=1, raw_text="ERROR: test2", content="test2")
     assert msg1 != msg2

@@ -17,13 +17,14 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.events import Resize
 from textual.message import Message as TextualMessage
-from textual.widgets import Static, DataTable, Input
 from textual.reactive import reactive
+from textual.widgets import DataTable, Input, Static
+from textual.widgets._data_table import ColumnKey
 
 from sawmill.models.plugin_api import SeverityLevel
+from sawmill.tui.filter_parser import parse_filter
 from sawmill.tui.theme import register_nord_theme
 from sawmill.tui.widgets.footer import SawmillFooter
-from sawmill.tui.filter_parser import parse_filter
 
 if TYPE_CHECKING:
     from sawmill.models.message import Message
@@ -42,6 +43,7 @@ SORT_MODES = [SORT_LINE, SORT_SEVERITY, SORT_ID, SORT_COUNT]
 # ---------------------------------------------------------------------------
 # Widgets
 # ---------------------------------------------------------------------------
+
 
 class MessageStats(Static):
     """Widget displaying message statistics.
@@ -185,7 +187,7 @@ class LogViewer(DataTable):
     def _set_flex_column_width(self, width: int) -> None:
         old_width = self._flex_col_width
         self._flex_col_width = width
-        flex_column = self.columns.get(self.FLEX_COL_KEY)
+        flex_column = self.columns.get(ColumnKey(self.FLEX_COL_KEY))
         if flex_column is not None:
             flex_column.width = width
         # Only notify if the change is large enough to matter for truncation
@@ -217,6 +219,7 @@ class FilterInput(Input):
 # ---------------------------------------------------------------------------
 # Main application
 # ---------------------------------------------------------------------------
+
 
 class SawmillApp(App):
     """Main Textual application for sawmill log analysis.
@@ -270,9 +273,7 @@ class SawmillApp(App):
         }
         # Map numeric keys to severity IDs (sorted ascending by level: 1=lowest)
         self._key_to_severity: dict[int, str] = {}
-        for i, level in enumerate(
-            sorted(self._severity_levels, key=lambda s: s.level), start=1
-        ):
+        for i, level in enumerate(sorted(self._severity_levels, key=lambda s: s.level), start=1):
             self._key_to_severity[i] = level.id
 
         # Widget refs (set in on_mount)
@@ -361,7 +362,7 @@ class SawmillApp(App):
         if not self.log_file:
             return
 
-        from sawmill.core.plugin import PluginManager, NoPluginFoundError, PluginConflictError
+        from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
         from sawmill.models.plugin_api import severity_levels_from_dicts
 
         manager = PluginManager()
@@ -409,7 +410,8 @@ class SawmillApp(App):
         # Apply per-severity toggle filter
         if effective_sev:
             filtered = [
-                m for m in filtered
+                m
+                for m in filtered
                 if m.severity is None or effective_sev.get(m.severity.lower(), True)
             ]
 
@@ -417,7 +419,8 @@ class SawmillApp(App):
         if parsed.message_id:
             id_pattern = parsed.message_id
             filtered = [
-                m for m in filtered
+                m
+                for m in filtered
                 if m.message_id is not None and fnmatch.fnmatch(m.message_id, id_pattern)
             ]
 
@@ -480,8 +483,7 @@ class SawmillApp(App):
 
         self._stats_widget.counts = counts
         self._stats_widget.active = {
-            level.id: self.severity_filter.get(level.id, True)
-            if self.severity_filter else True
+            level.id: self.severity_filter.get(level.id, True) if self.severity_filter else True
             for level in self._severity_levels
         }
 
@@ -571,12 +573,15 @@ class SawmillApp(App):
             for i, msg in enumerate(self._filtered_messages):
                 content = self._log_viewer.truncate_text(msg.content)
                 self._log_viewer.update_cell(
-                    str(i), "message", content, update_width=False,
+                    str(i),
+                    "message",
+                    content,
+                    update_width=False,
                 )
 
     # -- Actions -------------------------------------------------------------
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         self.exit()
 
     def action_clear_filter(self) -> None:
@@ -611,9 +616,11 @@ class SawmillApp(App):
         if not sev_id:
             return
 
-        current = dict(self.severity_filter) if self.severity_filter else {
-            level.id: True for level in self._severity_levels
-        }
+        current = (
+            dict(self.severity_filter)
+            if self.severity_filter
+            else {level.id: True for level in self._severity_levels}
+        )
         current[sev_id] = not current.get(sev_id, True)
         self.severity_filter = current
 
@@ -629,19 +636,19 @@ class SawmillApp(App):
     def action_toggle_sev_4(self) -> None:
         self._toggle_severity(4)
 
-    def action_screenshot(self) -> None:
+    def action_screenshot(self, filename: str | None = None, path: str | None = None) -> None:
         """Save a screenshot as SVG (Textual built-in)."""
-        path = self.save_screenshot()
-        self.notify(f"Screenshot saved: {path}")
+        saved = self.save_screenshot(filename=filename, path=path)
+        self.notify(f"Screenshot saved: {saved}")
 
     def action_open_filter(self) -> None:
         """Open the filter modal dialog."""
         from sawmill.tui.widgets.filter_modal import FilterModal
 
         current_filter = {
-            "severity_filter": self.severity_filter.copy() if self.severity_filter else {
-                level.id: True for level in self._severity_levels
-            },
+            "severity_filter": self.severity_filter.copy()
+            if self.severity_filter
+            else {level.id: True for level in self._severity_levels},
             "pattern": self.filter_pattern,
         }
         self.push_screen(
@@ -663,6 +670,7 @@ class SawmillApp(App):
 # Entry point helper
 # ---------------------------------------------------------------------------
 
+
 def run_tui(
     log_file: Path | None = None,
     plugin_name: str | None = None,
@@ -678,7 +686,7 @@ def run_tui(
     app = SawmillApp(
         log_file=log_file,
         plugin_name=plugin_name,
-        severity_levels=severity_levels,
+        severity_levels=severity_levels or [],
     )
     app.run()
 

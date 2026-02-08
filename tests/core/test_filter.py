@@ -4,8 +4,6 @@ Tests cover single filter matching, AND/OR modes, suppressions,
 and edge cases like invalid regex and disabled filters.
 """
 
-import pytest
-
 from sawmill.core.filter import FilterEngine
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import Message
@@ -17,9 +15,19 @@ class TestApplyFilter:
     def test_single_filter_match(self):
         """Single filter should match against raw_text."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: test", content="test", severity="error"),
-            Message(start_line=2, end_line=2, raw_text="Info: test", content="test", severity="info"),
-            Message(start_line=3, end_line=3, raw_text="Error: another", content="another", severity="error"),
+            Message(
+                start_line=1, end_line=1, raw_text="Error: test", content="test", severity="error"
+            ),
+            Message(
+                start_line=2, end_line=2, raw_text="Info: test", content="test", severity="info"
+            ),
+            Message(
+                start_line=3,
+                end_line=3,
+                raw_text="Error: another",
+                content="another",
+                severity="error",
+            ),
         ]
         engine = FilterEngine()
         results = engine.apply_filter(r"^Error:", messages)
@@ -100,9 +108,27 @@ class TestApplyFiltersAndMode:
     def test_multiple_filters_and_mode(self):
         """AND mode should require all enabled filters to match."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: timing slack -0.5", content="timing slack -0.5", severity="error"),
-            Message(start_line=2, end_line=2, raw_text="Error: DRC violation", content="DRC violation", severity="error"),
-            Message(start_line=3, end_line=3, raw_text="Warning: timing slack -0.2", content="timing slack -0.2", severity="warning"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="Error: timing slack -0.5",
+                content="timing slack -0.5",
+                severity="error",
+            ),
+            Message(
+                start_line=2,
+                end_line=2,
+                raw_text="Error: DRC violation",
+                content="DRC violation",
+                severity="error",
+            ),
+            Message(
+                start_line=3,
+                end_line=3,
+                raw_text="Warning: timing slack -0.2",
+                content="timing slack -0.2",
+                severity="warning",
+            ),
         ]
         filters = [
             FilterDefinition(id="1", name="Errors", pattern=r"^Error:", enabled=True),
@@ -147,8 +173,15 @@ class TestApplyFiltersAndMode:
     def test_and_mode_with_complex_pattern(self):
         """Complex regex patterns should work in AND mode."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="ERROR: [Vivado 12-3523] timing slack -0.5ns", content="test"),
-            Message(start_line=2, end_line=2, raw_text="ERROR: [DRC 1-1] simple error", content="test"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="ERROR: [Vivado 12-3523] timing slack -0.5ns",
+                content="test",
+            ),
+            Message(
+                start_line=2, end_line=2, raw_text="ERROR: [DRC 1-1] simple error", content="test"
+            ),
         ]
         filters = [
             FilterDefinition(id="1", name="Vivado ID", pattern=r"\[Vivado \d+-\d+\]", enabled=True),
@@ -165,7 +198,12 @@ class TestApplyFiltersAndMode:
     def test_and_mode_all_filters_match(self):
         """Message matching all enabled filters should be included."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="ERROR: timing critical", content="timing critical"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="ERROR: timing critical",
+                content="timing critical",
+            ),
         ]
         filters = [
             FilterDefinition(id="1", name="Errors", pattern=r"ERROR", enabled=True),
@@ -238,9 +276,27 @@ class TestApplySuppressions:
     def test_suppressions_remove_matches(self):
         """Suppression patterns should remove matching messages."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: important", content="important", severity="error"),
-            Message(start_line=2, end_line=2, raw_text="Info: noisy startup", content="noisy startup", severity="info"),
-            Message(start_line=3, end_line=3, raw_text="Warning: also important", content="also important", severity="warning"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="Error: important",
+                content="important",
+                severity="error",
+            ),
+            Message(
+                start_line=2,
+                end_line=2,
+                raw_text="Info: noisy startup",
+                content="noisy startup",
+                severity="info",
+            ),
+            Message(
+                start_line=3,
+                end_line=3,
+                raw_text="Warning: also important",
+                content="also important",
+                severity="warning",
+            ),
         ]
 
         engine = FilterEngine()
@@ -292,8 +348,18 @@ class TestApplySuppressions:
     def test_suppressions_with_regex(self):
         """Suppression patterns should support full regex."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="INFO: [Common 17-55] startup noise", content="startup noise"),
-            Message(start_line=2, end_line=2, raw_text="ERROR: [DRC 1-1] real error", content="real error"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="INFO: [Common 17-55] startup noise",
+                content="startup noise",
+            ),
+            Message(
+                start_line=2,
+                end_line=2,
+                raw_text="ERROR: [DRC 1-1] real error",
+                content="real error",
+            ),
         ]
 
         engine = FilterEngine()

@@ -11,7 +11,6 @@ They are distinct from suppressions which are for display filtering.
 import hashlib
 import re
 from pathlib import Path
-from typing import Optional
 
 import tomli
 
@@ -33,9 +32,9 @@ class WaiverValidationError(Exception):
     def __init__(
         self,
         message: str,
-        line: Optional[int] = None,
-        path: Optional[Path] = None,
-        waiver_index: Optional[int] = None
+        line: int | None = None,
+        path: Path | None = None,
+        waiver_index: int | None = None,
     ):
         self.line = line
         self.path = path
@@ -49,10 +48,7 @@ class WaiverValidationError(Exception):
             parts.append(f"waiver entry {waiver_index + 1}")
         if line is not None:
             parts.append(f"at line {line}")
-        if parts:
-            full_message = f"{' '.join(parts)}: {message}"
-        else:
-            full_message = message
+        full_message = f"{' '.join(parts)}: {message}" if parts else message
 
         super().__init__(full_message)
 
@@ -107,15 +103,11 @@ class WaiverLoader:
             data = tomli.loads(content)
         except tomli.TOMLDecodeError as e:
             line = self._extract_line_number(str(e))
-            raise WaiverValidationError(
-                f"Invalid TOML: {e}",
-                line=line,
-                path=path
-            ) from e
+            raise WaiverValidationError(f"Invalid TOML: {e}", line=line, path=path) from e
 
         return self._parse_waiver_file(data, path)
 
-    def load_from_string(self, content: str, path: Optional[Path] = None) -> WaiverFile:
+    def load_from_string(self, content: str, path: Path | None = None) -> WaiverFile:
         """Load waivers from a TOML string.
 
         Args:
@@ -133,15 +125,11 @@ class WaiverLoader:
             data = tomli.loads(content)
         except tomli.TOMLDecodeError as e:
             line = self._extract_line_number(str(e))
-            raise WaiverValidationError(
-                f"Invalid TOML: {e}",
-                line=line,
-                path=path
-            ) from e
+            raise WaiverValidationError(f"Invalid TOML: {e}", line=line, path=path) from e
 
         return self._parse_waiver_file(data, path)
 
-    def _parse_waiver_file(self, data: dict, path: Optional[Path]) -> WaiverFile:
+    def _parse_waiver_file(self, data: dict, path: Path | None) -> WaiverFile:
         """Parse waiver file data into WaiverFile instance.
 
         Args:
@@ -170,18 +158,9 @@ class WaiverLoader:
             waiver = self._parse_waiver_entry(entry, i, path)
             waivers.append(waiver)
 
-        return WaiverFile(
-            tool=tool,
-            waivers=waivers,
-            path=str(path) if path else None
-        )
+        return WaiverFile(tool=tool, waivers=waivers, path=str(path) if path else None)
 
-    def _parse_waiver_entry(
-        self,
-        entry: dict,
-        index: int,
-        path: Optional[Path]
-    ) -> Waiver:
+    def _parse_waiver_entry(self, entry: dict, index: int, path: Path | None) -> Waiver:
         """Parse and validate a single waiver entry.
 
         Args:
@@ -201,7 +180,7 @@ class WaiverLoader:
             raise WaiverValidationError(
                 f"Missing required fields: {', '.join(sorted(missing_fields))}",
                 path=path,
-                waiver_index=index
+                waiver_index=index,
             )
 
         # Validate type field
@@ -211,16 +190,14 @@ class WaiverLoader:
                 f"Invalid waiver type '{waiver_type}'. "
                 f"Must be one of: {', '.join(sorted(self.VALID_TYPES))}",
                 path=path,
-                waiver_index=index
+                waiver_index=index,
             )
 
         # Validate pattern based on type
         pattern = entry.get("pattern")
         if not pattern or not isinstance(pattern, str):
             raise WaiverValidationError(
-                "Pattern must be a non-empty string",
-                path=path,
-                waiver_index=index
+                "Pattern must be a non-empty string", path=path, waiver_index=index
             )
 
         # For pattern type, validate regex
@@ -229,36 +206,28 @@ class WaiverLoader:
                 re.compile(pattern)
             except re.error as e:
                 raise WaiverValidationError(
-                    f"Invalid regex pattern: {e}",
-                    path=path,
-                    waiver_index=index
+                    f"Invalid regex pattern: {e}", path=path, waiver_index=index
                 ) from e
 
         # Validate reason
         reason = entry.get("reason")
         if not reason or not isinstance(reason, str):
             raise WaiverValidationError(
-                "Reason must be a non-empty string",
-                path=path,
-                waiver_index=index
+                "Reason must be a non-empty string", path=path, waiver_index=index
             )
 
         # Validate author
         author = entry.get("author")
         if not author or not isinstance(author, str):
             raise WaiverValidationError(
-                "Author must be a non-empty string",
-                path=path,
-                waiver_index=index
+                "Author must be a non-empty string", path=path, waiver_index=index
             )
 
         # Validate date
         date = entry.get("date")
         if not date or not isinstance(date, str):
             raise WaiverValidationError(
-                "Date must be a non-empty string",
-                path=path,
-                waiver_index=index
+                "Date must be a non-empty string", path=path, waiver_index=index
             )
 
         # Create and return Waiver instance
@@ -269,10 +238,10 @@ class WaiverLoader:
             author=author,
             date=date,
             expires=entry.get("expires"),
-            ticket=entry.get("ticket")
+            ticket=entry.get("ticket"),
         )
 
-    def _extract_line_number(self, error_message: str) -> Optional[int]:
+    def _extract_line_number(self, error_message: str) -> int | None:
         """Extract line number from tomli error message.
 
         Args:
@@ -336,7 +305,7 @@ class WaiverMatcher:
         """Get the list of waivers."""
         return self._waivers
 
-    def is_waived(self, message: Message) -> Optional[Waiver]:
+    def is_waived(self, message: Message) -> Waiver | None:
         """Check if a message is waived.
 
         Waivers are checked in priority order:
@@ -515,7 +484,7 @@ class WaiverGenerator:
             for level in severity_levels:
                 self._severity_level_map[level.id.lower()] = level.level
 
-    def generate(self, messages: list[Message], tool: Optional[str] = None) -> str:
+    def generate(self, messages: list[Message], tool: str | None = None) -> str:
         """Generate waiver TOML content from messages.
 
         Only includes messages with severity level >= min_waiver_level

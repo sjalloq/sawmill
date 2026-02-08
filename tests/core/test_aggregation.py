@@ -8,8 +8,8 @@ from sawmill.core.aggregation import (
     SeverityStats,
     make_severity_sort_key,
 )
-from sawmill.models.plugin_api import SeverityLevel
 from sawmill.models.message import FileRef, Message
+from sawmill.models.plugin_api import SeverityLevel
 
 
 # Module-level fixture for standard severity levels

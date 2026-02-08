@@ -108,7 +108,11 @@ class TestPluginInfoContent:
         assert result.exit_code == 0
         # The description mentions synthesis or implementation
         output_lower = result.output.lower()
-        assert "synthesis" in output_lower or "implementation" in output_lower or "vivado" in output_lower
+        assert (
+            "synthesis" in output_lower
+            or "implementation" in output_lower
+            or "vivado" in output_lower
+        )
 
     def test_vivado_info_shows_filters(self):
         """Vivado plugin info should show filter definitions."""

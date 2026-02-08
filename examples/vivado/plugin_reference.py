@@ -5,9 +5,9 @@ This file serves as documentation and a template for the built-in Vivado plugin.
 The actual implementation will be in sawmill/plugins/vivado.py
 """
 
-from pathlib import Path
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
+from pathlib import Path
 
 # These would be imported from sawmill.plugin
 # from sawmill.plugin import SawmillPlugin, hookimpl
@@ -17,6 +17,7 @@ import re
 @dataclass
 class ParsedMessage:
     """Structured representation of a parsed log message."""
+
     severity: str  # info, warning, critical_warning, error
     message_id: str  # e.g., "Vivado 12-3523", "Synth 8-6157"
     content: str  # The message text
@@ -28,6 +29,7 @@ class ParsedMessage:
 @dataclass
 class FileRef:
     """Reference to a source file location."""
+
     path: str
     line: int
 
@@ -35,6 +37,7 @@ class FileRef:
 @dataclass
 class FilterDefinition:
     """Definition of a log filter."""
+
     id: str
     name: str
     pattern: str
@@ -47,6 +50,7 @@ class FilterDefinition:
 @dataclass
 class MessageBoundary:
     """Rules for grouping multi-line messages."""
+
     start_pattern: str
     continuation_pattern: str
     max_lines: int = 20
@@ -70,11 +74,11 @@ class VivadoPlugin:
 
     # Message ID pattern: [Category Number-Number]
     MESSAGE_PATTERN = re.compile(
-        r'^(INFO|WARNING|CRITICAL WARNING|ERROR):\s*\[([^\]]+)\]\s*(.+?)(?:\s*\[([^\]]+:\d+)\])?$'
+        r"^(INFO|WARNING|CRITICAL WARNING|ERROR):\s*\[([^\]]+)\]\s*(.+?)(?:\s*\[([^\]]+:\d+)\])?$"
     )
 
     # File reference pattern: [/path/to/file.v:123]
-    FILE_REF_PATTERN = re.compile(r'\[([^\]]+\.(v|vhd|sv|xdc|tcl)):(\d+)\]')
+    FILE_REF_PATTERN = re.compile(r"\[([^\]]+\.(v|vhd|sv|xdc|tcl)):(\d+)\]")
 
     # @hookimpl
     def can_handle(self, path: Path, content: str) -> float:
@@ -94,7 +98,7 @@ class VivadoPlugin:
             score = 0.85
 
         # Check for Vivado-style message IDs
-        if re.search(r'\[(Synth|Vivado|Timing|IP_Flow|Constraints)\s+\d+-\d+\]', content[:2000]):
+        if re.search(r"\[(Synth|Vivado|Timing|IP_Flow|Constraints)\s+\d+-\d+\]", content[:2000]):
             score = max(score, 0.8)
 
         return score
@@ -131,7 +135,6 @@ class VivadoPlugin:
                 category="severity",
                 description="All warning messages",
             ),
-
             # Timing-related filters
             FilterDefinition(
                 id="timing-failures",
@@ -145,13 +148,15 @@ class VivadoPlugin:
             FilterDefinition(
                 id="timing-summary",
                 name="Timing Summary",
-                pattern=r"(Design Timing Summary|Clock Summary|All user specified timing constraints)",
+                pattern=(
+                    r"(Design Timing Summary|Clock Summary"
+                    r"|All user specified timing constraints)"
+                ),
                 severity="info",
                 enabled_by_default=False,
                 category="timing",
                 description="Timing summary and status",
             ),
-
             # Synthesis filters
             FilterDefinition(
                 id="synthesis-warnings",
@@ -180,7 +185,6 @@ class VivadoPlugin:
                 category="synthesis",
                 description="State machine encoding",
             ),
-
             # Constraint filters
             FilterDefinition(
                 id="constraint-issues",
@@ -191,7 +195,6 @@ class VivadoPlugin:
                 category="constraints",
                 description="XDC constraint problems",
             ),
-
             # DRC filters
             FilterDefinition(
                 id="drc-issues",
@@ -202,7 +205,6 @@ class VivadoPlugin:
                 category="drc",
                 description="Design Rule Check messages",
             ),
-
             # IP filters
             FilterDefinition(
                 id="ip-generation",
@@ -262,7 +264,7 @@ class VivadoPlugin:
         # Parse file reference if present
         file_ref = None
         if file_ref_str:
-            ref_match = re.match(r'(.+):(\d+)', file_ref_str)
+            ref_match = re.match(r"(.+):(\d+)", file_ref_str)
             if ref_match:
                 file_ref = FileRef(path=ref_match.group(1), line=int(ref_match.group(2)))
 

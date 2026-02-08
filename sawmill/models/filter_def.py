@@ -6,7 +6,6 @@ This model represents filter patterns that can be applied to log messages.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -32,8 +31,8 @@ class FilterDefinition(BaseModel):
     name: str
     pattern: str
     enabled: bool = True
-    source: Optional[str] = None
-    description: Optional[str] = None
+    source: str | None = None
+    description: str | None = None
 
     @field_validator("pattern")
     @classmethod

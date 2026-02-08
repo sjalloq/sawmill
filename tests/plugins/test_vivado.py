@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from sawmill.plugins.vivado import VivadoPlugin
 
 
@@ -68,8 +66,7 @@ class TestVivadoLoadAndParse:
         plugin = VivadoPlugin()
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "WARNING: [Vivado 12-3523] Component name change\n"
-            "INFO: [Synth 8-1] Done\n"
+            "WARNING: [Vivado 12-3523] Component name change\nINFO: [Synth 8-1] Done\n"
         )
 
         messages = plugin.load_and_parse(log_file)

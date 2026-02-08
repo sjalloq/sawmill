@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import FileRef, Message
@@ -80,7 +79,7 @@ class VivadoPlugin(SawmillPlugin):
 
         try:
             # Read first 50 lines to check for Vivado signature
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
+            with open(path, encoding="utf-8", errors="replace") as f:
                 lines = []
                 for i, line in enumerate(f):
                     if i >= 50:
@@ -95,11 +94,22 @@ class VivadoPlugin(SawmillPlugin):
 
             # Medium-high confidence: Multiple Vivado-style message IDs
             message_ids = _MESSAGE_ID_PATTERN.findall(content)
-            vivado_categories = {"Synth", "Vivado", "IP_Flow", "Common", "DRC", "Timing",
-                                "Route", "Opt", "Physopt", "Power", "Device", "Project",
-                                "Constraints"}
-            vivado_matches = sum(1 for mid in message_ids
-                                if mid.split()[0] in vivado_categories)
+            vivado_categories = {
+                "Synth",
+                "Vivado",
+                "IP_Flow",
+                "Common",
+                "DRC",
+                "Timing",
+                "Route",
+                "Opt",
+                "Physopt",
+                "Power",
+                "Device",
+                "Project",
+                "Constraints",
+            }
+            vivado_matches = sum(1 for mid in message_ids if mid.split()[0] in vivado_categories)
 
             if vivado_matches >= 3:
                 return 0.85
@@ -143,7 +153,7 @@ class VivadoPlugin(SawmillPlugin):
         messages: list[Message] = []
 
         try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
+            with open(path, encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
         except Exception:
             return []
@@ -176,16 +186,18 @@ class VivadoPlugin(SawmillPlugin):
                 file_ref = self.extract_file_reference(raw_text)
                 category = self._extract_category(message_id)
 
-                messages.append(Message(
-                    start_line=start_line,
-                    end_line=end_line,
-                    raw_text=raw_text,
-                    content=content,
-                    severity=severity,
-                    message_id=message_id,
-                    category=category,
-                    file_ref=file_ref,
-                ))
+                messages.append(
+                    Message(
+                        start_line=start_line,
+                        end_line=end_line,
+                        raw_text=raw_text,
+                        content=content,
+                        severity=severity,
+                        message_id=message_id,
+                        category=category,
+                        file_ref=file_ref,
+                    )
+                )
 
                 i = j
             else:
@@ -356,7 +368,7 @@ class VivadoPlugin(SawmillPlugin):
         ]
 
     @hookimpl
-    def extract_file_reference(self, content: str) -> Optional[FileRef]:
+    def extract_file_reference(self, content: str) -> FileRef | None:
         """Extract a file reference from message content.
 
         Vivado logs include file references in formats like:
@@ -385,7 +397,7 @@ class VivadoPlugin(SawmillPlugin):
 
         return None
 
-    def _detect_severity(self, line: str) -> Optional[str]:
+    def _detect_severity(self, line: str) -> str | None:
         """Detect the severity level of a log line.
 
         Args:
@@ -418,18 +430,13 @@ class VivadoPlugin(SawmillPlugin):
             return False
 
         # New messages start with severity keywords
-        for pattern in _SEVERITY_PATTERNS.values():
-            if pattern.match(line):
-                return False
+        if any(pattern.match(line) for pattern in _SEVERITY_PATTERNS.values()):
+            return False
 
         # Check continuation patterns
-        for pattern in _CONTINUATION_PATTERNS:
-            if pattern.match(line):
-                return True
+        return any(pattern.match(line) for pattern in _CONTINUATION_PATTERNS)
 
-        return False
-
-    def _extract_message_id(self, line: str) -> Optional[str]:
+    def _extract_message_id(self, line: str) -> str | None:
         """Extract the message ID from a log line.
 
         Args:
@@ -439,9 +446,7 @@ class VivadoPlugin(SawmillPlugin):
             Message ID string (e.g., "Synth 8-6157") or None.
         """
         match = _MESSAGE_ID_PATTERN.search(line)
-        if match:
-            return match.group(1)
-        return None
+        return match.group(1) if match else None
 
     def _extract_content(self, line: str, severity: str) -> str:
         """Extract the message content without severity prefix.
@@ -466,7 +471,7 @@ class VivadoPlugin(SawmillPlugin):
 
         return line.strip()
 
-    def _extract_category(self, message_id: Optional[str]) -> Optional[str]:
+    def _extract_category(self, message_id: str | None) -> str | None:
         """Extract the category from a message ID.
 
         Args:
@@ -479,7 +484,4 @@ class VivadoPlugin(SawmillPlugin):
             return None
 
         parts = message_id.split()
-        if parts:
-            return parts[0].lower()
-
-        return None
+        return parts[0].lower() if parts else None

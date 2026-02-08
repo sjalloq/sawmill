@@ -2,9 +2,6 @@
 
 from pathlib import Path
 
-import pluggy
-import pytest
-
 from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,

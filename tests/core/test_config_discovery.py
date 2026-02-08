@@ -1,10 +1,8 @@
 """Tests for configuration discovery and merging."""
 
-from pathlib import Path
-
 import pytest
 
-from sawmill.core.config import ConfigLoader, Config, ConfigError
+from sawmill.core.config import ConfigError, ConfigLoader
 
 
 class TestDiscoverConfigs:
@@ -38,7 +36,7 @@ class TestDiscoverConfigs:
         """Should find user config in ~/.config/sawmill/."""
         user_config_dir = tmp_path / ".config" / "sawmill"
         user_config_dir.mkdir(parents=True)
-        (user_config_dir / "config.toml").write_text('[output]\ncolor = false\n')
+        (user_config_dir / "config.toml").write_text("[output]\ncolor = false\n")
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path))
@@ -152,9 +150,7 @@ class TestLoadMerged:
 
     def test_load_merged_single_config(self, tmp_path, monkeypatch):
         """Should load values from a single config file."""
-        (tmp_path / "sawmill.toml").write_text(
-            '[output]\nformat = "json"\ncolor = false\n'
-        )
+        (tmp_path / "sawmill.toml").write_text('[output]\nformat = "json"\ncolor = false\n')
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
@@ -173,9 +169,7 @@ class TestLoadMerged:
         # User config
         user_config = tmp_path / ".config" / "sawmill"
         user_config.mkdir(parents=True)
-        (user_config / "config.toml").write_text(
-            '[output]\nformat = "text"\ncolor = false\n'
-        )
+        (user_config / "config.toml").write_text('[output]\nformat = "text"\ncolor = false\n')
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path))
@@ -216,8 +210,7 @@ class TestLoadMerged:
         user_config = tmp_path / ".config" / "sawmill"
         user_config.mkdir(parents=True)
         (user_config / "config.toml").write_text(
-            '[output]\nformat = "text"\ncolor = false\n'
-            '[general]\ndefault_plugin = "generic"\n'
+            '[output]\nformat = "text"\ncolor = false\n[general]\ndefault_plugin = "generic"\n'
         )
 
         # Git root config (middle)
@@ -225,8 +218,7 @@ class TestLoadMerged:
         git_root.mkdir()
         (git_root / ".git").mkdir()
         (git_root / "sawmill.toml").write_text(
-            '[output]\nformat = "json"\n'
-            '[general]\ndefault_plugin = "vivado"\n'
+            '[output]\nformat = "json"\n[general]\ndefault_plugin = "vivado"\n'
         )
 
         # Local config (highest)
@@ -249,14 +241,10 @@ class TestLoadMerged:
         # User config with patterns
         user_config = tmp_path / ".config" / "sawmill"
         user_config.mkdir(parents=True)
-        (user_config / "config.toml").write_text(
-            '[suppress]\npatterns = ["noise", "debug"]\n'
-        )
+        (user_config / "config.toml").write_text('[suppress]\npatterns = ["noise", "debug"]\n')
 
         # Local config with different patterns
-        (tmp_path / "sawmill.toml").write_text(
-            '[suppress]\npatterns = ["warning"]\n'
-        )
+        (tmp_path / "sawmill.toml").write_text('[suppress]\npatterns = ["warning"]\n')
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path))
@@ -270,7 +258,7 @@ class TestLoadMerged:
 
     def test_invalid_toml_raises_config_error(self, tmp_path, monkeypatch):
         """Should raise ConfigError for invalid TOML."""
-        (tmp_path / "sawmill.toml").write_text('invalid toml [[[')
+        (tmp_path / "sawmill.toml").write_text("invalid toml [[[")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
@@ -282,7 +270,7 @@ class TestLoadMerged:
     def test_invalid_toml_includes_path_in_error(self, tmp_path, monkeypatch):
         """ConfigError should include path to problematic file."""
         config_path = tmp_path / "sawmill.toml"
-        config_path.write_text('invalid = [unclosed')
+        config_path.write_text("invalid = [unclosed")
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)

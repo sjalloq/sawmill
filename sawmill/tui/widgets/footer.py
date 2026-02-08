@@ -51,20 +51,20 @@ class SawmillFooter(Widget):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self._bindings = bindings or []
+        self._footer_bindings = bindings or []
 
     def compose(self) -> ComposeResult:
         with HorizontalGroup():
-            for key, label in self._bindings:
+            for key, label in self._footer_bindings:
                 yield Static(f" {key} ", classes="footer-key")
                 yield Static(label, classes="footer-label")
 
     def update_bindings(self, bindings: list[tuple[str, str]]) -> None:
         """Replace the displayed bindings and re-render."""
-        self._bindings = bindings
+        self._footer_bindings = bindings
         self.query("HorizontalGroup").remove()
         self.mount(HorizontalGroup())
         group = self.query_one(HorizontalGroup)
-        for key, label in self._bindings:
+        for key, label in self._footer_bindings:
             group.mount(Static(f" {key} ", classes="footer-key"))
             group.mount(Static(label, classes="footer-label"))

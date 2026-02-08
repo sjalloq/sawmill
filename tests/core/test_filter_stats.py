@@ -6,8 +6,6 @@ This module tests filter statistics functionality including:
 - Per-filter match breakdowns
 """
 
-import pytest
-
 from sawmill.core.filter import FilterEngine, FilterStats
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import Message
@@ -105,10 +103,7 @@ class TestGetStatsPercentage:
         """Test accurate percentage calculation."""
         messages = [
             Message(
-                start_line=i,
-                end_line=i,
-                raw_text="Match" if i < 25 else "NoMatch",
-                content="..."
+                start_line=i, end_line=i, raw_text="Match" if i < 25 else "NoMatch", content="..."
             )
             for i in range(100)
         ]
@@ -152,10 +147,7 @@ class TestGetStatsPercentage:
         # 3 out of 7 = 42.857...%
         messages = [
             Message(
-                start_line=i,
-                end_line=i,
-                raw_text="Match" if i < 3 else "NoMatch",
-                content="..."
+                start_line=i, end_line=i, raw_text="Match" if i < 3 else "NoMatch", content="..."
             )
             for i in range(7)
         ]
@@ -174,9 +166,19 @@ class TestGetStatsPerFilter:
     def test_per_filter_stats(self):
         """Test per-filter match count breakdown."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: test", content="test", severity="error"),
-            Message(start_line=2, end_line=2, raw_text="Warning: test", content="test", severity="warning"),
-            Message(start_line=3, end_line=3, raw_text="Info: test", content="test", severity="info"),
+            Message(
+                start_line=1, end_line=1, raw_text="Error: test", content="test", severity="error"
+            ),
+            Message(
+                start_line=2,
+                end_line=2,
+                raw_text="Warning: test",
+                content="test",
+                severity="warning",
+            ),
+            Message(
+                start_line=3, end_line=3, raw_text="Info: test", content="test", severity="info"
+            ),
         ]
         filters = [
             FilterDefinition(id="errors", name="Errors", pattern=r"^Error:", enabled=True),
@@ -228,9 +230,18 @@ class TestGetStatsPerFilter:
     def test_per_filter_overlapping_patterns(self):
         """Per-filter counts should work with overlapping patterns."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: timing violation", content="timing violation"),
-            Message(start_line=2, end_line=2, raw_text="Warning: timing slack", content="timing slack"),
-            Message(start_line=3, end_line=3, raw_text="Error: DRC violation", content="DRC violation"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="Error: timing violation",
+                content="timing violation",
+            ),
+            Message(
+                start_line=2, end_line=2, raw_text="Warning: timing slack", content="timing slack"
+            ),
+            Message(
+                start_line=3, end_line=3, raw_text="Error: DRC violation", content="DRC violation"
+            ),
         ]
         filters = [
             FilterDefinition(id="timing", name="Timing", pattern=r"timing", enabled=True),
@@ -268,40 +279,52 @@ class TestGetStatsIntegration:
         """Test stats with Vivado-like log messages."""
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="INFO: [Synth 8-6157] synthesizing module 'top'",
                 content="synthesizing module 'top'",
-                severity="info", message_id="Synth 8-6157"
+                severity="info",
+                message_id="Synth 8-6157",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="WARNING: [Vivado 12-3523] Component name change",
                 content="Component name change",
-                severity="warning", message_id="Vivado 12-3523"
+                severity="warning",
+                message_id="Vivado 12-3523",
             ),
             Message(
-                start_line=3, end_line=3,
+                start_line=3,
+                end_line=3,
                 raw_text="ERROR: [Route 35-9] Routing failed",
                 content="Routing failed",
-                severity="error", message_id="Route 35-9"
+                severity="error",
+                message_id="Route 35-9",
             ),
             Message(
-                start_line=4, end_line=4,
+                start_line=4,
+                end_line=4,
                 raw_text="CRITICAL WARNING: [Constraints 18-4427] Override warning",
                 content="Override warning",
-                severity="critical_warning", message_id="Constraints 18-4427"
+                severity="critical_warning",
+                message_id="Constraints 18-4427",
             ),
             Message(
-                start_line=5, end_line=5,
+                start_line=5,
+                end_line=5,
                 raw_text="INFO: [Common 17-55] Status update",
                 content="Status update",
-                severity="info", message_id="Common 17-55"
+                severity="info",
+                message_id="Common 17-55",
             ),
         ]
         filters = [
             FilterDefinition(id="errors", name="Errors", pattern=r"^ERROR:", enabled=True),
             FilterDefinition(id="warnings", name="Warnings", pattern=r"^WARNING:", enabled=True),
-            FilterDefinition(id="critical", name="Critical", pattern=r"^CRITICAL WARNING:", enabled=True),
+            FilterDefinition(
+                id="critical", name="Critical", pattern=r"^CRITICAL WARNING:", enabled=True
+            ),
         ]
 
         engine = FilterEngine()
@@ -317,9 +340,23 @@ class TestGetStatsIntegration:
     def test_stats_single_filter(self):
         """Test stats with single filter for common use case."""
         messages = [
-            Message(start_line=1, end_line=1, raw_text="ERROR: first error", content="first error", severity="error"),
-            Message(start_line=2, end_line=2, raw_text="ERROR: second error", content="second error", severity="error"),
-            Message(start_line=3, end_line=3, raw_text="INFO: status", content="status", severity="info"),
+            Message(
+                start_line=1,
+                end_line=1,
+                raw_text="ERROR: first error",
+                content="first error",
+                severity="error",
+            ),
+            Message(
+                start_line=2,
+                end_line=2,
+                raw_text="ERROR: second error",
+                content="second error",
+                severity="error",
+            ),
+            Message(
+                start_line=3, end_line=3, raw_text="INFO: status", content="status", severity="info"
+            ),
         ]
         filters = [
             FilterDefinition(id="errors", name="Errors", pattern=r"^ERROR:", enabled=True),

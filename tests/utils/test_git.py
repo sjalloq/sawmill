@@ -1,10 +1,5 @@
 """Tests for git utility functions."""
 
-import os
-from pathlib import Path
-
-import pytest
-
 
 class TestFindGitRoot:
     """Tests for find_git_root function."""
@@ -21,6 +16,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() == tmp_path
 
     def test_find_git_root_not_in_repo(self, tmp_path, monkeypatch):
@@ -31,6 +27,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() is None
 
     def test_find_git_root_with_start_path(self, tmp_path, monkeypatch):
@@ -44,6 +41,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         result = find_git_root(subdir)
         assert result == tmp_path
 
@@ -54,6 +52,7 @@ class TestFindGitRoot:
         monkeypatch.setenv("SAWMILL_GIT_ROOT", str(override_path))
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() == override_path
 
     def test_git_root_env_override_takes_precedence(self, tmp_path, monkeypatch):
@@ -67,6 +66,7 @@ class TestFindGitRoot:
         monkeypatch.setenv("SAWMILL_GIT_ROOT", str(override_path))
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() == override_path
 
     def test_find_git_root_at_repo_root(self, tmp_path, monkeypatch):
@@ -78,6 +78,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() == tmp_path
 
     def test_find_git_root_in_nested_directories(self, tmp_path, monkeypatch):
@@ -91,6 +92,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         assert find_git_root() == tmp_path
 
     def test_find_git_root_stops_at_git_dir(self, tmp_path, monkeypatch):
@@ -111,6 +113,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         # Should find inner repo, not outer
         assert find_git_root() == inner_repo
 
@@ -120,6 +123,7 @@ class TestFindGitRoot:
         monkeypatch.setenv("SAWMILL_GIT_ROOT", str(nonexistent))
 
         from sawmill.utils.git import find_git_root
+
         # Should return the path even if it doesn't exist
         assert find_git_root() == nonexistent
 
@@ -133,6 +137,7 @@ class TestFindGitRoot:
         monkeypatch.delenv("SAWMILL_GIT_ROOT", raising=False)
 
         from sawmill.utils.git import find_git_root
+
         # .git file is used for git worktrees - it should still be recognized
         # For simplicity, exists() returns True for files too
         assert find_git_root() == tmp_path

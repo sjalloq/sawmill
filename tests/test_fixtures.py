@@ -1,7 +1,8 @@
 """Tests to verify that conftest fixtures work correctly."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 def test_project_root_fixture(project_root):

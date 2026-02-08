@@ -1,15 +1,13 @@
 """Tests for FilterDefinition model."""
 
 import pytest
+
 from sawmill.models.filter_def import FilterDefinition
 
 
 def test_filter_creation():
     f = FilterDefinition(
-        id="test-filter",
-        name="Test Filter",
-        pattern=r"Error:\s+\w+",
-        enabled=True
+        id="test-filter", name="Test Filter", pattern=r"Error:\s+\w+", enabled=True
     )
     assert f.id == "test-filter"
     assert f.enabled is True
@@ -21,7 +19,7 @@ def test_invalid_regex_rejected():
             id="bad",
             name="Bad",
             pattern=r"[invalid(regex",  # Unclosed bracket
-            enabled=True
+            enabled=True,
         )
 
 
@@ -38,11 +36,7 @@ def test_filter_source_tracking():
 
 def test_filter_defaults():
     """Test default values for optional fields."""
-    f = FilterDefinition(
-        id="minimal",
-        name="Minimal",
-        pattern="test"
-    )
+    f = FilterDefinition(id="minimal", name="Minimal", pattern="test")
     assert f.enabled is True
     assert f.source is None
     assert f.description is None
@@ -55,7 +49,7 @@ def test_filter_with_description():
         name="Timing Errors",
         pattern=r"timing slack.*negative",
         enabled=True,
-        description="Matches timing violations with negative slack"
+        description="Matches timing violations with negative slack",
     )
     assert f.description == "Matches timing violations with negative slack"
 
@@ -80,7 +74,7 @@ def test_complex_regex_accepted():
         id="complex",
         name="Complex",
         pattern=r"^(?:ERROR|WARNING):\s+\[(\w+)\s+(\d+-\d+)\]\s+(.*)$",
-        enabled=True
+        enabled=True,
     )
     assert f.pattern == r"^(?:ERROR|WARNING):\s+\[(\w+)\s+(\d+-\d+)\]\s+(.*)$"
 
@@ -88,17 +82,12 @@ def test_complex_regex_accepted():
 def test_invalid_regex_various():
     """Various invalid regex patterns should be rejected."""
     invalid_patterns = [
-        r"[",            # Unclosed bracket
-        r"(",            # Unclosed group
-        r"*abc",         # Nothing to repeat
-        r"+abc",         # Nothing to repeat
-        r"(?P<",         # Incomplete named group
+        r"[",  # Unclosed bracket
+        r"(",  # Unclosed group
+        r"*abc",  # Nothing to repeat
+        r"+abc",  # Nothing to repeat
+        r"(?P<",  # Incomplete named group
     ]
     for pattern in invalid_patterns:
         with pytest.raises(ValueError):
-            FilterDefinition(
-                id="bad",
-                name="Bad",
-                pattern=pattern,
-                enabled=True
-            )
+            FilterDefinition(id="bad", name="Bad", pattern=pattern, enabled=True)

@@ -2,17 +2,18 @@
 
 import pytest
 from click.testing import CliRunner
+from pydantic import ValidationError
 
 from sawmill.__main__ import cli
-from sawmill.models.message import Message, FileRef
-from sawmill.models.plugin_api import (
-    SeverityLevel,
-    GroupingField,
-    DEFAULT_GROUPING_FIELDS,
-    severity_levels_from_dicts,
-    grouping_fields_from_dicts,
-)
 from sawmill.core.aggregation import Aggregator, make_severity_sort_key
+from sawmill.models.message import FileRef, Message
+from sawmill.models.plugin_api import (
+    DEFAULT_GROUPING_FIELDS,
+    GroupingField,
+    SeverityLevel,
+    grouping_fields_from_dicts,
+    severity_levels_from_dicts,
+)
 from sawmill.plugins.vivado import VivadoPlugin
 
 
@@ -36,7 +37,7 @@ class TestSeverityLevel:
     def test_frozen(self):
         """Test that SeverityLevel is immutable."""
         level = SeverityLevel(id="error", name="Error")
-        with pytest.raises(Exception):  # Pydantic ValidationError
+        with pytest.raises(ValidationError):
             level.id = "warning"
 
 
@@ -233,15 +234,24 @@ class TestAggregatorWithPluginMetadata:
         """Test grouping by a metadata field."""
         messages = [
             Message(
-                start_line=1, end_line=1, raw_text="msg1", content="msg1",
+                start_line=1,
+                end_line=1,
+                raw_text="msg1",
+                content="msg1",
                 metadata={"hierarchy": "top/fifo"},
             ),
             Message(
-                start_line=2, end_line=2, raw_text="msg2", content="msg2",
+                start_line=2,
+                end_line=2,
+                raw_text="msg2",
+                content="msg2",
                 metadata={"hierarchy": "top/ctrl"},
             ),
             Message(
-                start_line=3, end_line=3, raw_text="msg3", content="msg3",
+                start_line=3,
+                end_line=3,
+                raw_text="msg3",
+                content="msg3",
                 metadata={"hierarchy": "top/fifo"},
             ),
         ]
@@ -325,7 +335,7 @@ class TestVivadoPluginNewHooks:
         assert len(levels) >= 4
 
         # Check expected severity levels
-        ids = [l["id"] for l in levels]
+        ids = [level["id"] for level in levels]
         assert "critical_warning" in ids
         assert "error" in ids
         assert "warning" in ids

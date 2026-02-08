@@ -6,9 +6,9 @@ such as severity levels and grouping fields.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class SeverityLevel(BaseModel):
@@ -61,7 +61,7 @@ class GroupingField(BaseModel):
     name: str
     field_type: Literal["builtin", "metadata", "file_ref"] = "builtin"
     description: str = ""
-    sort_order: Optional[list[str]] = None
+    sort_order: list[str] | None = None
 
 
 # Default grouping fields used when plugin doesn't provide any

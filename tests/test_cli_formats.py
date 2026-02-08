@@ -20,7 +20,7 @@ class TestJsonFormat:
 
         assert result.exit_code == 0
         # Should have JSON output
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         assert len(lines) > 0
         data = json.loads(lines[-1])
         assert "severity" in data or "content" in data
@@ -39,7 +39,7 @@ class TestJsonFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "json"])
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         assert len(lines) == 3
 
         # Each line should be valid JSON
@@ -58,7 +58,7 @@ class TestJsonFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "json"])
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         data = json.loads(lines[-1])
 
         # Check required fields
@@ -78,7 +78,7 @@ class TestJsonFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "json"])
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         data = json.loads(lines[-1])
         assert data["severity"] == "error"
 
@@ -91,7 +91,7 @@ class TestJsonFormat:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "JSON"])
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         assert len(lines) > 0
 
 
@@ -120,10 +120,7 @@ class TestCountFormat:
         """Count format correctly counts errors."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [E1 1-1] e1\n"
-            "ERROR: [E2 1-2] e2\n"
-            "ERROR: [E3 1-3] e3\n"
+            "# Vivado v2025.2\nERROR: [E1 1-1] e1\nERROR: [E2 1-2] e2\nERROR: [E3 1-3] e3\n"
         )
 
         runner = CliRunner()
@@ -135,11 +132,7 @@ class TestCountFormat:
     def test_count_format_counts_warnings(self, tmp_path):
         """Count format correctly counts warnings."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "WARNING: [W1 1-1] w1\n"
-            "WARNING: [W2 1-2] w2\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nWARNING: [W1 1-1] w1\nWARNING: [W2 1-2] w2\n")
 
         runner = CliRunner()
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
@@ -170,10 +163,7 @@ class TestCountFormat:
         """Count format includes total message count."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [E1 1-1] e1\n"
-            "WARNING: [W1 2-1] w1\n"
-            "INFO: [I1 3-1] i1\n"
+            "# Vivado v2025.2\nERROR: [E1 1-1] e1\nWARNING: [W1 2-1] w1\nINFO: [I1 3-1] i1\n"
         )
 
         runner = CliRunner()
@@ -185,10 +175,7 @@ class TestCountFormat:
     def test_count_format_critical_warnings(self, tmp_path):
         """Count format counts critical warnings."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "CRITICAL WARNING: [CW1 1-1] critical warning\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nCRITICAL WARNING: [CW1 1-1] critical warning\n")
 
         runner = CliRunner()
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--format", "count"])
@@ -270,11 +257,7 @@ class TestFormatWithFilters:
     def test_json_with_severity_filter(self, tmp_path):
         """JSON format respects severity filter."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [I1 1-1] info\n"
-            "ERROR: [E1 2-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [I1 1-1] info\nERROR: [E1 2-1] error\n")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -282,7 +265,7 @@ class TestFormatWithFilters:
         )
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         assert len(lines) == 1
         data = json.loads(lines[0])
         assert data["severity"] == "error"
@@ -291,10 +274,7 @@ class TestFormatWithFilters:
         """Count format respects severity filter."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [I1 1-1] info\n"
-            "INFO: [I2 1-2] info2\n"
-            "ERROR: [E1 2-1] error\n"
+            "# Vivado v2025.2\nINFO: [I1 1-1] info\nINFO: [I2 1-2] info2\nERROR: [E1 2-1] error\n"
         )
 
         runner = CliRunner()
@@ -310,9 +290,7 @@ class TestFormatWithFilters:
         """JSON format respects suppression patterns."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [I1 1-1] keep this\n"
-            "INFO: [I2 1-2] suppress this\n"
+            "# Vivado v2025.2\nINFO: [I1 1-1] keep this\nINFO: [I2 1-2] suppress this\n"
         )
 
         runner = CliRunner()
@@ -321,7 +299,7 @@ class TestFormatWithFilters:
         )
 
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("{")]
+        lines = [line for line in result.output.strip().split("\n") if line.startswith("{")]
         assert len(lines) == 1
         data = json.loads(lines[0])
         assert "keep this" in data["raw_text"]

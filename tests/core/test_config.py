@@ -1,12 +1,11 @@
 """Tests for sawmill configuration loading."""
 
 import pytest
-from pathlib import Path
 
 from sawmill.core.config import (
-    ConfigLoader,
-    ConfigError,
     Config,
+    ConfigError,
+    ConfigLoader,
     GeneralConfig,
     OutputConfig,
     SuppressConfig,
@@ -19,14 +18,14 @@ class TestConfigLoader:
     def test_load_basic_config(self, tmp_path):
         """Load a basic configuration file with general and output sections."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [general]
 default_plugin = "vivado"
 
 [output]
 color = true
 format = "text"
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -38,10 +37,10 @@ format = "text"
     def test_load_partial_config(self, tmp_path):
         """Load a config with only some sections defined."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [output]
 color = false
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -56,7 +55,7 @@ color = false
     def test_load_empty_config(self, tmp_path):
         """Load an empty config file returns defaults."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('')
+        config_file.write_text("")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -107,7 +106,7 @@ class TestMalformedTOML:
     def test_unclosed_bracket_error(self, tmp_path):
         """Unclosed bracket should raise ConfigError."""
         bad_config = tmp_path / "bad.toml"
-        bad_config.write_text('[section')
+        bad_config.write_text("[section")
 
         loader = ConfigLoader()
         with pytest.raises(ConfigError):
@@ -125,7 +124,7 @@ class TestMalformedTOML:
     def test_invalid_value_type_error(self, tmp_path):
         """Invalid TOML syntax should raise ConfigError."""
         bad_config = tmp_path / "bad.toml"
-        bad_config.write_text('[output]\ncolor = not_a_bool_or_string')
+        bad_config.write_text("[output]\ncolor = not_a_bool_or_string")
 
         loader = ConfigLoader()
         with pytest.raises(ConfigError):
@@ -134,7 +133,7 @@ class TestMalformedTOML:
     def test_error_includes_file_path(self, tmp_path):
         """Error message should include the file path."""
         bad_config = tmp_path / "bad.toml"
-        bad_config.write_text('[section\n')
+        bad_config.write_text("[section\n")
 
         loader = ConfigLoader()
         with pytest.raises(ConfigError) as exc:
@@ -148,11 +147,11 @@ class TestSuppressConfig:
     def test_suppress_config(self, tmp_path):
         """Suppress patterns should be loaded from config."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [suppress]
 patterns = ["^INFO: \\\\[.*\\\\] Launching", "DEBUG:"]
 message_ids = ["Common 17-55", "Vivado 12-3523"]
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -166,11 +165,11 @@ message_ids = ["Common 17-55", "Vivado 12-3523"]
     def test_suppress_empty_patterns(self, tmp_path):
         """Empty suppress patterns list is valid."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [suppress]
 patterns = []
 message_ids = []
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -181,10 +180,10 @@ message_ids = []
     def test_suppress_patterns_only(self, tmp_path):
         """Only patterns defined, message_ids defaults to empty."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [suppress]
 patterns = ["DEBUG:"]
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -195,10 +194,10 @@ patterns = ["DEBUG:"]
     def test_suppress_message_ids_only(self, tmp_path):
         """Only message_ids defined, patterns defaults to empty."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [suppress]
 message_ids = ["Common 17-55"]
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -225,10 +224,10 @@ class TestOutputConfig:
     def test_output_json_format(self, tmp_path):
         """JSON format can be specified."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [output]
 format = "json"
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -238,11 +237,11 @@ format = "json"
     def test_output_count_format(self, tmp_path):
         """Count format can be specified."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [output]
 format = "count"
 color = false
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -257,10 +256,10 @@ class TestGeneralConfig:
     def test_general_default_plugin(self, tmp_path):
         """Default plugin can be specified."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [general]
 default_plugin = "vivado"
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -270,9 +269,9 @@ default_plugin = "vivado"
     def test_general_no_default_plugin(self, tmp_path):
         """Missing default_plugin is None."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('''
+        config_file.write_text("""
 [general]
-''')
+""")
 
         loader = ConfigLoader()
         config = loader.load(config_file)
@@ -288,10 +287,7 @@ class TestDataclasses:
         data = {
             "general": {"default_plugin": "vivado"},
             "output": {"color": False, "format": "json"},
-            "suppress": {
-                "patterns": ["DEBUG:"],
-                "message_ids": ["Test 1-1"]
-            }
+            "suppress": {"patterns": ["DEBUG:"], "message_ids": ["Test 1-1"]},
         }
 
         config = Config.from_dict(data)

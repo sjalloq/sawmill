@@ -20,9 +20,7 @@ class TestBasicCLI:
     def test_cli_basic_output(self, tmp_path):
         """With Vivado plugin, basic output should work."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\nINFO: [Test 1-1] message\nERROR: [Test 2-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Test 1-1] message\nERROR: [Test 2-1] error\n")
 
         runner = CliRunner()
         result = runner.invoke(cli, [str(log_file)])
@@ -63,15 +61,11 @@ class TestSeverityFilter:
         """With Vivado plugin, severity filter should work."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Synth 8-1] info message\n"
-            "ERROR: [DRC 1-1] error message\n"
+            "# Vivado v2025.2\nINFO: [Synth 8-1] info message\nERROR: [DRC 1-1] error message\n"
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--severity", "error"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--severity", "error"])
 
         assert result.exit_code == 0
         assert "ERROR" in result.output
@@ -89,9 +83,7 @@ class TestSeverityFilter:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--severity", "warning"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--severity", "warning"])
 
         assert result.exit_code == 0
         assert "WARNING" in result.output or "warning" in result.output
@@ -122,9 +114,7 @@ class TestRegexFilter:
         """Regex filter should be case-sensitive by default."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Synth 8-1] TIMING issue\n"
-            "INFO: [Route 35-1] timing issue\n"
+            "# Vivado v2025.2\nINFO: [Synth 8-1] TIMING issue\nINFO: [Route 35-1] timing issue\n"
         )
 
         runner = CliRunner()
@@ -166,9 +156,7 @@ class TestSuppressionPatterns:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--suppress", "noise1", "--suppress", "noise2"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--suppress", "noise1", "--suppress", "noise2"])
 
         assert result.exit_code == 0
         assert "noise1" not in result.output
@@ -201,9 +189,7 @@ class TestSuppressById:
         """--suppress-id should hide messages by ID."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Common 17-55] suppress this\n"
-            "ERROR: [DRC 1-1] keep this\n"
+            "# Vivado v2025.2\nINFO: [Common 17-55] suppress this\nERROR: [DRC 1-1] keep this\n"
         )
 
         runner = CliRunner()
@@ -228,8 +214,10 @@ class TestSuppressById:
             cli,
             [
                 str(log_file),
-                "--suppress-id", "Common 17-55",
-                "--suppress-id", "Vivado 12-3523",
+                "--suppress-id",
+                "Common 17-55",
+                "--suppress-id",
+                "Vivado 12-3523",
             ],
         )
 
@@ -245,10 +233,7 @@ class TestPluginSelection:
     def test_cli_explicit_plugin(self, tmp_path):
         """--plugin should force a specific plugin."""
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Test 1-1] message\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Test 1-1] message\n")
 
         runner = CliRunner()
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado"])
@@ -269,10 +254,7 @@ class TestPluginSelection:
     def test_cli_auto_detect_vivado(self, tmp_path):
         """Auto-detect should work for Vivado logs."""
         log_file = tmp_path / "build.log"
-        log_file.write_text(
-            "# Vivado v2025.2 (64-bit)\n"
-            "INFO: [Synth 8-6157] synthesizing module\n"
-        )
+        log_file.write_text("# Vivado v2025.2 (64-bit)\nINFO: [Synth 8-6157] synthesizing module\n")
 
         runner = CliRunner()
         result = runner.invoke(cli, [str(log_file)])
@@ -294,9 +276,7 @@ class TestCombinedFilters:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--severity", "error", "--filter", "timing"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--severity", "error", "--filter", "timing"])
 
         assert result.exit_code == 0
         assert "timing error" in result.output
@@ -314,9 +294,7 @@ class TestCombinedFilters:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--filter", "DRC", "--suppress", "noisy"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--filter", "DRC", "--suppress", "noisy"])
 
         assert result.exit_code == 0
         assert "DRC check passed" in result.output
@@ -345,6 +323,7 @@ class TestPluginEntryPointDiscovery:
     def test_no_direct_vivado_import(self):
         """__main__.py should not directly import VivadoPlugin."""
         import inspect
+
         import sawmill.__main__ as main_module
 
         source = inspect.getsource(main_module)
@@ -409,6 +388,7 @@ class TestGetFailOnLevel:
     def test_invalid_fail_on_raises(self):
         """Invalid --fail-on should raise click.BadParameter."""
         import click
+
         from sawmill.__main__ import _get_fail_on_level
         from sawmill.plugins.vivado import VivadoPlugin
 

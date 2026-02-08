@@ -204,9 +204,7 @@ class Aggregator:
 
         return summary
 
-    def group_by_field(
-        self, messages: list[Message], field_id: str
-    ) -> dict[str, MessageStats]:
+    def group_by_field(self, messages: list[Message], field_id: str) -> dict[str, MessageStats]:
         """Group messages by any field (builtin or metadata).
 
         This is the generic grouping method that uses Message.get_field_value()
@@ -321,9 +319,7 @@ class Aggregator:
 
         return groups
 
-    def group_by(
-        self, messages: list[Message], field: str
-    ) -> dict[str, MessageStats]:
+    def group_by(self, messages: list[Message], field: str) -> dict[str, MessageStats]:
         """Group messages by the specified field.
 
         This method supports both builtin fields and plugin-defined metadata
@@ -377,9 +373,7 @@ class Aggregator:
         else:
             return sorted(groups.items(), key=lambda x: x[0])
 
-    def sorted_summary(
-        self, summary: dict[str, SeverityStats]
-    ) -> list[tuple[str, SeverityStats]]:
+    def sorted_summary(self, summary: dict[str, SeverityStats]) -> list[tuple[str, SeverityStats]]:
         """Sort summary by severity order.
 
         Uses plugin-provided severity levels if available, otherwise

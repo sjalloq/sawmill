@@ -1,6 +1,5 @@
 """Tests for CI mode waiver integration."""
 
-import pytest
 from click.testing import CliRunner
 
 from sawmill.__main__ import cli
@@ -15,21 +14,19 @@ class TestCIModeWithWaivers:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -39,21 +36,19 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] unknown issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 2-2"
 reason = "Different issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -63,21 +58,19 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] expected timing failure\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "pattern"
 pattern = "expected.*failure"
 reason = "Known timing issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -85,13 +78,11 @@ date = "2026-01-18"
         """CI mode with multiple waivers should pass when all errors are waived."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] first error\n"
-            "ERROR: [Test 2-2] second error\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] first error\nERROR: [Test 2-2] second error\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
@@ -105,14 +96,12 @@ pattern = "Test 2-2"
 reason = "Second known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -120,27 +109,23 @@ date = "2026-01-18"
         """CI mode should fail if some errors are not waived."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] first error\n"
-            "ERROR: [Test 2-2] second error\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] first error\nERROR: [Test 2-2] second error\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Only first is waived"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 1
 
@@ -150,21 +135,29 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nWARNING: [Test 1-1] known warning\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Acceptable warning"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--fail-on', 'warning', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--fail-on",
+                "warning",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                str(log_file),
+            ],
+        )
 
         assert result.exit_code == 0
 
@@ -172,26 +165,23 @@ date = "2026-01-18"
         """CI mode should pass when critical warning is waived."""
         log_file = tmp_path / "critical.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "CRITICAL WARNING: [Test 1-1] critical but acceptable\n"
+            "# Vivado v2025.2\nCRITICAL WARNING: [Test 1-1] critical but acceptable\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Accepted critical warning"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -201,11 +191,17 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nINFO: [Test 1-1] test\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(tmp_path / "nonexistent.toml"),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(tmp_path / "nonexistent.toml"),
+                str(log_file),
+            ],
+        )
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower() or "error" in result.output.lower()
@@ -219,11 +215,9 @@ date = "2026-01-18"
         waiver_file.write_text("this is not valid toml [[[")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code != 0
         assert "error" in result.output.lower() or "invalid" in result.output.lower()
@@ -238,22 +232,28 @@ class TestShowWaived:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--show-waived',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--show-waived",
+                str(log_file),
+            ],
+        )
 
         # Output should contain the waived message or waiver indication
         assert "waived" in result.output.lower() or "Test 1-1" in result.output
@@ -262,13 +262,11 @@ date = "2026-01-18"
         """--show-waived should display all waived messages."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] first error\n"
-            "ERROR: [Test 2-2] second error\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] first error\nERROR: [Test 2-2] second error\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
@@ -282,15 +280,21 @@ pattern = "Test 2-2"
 reason = "Second known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--show-waived',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--show-waived",
+                str(log_file),
+            ],
+        )
 
         # Should show both waived messages
         assert "Test 1-1" in result.output
@@ -302,11 +306,9 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--show-waived',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--show-waived", str(log_file)]
+        )
 
         # Should indicate no waivers or no waived messages
         # The output still shows the error because it's not waived
@@ -318,22 +320,28 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Intentional for testing"
 author = "engineer"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--show-waived',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--show-waived",
+                str(log_file),
+            ],
+        )
 
         # Should include the reason
         assert "Intentional" in result.output or "reason" in result.output.lower()
@@ -348,22 +356,28 @@ class TestReportUnused:
         log_file.write_text("# Vivado v2025.2\nINFO: [Test 1-1] info message\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "NonExistent 1-1"
 reason = "This waiver is stale"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--report-unused',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--report-unused",
+                str(log_file),
+            ],
+        )
 
         # Should report the unused waiver
         assert "NonExistent 1-1" in result.output or "unused" in result.output.lower()
@@ -374,29 +388,37 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--report-unused',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--report-unused",
+                str(log_file),
+            ],
+        )
 
         # Should pass and not mention unused waivers
         assert result.exit_code == 0
         # If "unused" appears, it should say "no unused" or similar
         if "unused" in result.output.lower():
             # Check that there's no actual unused waiver listed
-            assert "Test 1-1" not in result.output.split("unused")[0].lower() or "0" in result.output
+            assert (
+                "Test 1-1" not in result.output.split("unused")[0].lower() or "0" in result.output
+            )
 
     def test_report_unused_with_multiple_waivers(self, tmp_path):
         """--report-unused should identify which waivers are unused."""
@@ -404,7 +426,7 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
@@ -418,15 +440,21 @@ pattern = "Stale 9-9"
 reason = "Unused waiver"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            '--report-unused',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                "--report-unused",
+                str(log_file),
+            ],
+        )
 
         # Should report only the unused waiver
         assert "Stale 9-9" in result.output
@@ -437,11 +465,9 @@ date = "2026-01-18"
         log_file.write_text("# Vivado v2025.2\nINFO: [Test 1-1] test\n")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--report-unused',
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--report-unused", str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -460,22 +486,29 @@ class TestWaiverWithFilters:
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Err 3-3"
 reason = "Known error"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--severity', 'error',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--severity",
+                "error",
+                "--waivers",
+                str(waiver_file),
+                str(log_file),
+            ],
+        )
 
         # Error is waived, should pass
         assert result.exit_code == 0
@@ -484,28 +517,33 @@ date = "2026-01-18"
         """Waivers should work with suppression patterns."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] first error\n"
-            "ERROR: [Test 2-2] second error\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] first error\nERROR: [Test 2-2] second error\n"
         )
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "First is waived"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--suppress', 'second error',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--suppress",
+                "second error",
+                "--waivers",
+                str(waiver_file),
+                str(log_file),
+            ],
+        )
 
         # Both errors handled: one waived, one suppressed
         assert result.exit_code == 0
@@ -520,21 +558,19 @@ class TestWaiverEdgeCases:
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text('''
+        waiver_file.write_text("""
 [[waiver]]
 type = "id"
 pattern = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         # Should run without error (exit code 0 since not in CI mode)
         assert result.exit_code == 0
@@ -546,6 +582,7 @@ date = "2026-01-18"
 
         # Calculate hash of the raw message
         import hashlib
+
         raw_text = "ERROR: [Test 1-1] specific error"
         msg_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
 
@@ -560,11 +597,9 @@ date = "2026-01-18"
 ''')
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -577,11 +612,9 @@ date = "2026-01-18"
         waiver_file.write_text("")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            '--waivers', str(waiver_file),
-            str(log_file)
-        ])
+        result = runner.invoke(
+            cli, ["--check", "--plugin", "vivado", "--waivers", str(waiver_file), str(log_file)]
+        )
 
         assert result.exit_code == 0
 
@@ -592,9 +625,6 @@ date = "2026-01-18"
 
         # No waiver file provided
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            '--check', '--plugin', 'vivado',
-            str(log_file)
-        ])
+        result = runner.invoke(cli, ["--check", "--plugin", "vivado", str(log_file)])
 
         assert result.exit_code == 0

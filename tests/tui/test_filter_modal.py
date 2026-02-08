@@ -50,7 +50,7 @@ class TestFilterModalInit:
         """Test initialization with non-Vivado severity scheme."""
         modal = FilterModal(custom_severity_levels)
         assert len(modal._severity_levels) == 4
-        ids = [l.id for l in modal._severity_levels]
+        ids = [level.id for level in modal._severity_levels]
         assert "fatal" in ids
         assert "major" in ids
 
@@ -61,11 +61,13 @@ class TestFilterModalImports:
     def test_import_from_widgets_package(self):
         """Test FilterModal can be imported from widgets package."""
         from sawmill.tui.widgets import FilterModal
+
         assert FilterModal is not None
 
     def test_import_from_module(self):
         """Test FilterModal can be imported directly."""
         from sawmill.tui.widgets.filter_modal import FilterModal
+
         assert FilterModal is not None
 
 

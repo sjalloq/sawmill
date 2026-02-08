@@ -26,7 +26,7 @@ class SawmillHookSpec:
     """
 
     @hookspec
-    def can_handle(self, path: Path) -> float:
+    def can_handle(self, path: Path) -> float:  # type: ignore[empty-body]
         """Determine if this plugin can handle the given log file.
 
         Plugins should examine the file (name, initial content, etc.) and return
@@ -44,9 +44,10 @@ class SawmillHookSpec:
             The plugin with the highest confidence score will be selected.
             If no plugin has confidence > 0.5, an error is raised.
         """
+        ...
 
     @hookspec
-    def load_and_parse(self, path: Path) -> list["Message"]:
+    def load_and_parse(self, path: Path) -> list[Message]:  # type: ignore[empty-body]
         """Load and parse the log file into messages.
 
         This is the primary parsing hook. Plugins should:
@@ -63,9 +64,10 @@ class SawmillHookSpec:
             message (single or multi-line). Messages should have start_line
             and end_line set correctly for multi-line messages.
         """
+        ...
 
     @hookspec
-    def get_filters(self) -> list["FilterDefinition"]:
+    def get_filters(self) -> list[FilterDefinition]:  # type: ignore[empty-body]
         """Get filter definitions provided by this plugin.
 
         Plugins can provide pre-defined filters for common use cases,
@@ -74,9 +76,10 @@ class SawmillHookSpec:
         Returns:
             List of FilterDefinition objects that users can enable/disable.
         """
+        ...
 
     @hookspec
-    def extract_file_reference(self, content: str) -> "FileRef | None":
+    def extract_file_reference(self, content: str) -> FileRef | None:  # type: ignore[empty-body]
         """Extract a file reference from message content.
 
         Many log messages reference source files with line numbers.
@@ -88,9 +91,10 @@ class SawmillHookSpec:
         Returns:
             FileRef if a reference is found, None otherwise.
         """
+        ...
 
     @hookspec
-    def get_severity_levels(self) -> list[dict]:
+    def get_severity_levels(self) -> list[dict]:  # type: ignore[empty-body]
         """REQUIRED: Get severity levels supported by this plugin.
 
         Plugins MUST implement this hook to define their severity levels.
@@ -141,9 +145,10 @@ class SawmillHookSpec:
         Raises:
             NotImplementedError: If not implemented by the plugin.
         """
+        ...
 
     @hookspec
-    def get_grouping_fields(self) -> list[dict]:
+    def get_grouping_fields(self) -> list[dict]:  # type: ignore[empty-body]
         """Get fields available for grouping and sorting.
 
         Plugins can declare what dimensions are available for grouping
@@ -176,3 +181,4 @@ class SawmillHookSpec:
         If not implemented, the base app provides default groupings:
         severity, id, file, category.
         """
+        ...

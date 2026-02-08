@@ -7,7 +7,6 @@ and the Config dataclass for storing configuration values.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import tomli
 
@@ -23,12 +22,7 @@ class ConfigError(Exception):
         path: Path to the config file (if available)
     """
 
-    def __init__(
-        self,
-        message: str,
-        line: Optional[int] = None,
-        path: Optional[Path] = None
-    ):
+    def __init__(self, message: str, line: int | None = None, path: Path | None = None):
         self.line = line
         self.path = path
 
@@ -38,10 +32,7 @@ class ConfigError(Exception):
             parts.append(f"Error in {path}")
         if line is not None:
             parts.append(f"at line {line}")
-        if parts:
-            full_message = f"{' '.join(parts)}: {message}"
-        else:
-            full_message = message
+        full_message = f"{' '.join(parts)}: {message}" if parts else message
 
         super().__init__(full_message)
 
@@ -50,14 +41,12 @@ class ConfigError(Exception):
 class GeneralConfig:
     """General configuration settings."""
 
-    default_plugin: Optional[str] = None
+    default_plugin: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "GeneralConfig":
         """Create GeneralConfig from a dictionary."""
-        return cls(
-            default_plugin=data.get("default_plugin")
-        )
+        return cls(default_plugin=data.get("default_plugin"))
 
 
 @dataclass
@@ -70,10 +59,7 @@ class OutputConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "OutputConfig":
         """Create OutputConfig from a dictionary."""
-        return cls(
-            color=data.get("color", True),
-            format=data.get("format", "text")
-        )
+        return cls(color=data.get("color", True), format=data.get("format", "text"))
 
 
 @dataclass
@@ -90,10 +76,7 @@ class SuppressConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "SuppressConfig":
         """Create SuppressConfig from a dictionary."""
-        return cls(
-            patterns=data.get("patterns", []),
-            message_ids=data.get("message_ids", [])
-        )
+        return cls(patterns=data.get("patterns", []), message_ids=data.get("message_ids", []))
 
 
 @dataclass
@@ -123,7 +106,7 @@ class Config:
         return cls(
             general=GeneralConfig.from_dict(data.get("general", {})),
             output=OutputConfig.from_dict(data.get("output", {})),
-            suppress=SuppressConfig.from_dict(data.get("suppress", {}))
+            suppress=SuppressConfig.from_dict(data.get("suppress", {})),
         )
 
 
@@ -138,7 +121,7 @@ class ConfigLoader:
         config = loader.load(None)
     """
 
-    def load(self, path: Optional[Path]) -> Config:
+    def load(self, path: Path | None) -> Config:
         """Load configuration from a TOML file.
 
         Args:
@@ -166,7 +149,7 @@ class ConfigLoader:
             line = self._extract_line_number(str(e))
             raise ConfigError(str(e), line=line, path=path) from e
 
-    def _extract_line_number(self, error_message: str) -> Optional[int]:
+    def _extract_line_number(self, error_message: str) -> int | None:
         """Extract line number from tomli error message.
 
         Args:
@@ -183,7 +166,7 @@ class ConfigLoader:
             return int(match.group(1))
         return None
 
-    def discover_configs(self, start_path: Optional[Path] = None) -> list[Path]:
+    def discover_configs(self, start_path: Path | None = None) -> list[Path]:
         """Discover configuration files in order of precedence.
 
         Searches for configuration files in standard locations, returning them
@@ -204,10 +187,7 @@ class ConfigLoader:
         Returns:
             List of existing config file paths in precedence order (lowest first).
         """
-        if start_path is None:
-            start_path = Path.cwd()
-        else:
-            start_path = Path(start_path).resolve()
+        start_path = Path.cwd() if start_path is None else Path(start_path).resolve()
 
         configs: list[Path] = []
 
@@ -221,21 +201,19 @@ class ConfigLoader:
         git_root = find_git_root(start_path)
         if git_root:
             git_config = git_root / "sawmill.toml"
-            if git_config.exists():
-                # Don't add duplicate if git root is same as start_path
-                if git_config.resolve() not in [c.resolve() for c in configs]:
-                    configs.append(git_config)
+            # Don't add duplicate if git root is same as start_path
+            if git_config.exists() and git_config.resolve() not in [c.resolve() for c in configs]:
+                configs.append(git_config)
 
         # 3. Local config (highest file precedence)
         local_config = start_path / "sawmill.toml"
-        if local_config.exists():
-            # Don't add duplicate if already in list
-            if local_config.resolve() not in [c.resolve() for c in configs]:
-                configs.append(local_config)
+        # Don't add duplicate if already in list
+        if local_config.exists() and local_config.resolve() not in [c.resolve() for c in configs]:
+            configs.append(local_config)
 
         return configs
 
-    def load_merged(self, start_path: Optional[Path] = None) -> Config:
+    def load_merged(self, start_path: Path | None = None) -> Config:
         """Load and merge configuration from all discovered config files.
 
         Loads config files in precedence order, merging them so that later
@@ -293,11 +271,7 @@ class ConfigLoader:
         result = base.copy()
 
         for key, value in override.items():
-            if (
-                key in result
-                and isinstance(result[key], dict)
-                and isinstance(value, dict)
-            ):
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 # Recursively merge nested dictionaries
                 result[key] = self._deep_merge(result[key], value)
             else:

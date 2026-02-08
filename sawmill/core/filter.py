@@ -63,10 +63,7 @@ class FilterEngine:
             # Invalid regex returns empty results
             return []
 
-        return [
-            msg for msg in messages
-            if compiled.search(msg.raw_text)
-        ]
+        return [msg for msg in messages if compiled.search(msg.raw_text)]
 
     def apply_filters(
         self,
@@ -153,8 +150,7 @@ class FilterEngine:
             return list(messages)
 
         return [
-            msg for msg in messages
-            if not any(cp.search(msg.raw_text) for cp in compiled_patterns)
+            msg for msg in messages if not any(cp.search(msg.raw_text) for cp in compiled_patterns)
         ]
 
     def get_stats(
@@ -192,10 +188,7 @@ class FilterEngine:
         matched_count = len(matched)
 
         # Calculate percentage
-        if total > 0:
-            percentage = (matched_count / total) * 100.0
-        else:
-            percentage = 0.0
+        percentage = (matched_count / total) * 100.0 if total > 0 else 0.0
 
         return FilterStats(
             total_messages=total,

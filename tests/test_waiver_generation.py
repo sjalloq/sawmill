@@ -8,7 +8,6 @@ This module tests:
 import hashlib
 from datetime import date
 
-import pytest
 import tomli
 from click.testing import CliRunner
 
@@ -16,7 +15,6 @@ from sawmill.__main__ import cli
 from sawmill.core.waiver import WaiverGenerator, WaiverLoader
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
-
 
 # Test severity levels matching typical Vivado-like schema
 TEST_SEVERITY_LEVELS = [
@@ -315,10 +313,7 @@ class TestWaiverGenerator:
 
         # Generate waivers - update with real author/reason since
         # WaiverLoader requires non-empty, non-placeholder values
-        generator = WaiverGenerator(
-            author="test@example.com",
-            reason="Test reason for CI"
-        )
+        generator = WaiverGenerator(author="test@example.com", reason="Test reason for CI")
         toml_content = generator.generate(messages, tool="vivado")
 
         # Load with WaiverLoader
@@ -332,19 +327,28 @@ class TestWaiverGenerator:
         """Level-based filtering uses numeric level comparison."""
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="ERROR: [E 1-1] error",
-                content="error", severity="error", message_id="E 1-1",
+                content="error",
+                severity="error",
+                message_id="E 1-1",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="WARNING: [W 1-1] warning",
-                content="warning", severity="warning", message_id="W 1-1",
+                content="warning",
+                severity="warning",
+                message_id="W 1-1",
             ),
             Message(
-                start_line=3, end_line=3,
+                start_line=3,
+                end_line=3,
                 raw_text="INFO: [I 1-1] info",
-                content="info", severity="info", message_id="I 1-1",
+                content="info",
+                severity="info",
+                message_id="I 1-1",
             ),
         ]
 
@@ -363,27 +367,33 @@ class TestWaiverGenerator:
         """Custom min_waiver_level filters appropriately."""
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="ERROR: [E 1-1] error",
-                content="error", severity="error", message_id="E 1-1",
+                content="error",
+                severity="error",
+                message_id="E 1-1",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="CRITICAL WARNING: [CW 1-1] critical warning",
-                content="critical warning", severity="critical_warning", message_id="CW 1-1",
+                content="critical warning",
+                severity="critical_warning",
+                message_id="CW 1-1",
             ),
             Message(
-                start_line=3, end_line=3,
+                start_line=3,
+                end_line=3,
                 raw_text="WARNING: [W 1-1] warning",
-                content="warning", severity="warning", message_id="W 1-1",
+                content="warning",
+                severity="warning",
+                message_id="W 1-1",
             ),
         ]
 
         # With min_waiver_level=2, only error (3) and critical_warning (2)
-        generator = WaiverGenerator(
-            severity_levels=TEST_SEVERITY_LEVELS,
-            min_waiver_level=2
-        )
+        generator = WaiverGenerator(severity_levels=TEST_SEVERITY_LEVELS, min_waiver_level=2)
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
@@ -396,22 +406,25 @@ class TestWaiverGenerator:
         """min_waiver_level=3 includes only errors."""
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="ERROR: [E 1-1] error",
-                content="error", severity="error", message_id="E 1-1",
+                content="error",
+                severity="error",
+                message_id="E 1-1",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="CRITICAL WARNING: [CW 1-1] critical warning",
-                content="critical warning", severity="critical_warning", message_id="CW 1-1",
+                content="critical warning",
+                severity="critical_warning",
+                message_id="CW 1-1",
             ),
         ]
 
         # With min_waiver_level=3, only error (3) is included
-        generator = WaiverGenerator(
-            severity_levels=TEST_SEVERITY_LEVELS,
-            min_waiver_level=3
-        )
+        generator = WaiverGenerator(severity_levels=TEST_SEVERITY_LEVELS, min_waiver_level=3)
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
@@ -422,22 +435,26 @@ class TestWaiverGenerator:
         """include_all=True includes all severities regardless of level."""
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="ERROR: [E 1-1] error",
-                content="error", severity="error", message_id="E 1-1",
+                content="error",
+                severity="error",
+                message_id="E 1-1",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="INFO: [I 1-1] info",
-                content="info", severity="info", message_id="I 1-1",
+                content="info",
+                severity="info",
+                message_id="I 1-1",
             ),
         ]
 
         # Even with high min_waiver_level, include_all=True includes everything
         generator = WaiverGenerator(
-            severity_levels=TEST_SEVERITY_LEVELS,
-            min_waiver_level=3,
-            include_all=True
+            severity_levels=TEST_SEVERITY_LEVELS, min_waiver_level=3, include_all=True
         )
         result = generator.generate(messages)
 
@@ -458,27 +475,33 @@ class TestWaiverGenerator:
 
         messages = [
             Message(
-                start_line=1, end_line=1,
+                start_line=1,
+                end_line=1,
                 raw_text="FATAL: fatal error",
-                content="fatal error", severity="fatal", message_id="F-1",
+                content="fatal error",
+                severity="fatal",
+                message_id="F-1",
             ),
             Message(
-                start_line=2, end_line=2,
+                start_line=2,
+                end_line=2,
                 raw_text="NOTE: just a note",
-                content="just a note", severity="note", message_id="N-1",
+                content="just a note",
+                severity="note",
+                message_id="N-1",
             ),
             Message(
-                start_line=3, end_line=3,
+                start_line=3,
+                end_line=3,
                 raw_text="DEBUG: debug info",
-                content="debug info", severity="debug", message_id="D-1",
+                content="debug info",
+                severity="debug",
+                message_id="D-1",
             ),
         ]
 
         # With min_waiver_level=1, includes fatal (4) and note (1), not debug (0)
-        generator = WaiverGenerator(
-            severity_levels=custom_levels,
-            min_waiver_level=1
-        )
+        generator = WaiverGenerator(severity_levels=custom_levels, min_waiver_level=1)
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
@@ -495,15 +518,11 @@ class TestGenerateWaiversCLI:
         """Basic waiver generation from log file."""
         log_file = tmp_path / "vivado.log"
         log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] error message\n"
-            "WARNING: [Test 2-1] warning\n"
+            "# Vivado v2025.2\nERROR: [Test 1-1] error message\nWARNING: [Test 2-1] warning\n"
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         assert result.exit_code == 0
         assert "[[waiver]]" in result.output
@@ -525,9 +544,7 @@ class TestGenerateWaiversCLI:
         )
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         assert result.exit_code == 0
         parsed = tomli.loads(result.output)
@@ -568,15 +585,10 @@ class TestGenerateWaiversCLI:
     def test_generate_waivers_info_only_excluded_by_default(self, tmp_path):
         """INFO-only log generates empty waivers by default (min_waiver_level=1)."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Info 1-1] all is well\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Info 1-1] all is well\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         assert result.exit_code == 0
         parsed = tomli.loads(result.output)
@@ -586,10 +598,7 @@ class TestGenerateWaiversCLI:
     def test_generate_waivers_info_with_waiver_level_0(self, tmp_path):
         """INFO messages included with --waiver-level 0."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "INFO: [Info 1-1] all is well\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nINFO: [Info 1-1] all is well\n")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -632,15 +641,10 @@ class TestGenerateWaiversCLI:
     def test_generate_waivers_includes_tool_name(self, tmp_path):
         """Tool name is included in metadata."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] error\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         assert result.exit_code == 0
         parsed = tomli.loads(result.output)
@@ -664,15 +668,10 @@ class TestGenerateWaiversCLI:
     def test_generate_waivers_redirect_to_file(self, tmp_path):
         """Waiver output can be redirected to a file."""
         log_file = tmp_path / "vivado.log"
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: [Test 1-1] error message\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error message\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         # Write output to file (simulating redirect)
         waiver_file = tmp_path / "waivers.toml"
@@ -702,15 +701,10 @@ class TestGenerateWaiversCLI:
         """Messages without ID generate hash-type waivers."""
         log_file = tmp_path / "vivado.log"
         # Create a message that won't parse to a message_id
-        log_file.write_text(
-            "# Vivado v2025.2\n"
-            "ERROR: Some error without standard format\n"
-        )
+        log_file.write_text("# Vivado v2025.2\nERROR: Some error without standard format\n")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"]
-        )
+        result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         # The Vivado plugin may or may not parse this - check output
         # If it generated a waiver, check the type
