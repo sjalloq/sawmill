@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -41,6 +42,16 @@ SORT_MODES = [SORT_LINE, SORT_SEVERITY, SORT_ID, SORT_COUNT]
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _escape_toml(value: str) -> str:
+    """Escape a string value for TOML basic string output."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+# ---------------------------------------------------------------------------
 # Widgets
 # ---------------------------------------------------------------------------
 
@@ -64,6 +75,8 @@ class MessageStats(Static):
         self._severity_levels = list(severity_levels) if severity_levels else []
         self._counts: dict[str, int] = {}
         self._active: dict[str, bool] = {}
+        self._suppressed_count: int = 0
+        self._waived_count: int = 0
 
     @property
     def counts(self) -> dict[str, int]:
@@ -83,6 +96,24 @@ class MessageStats(Static):
         self._active = value
         self.refresh()
 
+    @property
+    def suppressed_count(self) -> int:
+        return self._suppressed_count
+
+    @suppressed_count.setter
+    def suppressed_count(self, value: int) -> None:
+        self._suppressed_count = value
+        self.refresh()
+
+    @property
+    def waived_count(self) -> int:
+        return self._waived_count
+
+    @waived_count.setter
+    def waived_count(self, value: int) -> None:
+        self._waived_count = value
+        self.refresh()
+
     def render(self) -> str:
         """Render the stats display with plugin-driven severity counts."""
         parts = [f"Total: {self.total}"]
@@ -96,7 +127,15 @@ class MessageStats(Static):
                 parts.append(f"[dim]{hint}{level.name}: {count}[/dim]")
             else:
                 parts.append(f"{hint}{level.name}: {count}")
-        return " | ".join(parts)
+        result = " | ".join(parts)
+        extras = []
+        if self._waived_count > 0:
+            extras.append(f"[$accent]{self._waived_count} waived[/$accent]")
+        if self._suppressed_count > 0:
+            extras.append(f"[dim]{self._suppressed_count} suppressed[/dim]")
+        if extras:
+            result += " | " + "  ".join(extras)
+        return result
 
 
 class LogViewer(DataTable):
@@ -235,10 +274,14 @@ class SawmillApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
+        Binding("ctrl+s", "save", "Save", show=False),
         Binding("escape", "clear_filter", "Clear Filter", show=False),
         Binding("/", "focus_filter", "Filter", show=False),
         Binding("tab", "toggle_focus", "Toggle Focus", show=False),
-        Binding("s", "cycle_sort", "Sort", show=False),
+        Binding("o", "cycle_sort", "Sort", show=False),
+        Binding("s", "suppress", "Suppress", show=False),
+        Binding("v", "toggle_suppressed", "Hidden", show=False),
+        Binding("w", "waive", "Waive", show=False),
         Binding("1", "toggle_sev_1", "Sev 1", show=False),
         Binding("2", "toggle_sev_2", "Sev 2", show=False),
         Binding("3", "toggle_sev_3", "Sev 3", show=False),
@@ -247,10 +290,14 @@ class SawmillApp(App):
         Binding("f12", "screenshot", "Screenshot", show=False),
     ]
 
-    # Reactive properties
-    filter_pattern: reactive[str] = reactive("")
-    severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True)
-    sort_mode: reactive[str] = reactive(SORT_LINE)
+    # Reactive properties — all use init=False to prevent watcher calls during
+    # lazy initialisation (which would cause re-entrant _apply_filters calls).
+    filter_pattern: reactive[str] = reactive("", init=False)
+    severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True, init=False)
+    sort_mode: reactive[str] = reactive(SORT_LINE, init=False)
+    suppressed_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
+    show_suppressed: reactive[bool] = reactive(False, init=False)
+    waived_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
 
     def __init__(
         self,
@@ -258,6 +305,7 @@ class SawmillApp(App):
         log_file: Path | None = None,
         messages: list[Message] | None = None,
         plugin_name: str | None = None,
+        waiver_file_path: Path | None = None,
         *args,
         **kwargs,
     ):
@@ -282,6 +330,16 @@ class SawmillApp(App):
         self._log_viewer: LogViewer | None = None
         self._filter_input: FilterInput | None = None
         self._detail_content: Static | None = None
+
+        # Suppress state
+        self._suppressions_dirty: bool = False
+
+        # Waive state
+        from sawmill.models.waiver import Waiver
+
+        self._session_waivers: list[Waiver] = []
+        self._waivers_dirty: bool = False
+        self._waiver_file_path: Path = waiver_file_path or Path("./waivers.toml")
 
         # ID count cache for count sort mode
         self._id_counts: dict[str, int] = {}
@@ -326,7 +384,9 @@ class SawmillApp(App):
                 ("/", "Search"),
                 ("Tab", "Focus"),
                 ("1-4", "Severity"),
-                ("s", "Sort"),
+                ("o", "Sort"),
+                ("s", "Suppress"),
+                ("w", "Waive"),
                 ("?", "Help"),
             ],
         )
@@ -398,7 +458,11 @@ class SawmillApp(App):
     # -- Filtering & Sorting -------------------------------------------------
 
     def _apply_filters(self) -> None:
-        """Apply current filters, sort, and update the display."""
+        """Apply current filters, sort, and update the display.
+
+        This is the single rendering path. All state changes that affect the
+        display go through reactive watchers which call this method.
+        """
         filtered = self._messages.copy()
 
         # Parse the search bar for prefix filters
@@ -437,6 +501,10 @@ class SawmillApp(App):
                 filtered = [m for m in filtered if compiled.search(m.raw_text)]
             except re.error:
                 pass
+
+        # Apply suppression filter
+        if self.suppressed_ids and not self.show_suppressed:
+            filtered = [m for m in filtered if m.message_id not in self.suppressed_ids]
 
         # Compute ID counts for count sort mode (before sorting)
         self._id_counts = {}
@@ -492,6 +560,22 @@ class SawmillApp(App):
             for level in self._severity_levels
         }
 
+        # Count how many messages are suppressed (across all messages, not just filtered)
+        suppressed_count = sum(
+            1
+            for m in self._messages
+            if m.message_id is not None and m.message_id in self.suppressed_ids
+        )
+        self._stats_widget.suppressed_count = suppressed_count
+
+        # Count waived messages
+        waived_count = sum(
+            1
+            for m in self._filtered_messages
+            if m.message_id is not None and m.message_id in self.waived_ids
+        )
+        self._stats_widget.waived_count = waived_count
+
     def _populate_table(self) -> None:
         """Populate the log viewer table with filtered messages."""
         if not self._log_viewer:
@@ -508,9 +592,23 @@ class SawmillApp(App):
                 msg_id = msg.message_id or ""
                 content = self._log_viewer.truncate_text(msg.content)
 
+                # Determine visual treatment
+                is_suppressed = (
+                    self.show_suppressed
+                    and msg.message_id is not None
+                    and msg.message_id in self.suppressed_ids
+                )
+                is_waived = msg.message_id is not None and msg.message_id in self.waived_ids
+                if is_suppressed:
+                    sev_display = f"[dim]{sev.title()}[/dim]"
+                elif is_waived:
+                    sev_display = f"[dim]{sev.title()} \\[waived][/dim]"
+                else:
+                    sev_display = sev.title()
+
                 self._log_viewer.add_row(
                     str(msg.start_line),
-                    sev.title(),
+                    sev_display,
                     msg_id,
                     content,
                     key=str(i),
@@ -551,6 +649,15 @@ class SawmillApp(App):
     def watch_sort_mode(self, mode: str) -> None:
         self._apply_filters()
 
+    def watch_suppressed_ids(self, value: set[str]) -> None:
+        self._apply_filters()
+
+    def watch_show_suppressed(self, value: bool) -> None:
+        self._apply_filters()
+
+    def watch_waived_ids(self, value: set[str]) -> None:
+        self._apply_filters()
+
     # -- Event handlers ------------------------------------------------------
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -587,7 +694,132 @@ class SawmillApp(App):
     # -- Actions -------------------------------------------------------------
 
     async def action_quit(self) -> None:
-        self.exit()
+        """Quit with dirty-state check."""
+        if self._suppressions_dirty or self._waivers_dirty:
+            from sawmill.tui.widgets.quit_modal import QuitConfirmModal
+
+            suppression_count = len(self.suppressed_ids)
+            waiver_count = len(self._session_waivers)
+            self.push_screen(
+                QuitConfirmModal(
+                    suppression_count=suppression_count,
+                    waiver_count=waiver_count,
+                ),
+                callback=self._on_quit_result,
+            )
+        else:
+            self.exit()
+
+    def _on_quit_result(self, result: str | None) -> None:
+        """Handle quit confirmation modal result."""
+        if result == "save_quit":
+            self._save_all()
+            self.exit()
+        elif result == "discard_quit":
+            self.exit()
+        # else: None (cancelled) — stay in app
+
+    def action_save(self) -> None:
+        """Save session state (Ctrl+S)."""
+        self._save_all()
+
+    def _notify_safe(self, message: str, **kwargs) -> None:
+        """Notify if the app is mounted, otherwise silently ignore."""
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            self.notify(message, **kwargs)
+
+    def _save_all(self) -> None:
+        """Save both suppressions and waivers to their respective files."""
+        saved_parts = []
+
+        # Save suppressions to sawmill.toml
+        if self._suppressions_dirty and self.suppressed_ids:
+            try:
+                self._save_suppressions()
+                saved_parts.append(f"{len(self.suppressed_ids)} suppressions to sawmill.toml")
+                self._suppressions_dirty = False
+            except Exception as e:
+                self._notify_safe(f"Failed to save suppressions: {e}", severity="error")
+
+        # Save waivers to waiver file
+        if self._waivers_dirty and self._session_waivers:
+            try:
+                self._save_waivers()
+                saved_parts.append(
+                    f"{len(self._session_waivers)} waivers to {self._waiver_file_path.name}"
+                )
+                self._waivers_dirty = False
+                self._session_waivers = []
+            except Exception as e:
+                self._notify_safe(f"Failed to save waivers: {e}", severity="error")
+
+        if saved_parts:
+            self._notify_safe(f"Saved: {', '.join(saved_parts)}")
+        elif not self._suppressions_dirty and not self._waivers_dirty:
+            self._notify_safe("Nothing to save")
+
+    def _save_suppressions(self) -> None:
+        """Save suppression IDs to sawmill.toml."""
+        import tomli
+        import tomli_w
+
+        config_path = Path("sawmill.toml")
+
+        # Load existing config
+        data: dict = {}
+        if config_path.exists():
+            content = config_path.read_text(encoding="utf-8")
+            if content.strip():
+                data = tomli.loads(content)
+
+        # Merge suppression IDs
+        suppress = data.setdefault("suppress", {})
+        existing_ids = set(suppress.get("message_ids", []))
+        merged_ids = sorted(existing_ids | self.suppressed_ids)
+        suppress["message_ids"] = merged_ids
+
+        # Write back
+        with open(config_path, "wb") as f:
+            tomli_w.dump(data, f)
+
+    def _save_waivers(self) -> None:
+        """Append session waivers to the waiver file."""
+        waiver_path = self._waiver_file_path
+
+        # If file exists, validate it first
+        if waiver_path.exists():
+            from sawmill.core.waiver import WaiverLoader
+
+            loader = WaiverLoader()
+            loader.load(waiver_path)  # Validate existing content
+
+        # Build TOML entries for new waivers
+        entries = []
+        for waiver in self._session_waivers:
+            lines = ["[[waiver]]"]
+            lines.append(f'message_id = "{_escape_toml(waiver.message_id)}"')
+            if waiver.content_match and waiver.content_pattern:
+                lines.append(f'content_match = "{waiver.content_match}"')
+                lines.append(f'content_pattern = "{_escape_toml(waiver.content_pattern)}"')
+            lines.append(f'reason = "{_escape_toml(waiver.reason)}"')
+            lines.append(f'author = "{_escape_toml(waiver.author)}"')
+            lines.append(f'date = "{waiver.date}"')
+            entries.append("\n".join(lines))
+
+        new_content = "\n\n".join(entries) + "\n"
+
+        if waiver_path.exists():
+            # Append to existing file
+            with open(waiver_path, "a", encoding="utf-8") as f:
+                f.write("\n" + new_content)
+        else:
+            # Create new file with header
+            header = "# Sawmill waiver file\n# Generated by sawmill TUI\n\n"
+            if self._plugin_name:
+                header += f'[metadata]\ntool = "{self._plugin_name}"\n\n'
+            waiver_path.write_text(header + new_content, encoding="utf-8")
 
     def action_clear_filter(self) -> None:
         """Clear the search bar and severity filter, return focus to table."""
@@ -614,6 +846,84 @@ class SawmillApp(App):
         """Cycle through sort modes."""
         idx = SORT_MODES.index(self.sort_mode)
         self.sort_mode = SORT_MODES[(idx + 1) % len(SORT_MODES)]
+
+    def action_suppress(self) -> None:
+        """Suppress or un-suppress the highlighted message by ID."""
+        if not self._log_viewer or not self._filtered_messages:
+            return
+
+        row = self._log_viewer.cursor_row
+        if row < 0 or row >= len(self._filtered_messages):
+            return
+
+        msg = self._filtered_messages[row]
+        if msg.message_id is None:
+            self.notify("Cannot suppress: message has no ID")
+            return
+
+        current = set(self.suppressed_ids)
+        if msg.message_id in current:
+            current.discard(msg.message_id)
+            self.notify(f"Un-suppressed: {msg.message_id}")
+        else:
+            current.add(msg.message_id)
+            self._suppressions_dirty = True
+            self.notify(f"Suppressed: {msg.message_id}")
+        self.suppressed_ids = current
+
+    def action_toggle_suppressed(self) -> None:
+        """Toggle visibility of suppressed messages."""
+        self.show_suppressed = not self.show_suppressed
+
+    def action_waive(self) -> None:
+        """Open waive modal for the highlighted message."""
+        if not self._log_viewer or not self._filtered_messages:
+            return
+
+        row = self._log_viewer.cursor_row
+        if row < 0 or row >= len(self._filtered_messages):
+            return
+
+        msg = self._filtered_messages[row]
+        if msg.message_id is None:
+            self.notify("Cannot waive: message has no ID")
+            return
+
+        from sawmill.tui.widgets.waive_modal import WaiveModal
+        from sawmill.utils.author import discover_author
+
+        self.push_screen(
+            WaiveModal(
+                message_id=msg.message_id,
+                severity=(msg.severity or "").title(),
+                content=msg.content,
+                author=discover_author(),
+                waiver_file_path=str(self._waiver_file_path),
+            ),
+            callback=self._on_waive_modal_result,
+        )
+
+    def _on_waive_modal_result(self, result: dict | None) -> None:
+        """Handle the result from the waive modal."""
+        if result is None:
+            return
+
+        from sawmill.models.waiver import Waiver
+
+        waiver = Waiver(
+            message_id=result["message_id"],
+            content_match=result.get("content_match"),
+            content_pattern=result.get("content_pattern"),
+            reason=result["reason"],
+            author=result["author"],
+            date=date.today().isoformat(),
+        )
+        self._session_waivers.append(waiver)
+        self._waivers_dirty = True
+        self.notify(f"Waived: {waiver.message_id}")
+        current = set(self.waived_ids)
+        current.add(waiver.message_id)
+        self.waived_ids = current
 
     def _toggle_severity(self, key_num: int) -> None:
         """Toggle visibility of a severity level by number key."""
@@ -680,6 +990,7 @@ def run_tui(
     log_file: Path | None = None,
     plugin_name: str | None = None,
     severity_levels: list[SeverityLevel] | None = None,
+    waiver_file_path: Path | None = None,
 ) -> None:
     """Run the TUI application.
 
@@ -687,11 +998,13 @@ def run_tui(
         log_file: Path to the log file to analyze.
         plugin_name: Name of plugin to use.
         severity_levels: Severity level definitions from plugin.
+        waiver_file_path: Path to the waiver file for saving waivers.
     """
     app = SawmillApp(
         log_file=log_file,
         plugin_name=plugin_name,
         severity_levels=severity_levels or [],
+        waiver_file_path=waiver_file_path,
     )
     app.run()
 

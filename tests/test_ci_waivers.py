@@ -16,8 +16,7 @@ class TestCIModeWithWaivers:
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
@@ -38,8 +37,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 2-2"
+message_id = "Test 2-2"
 reason = "Different issue"
 author = "test"
 date = "2026-01-18"
@@ -52,16 +50,17 @@ date = "2026-01-18"
 
         assert result.exit_code == 1
 
-    def test_ci_pass_with_pattern_waiver(self, tmp_path):
-        """CI mode should pass with pattern-based waiver."""
+    def test_ci_pass_with_content_pattern_waiver(self, tmp_path):
+        """CI mode should pass with content_pattern-based waiver."""
         log_file = tmp_path / "errors.log"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] expected timing failure\n")
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "pattern"
-pattern = "expected.*failure"
+message_id = "Test 1-1"
+content_match = "regex"
+content_pattern = "expected.*failure"
 reason = "Known timing issue"
 author = "test"
 date = "2026-01-18"
@@ -84,15 +83,13 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "First known issue"
 author = "test"
 date = "2026-01-18"
 
 [[waiver]]
-type = "id"
-pattern = "Test 2-2"
+message_id = "Test 2-2"
 reason = "Second known issue"
 author = "test"
 date = "2026-01-18"
@@ -115,8 +112,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Only first is waived"
 author = "test"
 date = "2026-01-18"
@@ -137,8 +133,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Acceptable warning"
 author = "test"
 date = "2026-01-18"
@@ -171,8 +166,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Accepted critical warning"
 author = "test"
 date = "2026-01-18"
@@ -234,8 +228,7 @@ class TestShowWaived:
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
@@ -268,15 +261,13 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "First known issue"
 author = "test"
 date = "2026-01-18"
 
 [[waiver]]
-type = "id"
-pattern = "Test 2-2"
+message_id = "Test 2-2"
 reason = "Second known issue"
 author = "test"
 date = "2026-01-18"
@@ -322,8 +313,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Intentional for testing"
 author = "engineer"
 date = "2026-01-18"
@@ -358,8 +348,7 @@ class TestReportUnused:
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "NonExistent 1-1"
+message_id = "NonExistent 1-1"
 reason = "This waiver is stale"
 author = "test"
 date = "2026-01-18"
@@ -390,8 +379,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
@@ -428,15 +416,13 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Used waiver"
 author = "test"
 date = "2026-01-18"
 
 [[waiver]]
-type = "id"
-pattern = "Stale 9-9"
+message_id = "Stale 9-9"
 reason = "Unused waiver"
 author = "test"
 date = "2026-01-18"
@@ -488,8 +474,7 @@ class TestWaiverWithFilters:
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Err 3-3"
+message_id = "Err 3-3"
 reason = "Known error"
 author = "test"
 date = "2026-01-18"
@@ -514,7 +499,7 @@ date = "2026-01-18"
         assert result.exit_code == 0
 
     def test_waiver_with_suppression(self, tmp_path):
-        """Waivers should work with suppression patterns."""
+        """Suppress is display-only — only waived errors are accepted for CI."""
         log_file = tmp_path / "errors.log"
         log_file.write_text(
             "# Vivado v2025.2\nERROR: [Test 1-1] first error\nERROR: [Test 2-2] second error\n"
@@ -523,8 +508,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "First is waived"
 author = "test"
 date = "2026-01-18"
@@ -545,8 +529,9 @@ date = "2026-01-18"
             ],
         )
 
-        # Both errors handled: one waived, one suppressed
-        assert result.exit_code == 0
+        # First error is waived (CI accepts), second is only suppressed (display-only)
+        # CI still sees the second error as unwaived → fail
+        assert result.exit_code == 1
 
 
 class TestWaiverEdgeCases:
@@ -560,8 +545,7 @@ class TestWaiverEdgeCases:
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Known issue"
 author = "test"
 date = "2026-01-18"
@@ -575,26 +559,21 @@ date = "2026-01-18"
         # Should run without error (exit code 0 since not in CI mode)
         assert result.exit_code == 0
 
-    def test_waiver_with_hash_type(self, tmp_path):
-        """Waivers with hash type should work."""
+    def test_waiver_with_content_pattern(self, tmp_path):
+        """Waivers with content_pattern should work."""
         log_file = tmp_path / "errors.log"
-        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] specific error\n")
-
-        # Calculate hash of the raw message
-        import hashlib
-
-        raw_text = "ERROR: [Test 1-1] specific error"
-        msg_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] specific error message\n")
 
         waiver_file = tmp_path / "waivers.toml"
-        waiver_file.write_text(f'''
+        waiver_file.write_text("""
 [[waiver]]
-type = "hash"
-pattern = "{msg_hash}"
-reason = "Known issue by hash"
+message_id = "Test 1-1"
+content_match = "raw"
+content_pattern = "specific error"
+reason = "Known issue by content"
 author = "test"
 date = "2026-01-18"
-''')
+""")
 
         runner = CliRunner()
         result = runner.invoke(

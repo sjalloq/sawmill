@@ -5,7 +5,6 @@ This module tests:
 - CLI --generate-waivers option
 """
 
-import hashlib
 from datetime import date
 
 import tomli
@@ -56,14 +55,13 @@ class TestWaiverGenerator:
         assert len(parsed["waiver"]) == 1
 
         waiver = parsed["waiver"][0]
-        assert waiver["type"] == "id"
-        assert waiver["pattern"] == "Test 1-1"
+        assert waiver["message_id"] == "Test 1-1"
         assert "reason" in waiver
         assert "author" in waiver
         assert "date" in waiver
 
-    def test_generate_single_error_without_id(self):
-        """Generate waiver for error without message_id uses hash."""
+    def test_generate_skips_messages_without_id(self):
+        """Messages without message_id are skipped (no hash fallback)."""
         msg = Message(
             start_line=10,
             end_line=10,
@@ -74,12 +72,8 @@ class TestWaiverGenerator:
         generator = WaiverGenerator()
         result = generator.generate([msg])
 
-        parsed = tomli.loads(result)
-        waiver = parsed["waiver"][0]
-        assert waiver["type"] == "hash"
-        # Verify the hash is correct
-        expected_hash = hashlib.sha256(msg.raw_text.encode("utf-8")).hexdigest()
-        assert waiver["pattern"] == expected_hash
+        # Should not contain any waiver entries
+        assert "[[waiver]]" not in result
 
     def test_generate_filters_info_by_default(self):
         """INFO messages are excluded by default (level 0 < min_waiver_level 1)."""
@@ -106,7 +100,7 @@ class TestWaiverGenerator:
 
         parsed = tomli.loads(result)
         assert len(parsed["waiver"]) == 1
-        assert parsed["waiver"][0]["pattern"] == "Error 1-1"
+        assert parsed["waiver"][0]["message_id"] == "Error 1-1"
 
     def test_generate_includes_info_when_requested(self):
         """INFO messages are included when include_all=True."""
@@ -125,7 +119,7 @@ class TestWaiverGenerator:
 
         parsed = tomli.loads(result)
         assert len(parsed["waiver"]) == 1
-        assert parsed["waiver"][0]["pattern"] == "Info 1-1"
+        assert parsed["waiver"][0]["message_id"] == "Info 1-1"
 
     def test_generate_includes_warnings(self):
         """Warnings are included in generated waivers."""
@@ -256,7 +250,7 @@ class TestWaiverGenerator:
 
         # TOML should parse without error
         parsed = tomli.loads(result)
-        assert parsed["waiver"][0]["pattern"] == 'Test "1-1"'
+        assert parsed["waiver"][0]["message_id"] == 'Test "1-1"'
 
     def test_generate_date_format(self):
         """Generated date is in ISO format."""
@@ -358,10 +352,10 @@ class TestWaiverGenerator:
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "E 1-1" in patterns
-        assert "W 1-1" in patterns
-        assert "I 1-1" not in patterns
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "E 1-1" in message_ids
+        assert "W 1-1" in message_ids
+        assert "I 1-1" not in message_ids
 
     def test_custom_min_waiver_level(self):
         """Custom min_waiver_level filters appropriately."""
@@ -397,10 +391,10 @@ class TestWaiverGenerator:
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "E 1-1" in patterns
-        assert "CW 1-1" in patterns
-        assert "W 1-1" not in patterns
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "E 1-1" in message_ids
+        assert "CW 1-1" in message_ids
+        assert "W 1-1" not in message_ids
 
     def test_min_waiver_level_errors_only(self):
         """min_waiver_level=3 includes only errors."""
@@ -429,7 +423,7 @@ class TestWaiverGenerator:
 
         parsed = tomli.loads(result)
         assert len(parsed["waiver"]) == 1
-        assert parsed["waiver"][0]["pattern"] == "E 1-1"
+        assert parsed["waiver"][0]["message_id"] == "E 1-1"
 
     def test_include_all_overrides_min_waiver_level(self):
         """include_all=True includes all severities regardless of level."""
@@ -459,9 +453,9 @@ class TestWaiverGenerator:
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "E 1-1" in patterns
-        assert "I 1-1" in patterns
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "E 1-1" in message_ids
+        assert "I 1-1" in message_ids
 
     def test_custom_severity_levels(self):
         """Works with custom severity level definitions."""
@@ -505,10 +499,10 @@ class TestWaiverGenerator:
         result = generator.generate(messages)
 
         parsed = tomli.loads(result)
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "F-1" in patterns
-        assert "N-1" in patterns
-        assert "D-1" not in patterns
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "F-1" in message_ids
+        assert "N-1" in message_ids
+        assert "D-1" not in message_ids
 
 
 class TestGenerateWaiversCLI:
@@ -550,11 +544,11 @@ class TestGenerateWaiversCLI:
         parsed = tomli.loads(result.output)
 
         # Default waiver-level=1 includes warning and above, excludes info
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "Error 1-1" in patterns
-        assert "CW 1-1" in patterns
-        assert "Warn 1-1" in patterns
-        assert "Info 1-1" not in patterns  # INFO excluded by default
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "Error 1-1" in message_ids
+        assert "CW 1-1" in message_ids
+        assert "Warn 1-1" in message_ids
+        assert "Info 1-1" not in message_ids  # INFO excluded by default
 
     def test_generate_waivers_all_levels_with_waiver_level_0(self, tmp_path):
         """With --waiver-level 0, all severity levels are included."""
@@ -576,11 +570,11 @@ class TestGenerateWaiversCLI:
         parsed = tomli.loads(result.output)
 
         # waiver-level=0 includes all severity levels
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "Error 1-1" in patterns
-        assert "CW 1-1" in patterns
-        assert "Warn 1-1" in patterns
-        assert "Info 1-1" in patterns
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "Error 1-1" in message_ids
+        assert "CW 1-1" in message_ids
+        assert "Warn 1-1" in message_ids
+        assert "Info 1-1" in message_ids
 
     def test_generate_waivers_info_only_excluded_by_default(self, tmp_path):
         """INFO-only log generates empty waivers by default (min_waiver_level=1)."""
@@ -609,7 +603,7 @@ class TestGenerateWaiversCLI:
         parsed = tomli.loads(result.output)
         assert "waiver" in parsed
         assert len(parsed["waiver"]) == 1
-        assert parsed["waiver"][0]["pattern"] == "Info 1-1"
+        assert parsed["waiver"][0]["message_id"] == "Info 1-1"
 
     def test_generate_waivers_errors_only_with_waiver_level_2(self, tmp_path):
         """With --waiver-level 2, only errors and critical warnings are included."""
@@ -631,12 +625,12 @@ class TestGenerateWaiversCLI:
         parsed = tomli.loads(result.output)
 
         # waiver-level=2 includes level 2 and above (error=3, critical_warning=2)
-        patterns = [w["pattern"] for w in parsed["waiver"]]
-        assert "Error 1-1" in patterns
-        assert "CW 1-1" in patterns  # Critical Warning has level 2
+        message_ids = [w["message_id"] for w in parsed["waiver"]]
+        assert "Error 1-1" in message_ids
+        assert "CW 1-1" in message_ids  # Critical Warning has level 2
         # Warning (level 1) and Info (level 0) excluded
-        assert "Warn 1-1" not in patterns
-        assert "Info 1-1" not in patterns
+        assert "Warn 1-1" not in message_ids
+        assert "Info 1-1" not in message_ids
 
     def test_generate_waivers_includes_tool_name(self, tmp_path):
         """Tool name is included in metadata."""
@@ -697,8 +691,8 @@ class TestGenerateWaiversCLI:
         # stdout should be empty (no TOML generated)
         assert "[[waiver]]" not in result.output
 
-    def test_generate_waivers_with_hash_type(self, tmp_path):
-        """Messages without ID generate hash-type waivers."""
+    def test_generate_waivers_messages_without_id_skipped(self, tmp_path):
+        """Messages without ID are skipped (no hash fallback)."""
         log_file = tmp_path / "vivado.log"
         # Create a message that won't parse to a message_id
         log_file.write_text("# Vivado v2025.2\nERROR: Some error without standard format\n")
@@ -707,12 +701,13 @@ class TestGenerateWaiversCLI:
         result = runner.invoke(cli, [str(log_file), "--plugin", "vivado", "--generate-waivers"])
 
         # The Vivado plugin may or may not parse this - check output
-        # If it generated a waiver, check the type
         if "[[waiver]]" in result.output:
             parsed = tomli.loads(result.output)
             if parsed.get("waiver"):
-                # Either type should be valid
-                assert parsed["waiver"][0]["type"] in ("id", "hash")
+                # All generated waivers should use message_id
+                for waiver in parsed["waiver"]:
+                    assert "message_id" in waiver
+                    assert "type" not in waiver
 
 
 class TestWaiverGeneratorEdgeCases:
@@ -770,7 +765,7 @@ class TestWaiverGeneratorEdgeCases:
 
         # Should be valid TOML
         parsed = tomli.loads(result)
-        assert parsed["waiver"][0]["pattern"] == "Test\\1-1"
+        assert parsed["waiver"][0]["message_id"] == "Test\\1-1"
 
     def test_newline_in_message_id(self):
         """Newlines in message_id are properly escaped."""
@@ -788,4 +783,4 @@ class TestWaiverGeneratorEdgeCases:
         # Should be valid TOML
         parsed = tomli.loads(result)
         # The newline should be escaped
-        assert "Test" in parsed["waiver"][0]["pattern"]
+        assert "Test" in parsed["waiver"][0]["message_id"]

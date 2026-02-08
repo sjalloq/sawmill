@@ -17,9 +17,15 @@ class Waiver(BaseModel):
     Waivers indicate that a specific error or warning has been reviewed
     and accepted, so it should not cause CI failure.
 
+    Every waiver matches on message_id (required). An optional content_pattern
+    narrows the match to specific instances of that message ID.
+
     Attributes:
-        type: The type of matching to use ("id", "pattern", "file", "hash").
-        pattern: The pattern to match against (meaning depends on type).
+        message_id: The message ID to match (exact match, required).
+        content_match: How to interpret content_pattern ("raw" or "regex").
+            None when content_pattern is absent.
+        content_pattern: Optional pattern to match against message content.
+            If absent/empty, waiver matches all instances of the message_id.
         reason: Explanation of why this is waived.
         author: Who created this waiver.
         date: When this waiver was created (ISO format string).
@@ -29,8 +35,9 @@ class Waiver(BaseModel):
 
     model_config = ConfigDict(frozen=False)
 
-    type: Literal["id", "pattern", "file", "hash"]
-    pattern: str
+    message_id: str
+    content_match: Literal["raw", "regex"] | None = None
+    content_pattern: str | None = None
     reason: str
     author: str
     date: str

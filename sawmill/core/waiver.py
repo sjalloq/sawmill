@@ -3,12 +3,12 @@
 This module provides:
 - WaiverLoader: For reading TOML waiver files and validating waiver entries
 - WaiverMatcher: For matching log messages against waivers
+- WaiverGenerator: For generating waiver TOML from log messages
 
 Waivers are for CI acceptance (pass/fail decisions with audit trail).
 They are distinct from suppressions which are for display filtering.
 """
 
-import hashlib
 import re
 from pathlib import Path
 
@@ -62,24 +62,25 @@ class WaiverLoader:
         tool = "vivado"  # Optional, for documentation
 
         [[waiver]]
-        type = "id"              # Required: id, pattern, file, or hash
-        pattern = "Vivado 12-3523"  # Required: pattern to match
-        reason = "Intentional"   # Required: why this is waived
-        author = "user@email"    # Required: who created this waiver
-        date = "2026-01-18"      # Required: when this was created
-        expires = "2026-06-01"   # Optional: expiration date
-        ticket = "PROJ-123"      # Optional: issue tracker reference
+        message_id = "Vivado 12-3523"  # Required: message ID to match
+        content_match = "raw"           # Optional: "raw" or "regex"
+        content_pattern = "some text"   # Optional: narrows match
+        reason = "Intentional"          # Required: why this is waived
+        author = "user@email"           # Required: who created this waiver
+        date = "2026-01-18"             # Required: when this was created
+        expires = "2026-06-01"          # Optional: expiration date
+        ticket = "PROJ-123"             # Optional: issue tracker reference
 
     Example usage:
         loader = WaiverLoader()
         waivers = loader.load(Path("waivers.toml"))
     """
 
-    # Valid waiver types
-    VALID_TYPES = frozenset({"id", "pattern", "file", "hash"})
+    # Valid content_match values
+    VALID_CONTENT_MATCH = frozenset({"raw", "regex"})
 
     # Required fields for a waiver entry
-    REQUIRED_FIELDS = frozenset({"type", "pattern", "reason", "author", "date"})
+    REQUIRED_FIELDS = frozenset({"message_id", "reason", "author", "date"})
 
     def load(self, path: Path) -> WaiverFile:
         """Load waivers from a TOML file.
@@ -183,31 +184,12 @@ class WaiverLoader:
                 waiver_index=index,
             )
 
-        # Validate type field
-        waiver_type = entry.get("type")
-        if waiver_type not in self.VALID_TYPES:
+        # Validate message_id
+        message_id = entry.get("message_id")
+        if not message_id or not isinstance(message_id, str):
             raise WaiverValidationError(
-                f"Invalid waiver type '{waiver_type}'. "
-                f"Must be one of: {', '.join(sorted(self.VALID_TYPES))}",
-                path=path,
-                waiver_index=index,
+                "message_id must be a non-empty string", path=path, waiver_index=index
             )
-
-        # Validate pattern based on type
-        pattern = entry.get("pattern")
-        if not pattern or not isinstance(pattern, str):
-            raise WaiverValidationError(
-                "Pattern must be a non-empty string", path=path, waiver_index=index
-            )
-
-        # For pattern type, validate regex
-        if waiver_type == "pattern":
-            try:
-                re.compile(pattern)
-            except re.error as e:
-                raise WaiverValidationError(
-                    f"Invalid regex pattern: {e}", path=path, waiver_index=index
-                ) from e
 
         # Validate reason
         reason = entry.get("reason")
@@ -230,10 +212,31 @@ class WaiverLoader:
                 "Date must be a non-empty string", path=path, waiver_index=index
             )
 
+        # Validate content_match if present
+        content_match = entry.get("content_match")
+        if content_match is not None and content_match not in self.VALID_CONTENT_MATCH:
+            raise WaiverValidationError(
+                f"Invalid content_match '{content_match}'. "
+                f"Must be one of: {', '.join(sorted(self.VALID_CONTENT_MATCH))}",
+                path=path,
+                waiver_index=index,
+            )
+
+        # Validate content_pattern as regex if content_match == "regex"
+        content_pattern = entry.get("content_pattern")
+        if content_match == "regex" and content_pattern:
+            try:
+                re.compile(content_pattern)
+            except re.error as e:
+                raise WaiverValidationError(
+                    f"Invalid regex pattern: {e}", path=path, waiver_index=index
+                ) from e
+
         # Create and return Waiver instance
         return Waiver(
-            type=waiver_type,
-            pattern=pattern,
+            message_id=message_id,
+            content_match=content_match,
+            content_pattern=content_pattern,
             reason=reason,
             author=author,
             date=date,
@@ -263,11 +266,12 @@ class WaiverMatcher:
     The matcher checks messages against a list of waivers and returns the
     first matching waiver, or None if no waiver matches.
 
-    Waivers are matched in priority order:
-    1. hash - Exact match on SHA-256 hash of message.raw_text
-    2. id - Exact match on message.message_id
-    3. pattern - Regex match on message.raw_text
-    4. file - Match on message.file_ref.path
+    Matching is two-stage:
+    1. Match message_id exactly (required for all waivers)
+    2. If content_pattern is set, apply it as additional refinement:
+       - content_match == "raw": substring match on message content/raw_text
+       - content_match == "regex": regex search on message content/raw_text
+    3. If no content_pattern: match all instances of this message_id
 
     Example usage:
         matcher = WaiverMatcher(waivers)
@@ -284,21 +288,10 @@ class WaiverMatcher:
         """
         self._waivers = waivers
 
-        # Pre-organize waivers by type for efficient matching
-        self._hash_waivers: list[Waiver] = []
-        self._id_waivers: list[Waiver] = []
-        self._pattern_waivers: list[Waiver] = []
-        self._file_waivers: list[Waiver] = []
-
+        # Index waivers by message_id for O(1) lookup
+        self._by_message_id: dict[str, list[Waiver]] = {}
         for waiver in waivers:
-            if waiver.type == "hash":
-                self._hash_waivers.append(waiver)
-            elif waiver.type == "id":
-                self._id_waivers.append(waiver)
-            elif waiver.type == "pattern":
-                self._pattern_waivers.append(waiver)
-            elif waiver.type == "file":
-                self._file_waivers.append(waiver)
+            self._by_message_id.setdefault(waiver.message_id, []).append(waiver)
 
     @property
     def waivers(self) -> list[Waiver]:
@@ -308,13 +301,11 @@ class WaiverMatcher:
     def is_waived(self, message: Message) -> Waiver | None:
         """Check if a message is waived.
 
-        Waivers are checked in priority order:
-        1. hash - Exact match on SHA-256 hash of message.raw_text
-        2. id - Exact match on message.message_id
-        3. pattern - Regex match on message.raw_text
-        4. file - Match on message.file_ref.path
-
-        The first matching waiver is returned. If no waivers match, None is returned.
+        Matching logic:
+        1. Look up waivers by message_id (exact match)
+        2. For each matching waiver, check content_pattern if present
+        3. Waivers with content_pattern are checked first (more specific),
+           then waivers without (catch-all)
 
         Args:
             message: The Message to check against waivers
@@ -322,109 +313,50 @@ class WaiverMatcher:
         Returns:
             The matching Waiver if found, or None
         """
-        # Priority 1: Hash match (highest priority)
-        for waiver in self._hash_waivers:
-            if self._match_hash(message, waiver):
+        if message.message_id is None:
+            return None
+
+        candidates = self._by_message_id.get(message.message_id, [])
+        if not candidates:
+            return None
+
+        # Check waivers with content_pattern first (more specific)
+        for waiver in candidates:
+            if waiver.content_pattern and self._match_content(message, waiver):
                 return waiver
 
-        # Priority 2: ID match
-        for waiver in self._id_waivers:
-            if self._match_id(message, waiver):
-                return waiver
-
-        # Priority 3: Pattern match
-        for waiver in self._pattern_waivers:
-            if self._match_pattern(message, waiver):
-                return waiver
-
-        # Priority 4: File match (lowest priority)
-        for waiver in self._file_waivers:
-            if self._match_file(message, waiver):
+        # Then check catch-all waivers (no content_pattern)
+        for waiver in candidates:
+            if not waiver.content_pattern:
                 return waiver
 
         return None
 
-    def _match_hash(self, message: Message, waiver: Waiver) -> bool:
-        """Check if message matches a hash waiver.
+    def _match_content(self, message: Message, waiver: Waiver) -> bool:
+        """Check if message content matches a waiver's content pattern.
 
         Args:
             message: The message to check
-            waiver: The hash waiver to match against
+            waiver: The waiver with a content_pattern to match against
 
         Returns:
-            True if the SHA-256 hash of message.raw_text matches the waiver pattern
+            True if the content matches
         """
-        message_hash = hashlib.sha256(message.raw_text.encode("utf-8")).hexdigest()
-        return message_hash == waiver.pattern
-
-    def _match_id(self, message: Message, waiver: Waiver) -> bool:
-        """Check if message matches an ID waiver.
-
-        Args:
-            message: The message to check
-            waiver: The ID waiver to match against
-
-        Returns:
-            True if message.message_id exactly matches the waiver pattern
-        """
-        if message.message_id is None:
-            return False
-        return message.message_id == waiver.pattern
-
-    def _match_pattern(self, message: Message, waiver: Waiver) -> bool:
-        """Check if message matches a pattern (regex) waiver.
-
-        Args:
-            message: The message to check
-            waiver: The pattern waiver to match against
-
-        Returns:
-            True if waiver.pattern regex matches message.raw_text
-        """
-        try:
-            # Use DOTALL flag so '.' matches newlines in multi-line messages
-            return bool(re.search(waiver.pattern, message.raw_text, re.DOTALL))
-        except re.error:
-            # Invalid regex pattern - should not happen if WaiverLoader validated
-            return False
-
-    def _match_file(self, message: Message, waiver: Waiver) -> bool:
-        """Check if message matches a file waiver.
-
-        The file waiver pattern is matched against the message's file_ref.path.
-        The match can be:
-        - Exact match
-        - Pattern matches end of path (for relative paths)
-        - Glob-style wildcards (* matches any characters)
-
-        Args:
-            message: The message to check
-            waiver: The file waiver to match against
-
-        Returns:
-            True if the message's file path matches the waiver pattern
-        """
-        if message.file_ref is None:
-            return False
-
-        file_path = message.file_ref.path
-        pattern = waiver.pattern
-
-        # Exact match
-        if file_path == pattern:
+        pattern = waiver.content_pattern
+        if not pattern:
             return True
 
-        # End match (relative path matching)
-        if file_path.endswith(pattern):
-            return True
+        # Match against raw_text (includes full message content)
+        text = message.raw_text
 
-        # Glob-style matching (convert * to regex .*)
-        # Escape regex special characters except *
-        regex_pattern = re.escape(pattern).replace(r"\*", ".*")
-        try:
-            return bool(re.fullmatch(regex_pattern, file_path))
-        except re.error:
-            return False
+        if waiver.content_match == "regex":
+            try:
+                return bool(re.search(pattern, text, re.DOTALL))
+            except re.error:
+                return False
+        else:
+            # Default to raw (substring) match
+            return pattern in text
 
 
 class WaiverGenerator:
@@ -435,9 +367,8 @@ class WaiverGenerator:
     placeholder values for author and reason that users should review
     and update.
 
-    Generated waivers use:
-    - type="id" for messages that have a message_id
-    - type="hash" for messages without a message_id (SHA-256 of raw_text)
+    Generated waivers use message_id for all messages that have one.
+    Messages without a message_id are skipped.
 
     The generator filters messages by severity level. By default, only messages
     with level >= 1 (above the lowest informational level 0) are included.
@@ -518,8 +449,10 @@ class WaiverGenerator:
 
         # Generate waiver entries
         for msg in filtered:
-            lines.extend(self._generate_waiver_entry(msg))
-            lines.append("")
+            entry = self._generate_waiver_entry(msg)
+            if entry:
+                lines.extend(entry)
+                lines.append("")
 
         return "\n".join(lines)
 
@@ -563,30 +496,26 @@ class WaiverGenerator:
 
         return result
 
-    def _generate_waiver_entry(self, message: Message) -> list[str]:
+    def _generate_waiver_entry(self, message: Message) -> list[str] | None:
         """Generate a single waiver entry for a message.
 
         Args:
             message: The message to generate a waiver for.
 
         Returns:
-            List of TOML lines for this waiver entry.
+            List of TOML lines for this waiver entry, or None if message
+            has no message_id.
         """
         from datetime import date
+
+        # Skip messages without message_id
+        if not message.message_id:
+            return None
 
         lines: list[str] = []
         lines.append("[[waiver]]")
 
-        # Determine waiver type and pattern
-        if message.message_id:
-            waiver_type = "id"
-            pattern = message.message_id
-        else:
-            waiver_type = "hash"
-            pattern = hashlib.sha256(message.raw_text.encode("utf-8")).hexdigest()
-
-        lines.append(f'type = "{waiver_type}"')
-        lines.append(f'pattern = "{self._escape_toml_string(pattern)}"')
+        lines.append(f'message_id = "{self._escape_toml_string(message.message_id)}"')
         lines.append(f'reason = "{self._escape_toml_string(self._reason)}"')
         lines.append(f'author = "{self._escape_toml_string(self._author)}"')
         lines.append(f'date = "{date.today().isoformat()}"')

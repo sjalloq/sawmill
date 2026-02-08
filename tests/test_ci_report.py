@@ -171,8 +171,7 @@ class TestCIReportGeneration:
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
-            '[[waiver]]\npattern = "Synth 8-1"\n'
-            'type = "id"\n'
+            '[[waiver]]\nmessage_id = "Synth 8-1"\n'
             'reason = "Known issue"\n'
             'author = "test"\n'
             'date = "2025-01-01"\n'
@@ -210,8 +209,7 @@ class TestCIReportGeneration:
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
-            '[[waiver]]\npattern = "Synth 8-1"\n'
-            'type = "id"\n'
+            '[[waiver]]\nmessage_id = "Synth 8-1"\n'
             'reason = "Known issue"\n'
             'author = "test"\n'
             'date = "2025-01-01"\n'
@@ -317,7 +315,7 @@ class TestReportWithFilters:
         assert report["summary"]["by_severity"]["info"] == 0
 
     def test_report_respects_suppress_id(self, tmp_path):
-        """Report should not count suppressed messages."""
+        """Suppress-id is display-only — CI report still counts suppressed messages."""
         log_file = tmp_path / "test.log"
         log_file.write_text(
             "# Vivado v2025.2\nERROR: [Synth 8-1] error1\nERROR: [Route 35-1] error2\n"
@@ -342,8 +340,14 @@ class TestReportWithFilters:
 
         report = json.loads(report_file.read_text())
 
-        assert report["summary"]["total"] == 1
-        assert report["summary"]["by_severity"]["error"] == 1
+        # Total includes both errors (suppression is display-only)
+        assert report["summary"]["total"] == 2
+        # Both errors visible to CI (unwaived, unsuppressed from CI perspective)
+        assert report["summary"]["by_severity"]["error"] == 2
+        # One message is suppressed from display
+        assert report["summary"]["suppressed"] == 1
+        # CI should fail since both errors are unwaived
+        assert report["exit_code"] == 1
 
 
 class TestReportMetadata:
@@ -481,8 +485,7 @@ class TestReportEdgeCases:
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
-            '[[waiver]]\npattern = "Synth 8-1"\n'
-            'type = "id"\n'
+            '[[waiver]]\nmessage_id = "Synth 8-1"\n'
             'reason = "Known issue"\n'
             'author = "test"\n'
             'date = "2025-01-01"\n'
@@ -523,13 +526,11 @@ class TestReportUnusedWaivers:
 
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text(
-            '[[waiver]]\npattern = "Synth 8-1"\n'
-            'type = "id"\n'
+            '[[waiver]]\nmessage_id = "Synth 8-1"\n'
             'reason = "Used waiver"\n'
             'author = "test"\n'
             'date = "2025-01-01"\n\n'
-            '[[waiver]]\npattern = "Route 99-99"\n'
-            'type = "id"\n'
+            '[[waiver]]\nmessage_id = "Route 99-99"\n'
             'reason = "Unused waiver"\n'
             'author = "test"\n'
             'date = "2025-01-01"\n'
@@ -556,4 +557,96 @@ class TestReportUnusedWaivers:
 
         assert "unused_waivers" in report
         assert len(report["unused_waivers"]) == 1
-        assert report["unused_waivers"][0]["pattern"] == "Route 99-99"
+        assert report["unused_waivers"][0]["message_id"] == "Route 99-99"
+
+
+class TestReportSuppressedMessages:
+    """Test report handling of suppressed messages (display-only, not CI)."""
+
+    def test_report_distinguishes_suppressed_and_waived(self, tmp_path):
+        """Report should have separate suppressed and waived sections with correct counts."""
+        log_file = tmp_path / "test.log"
+        log_file.write_text(
+            "# Vivado v2025.2\n"
+            "ERROR: [Synth 8-1] waived error\n"
+            "ERROR: [Route 35-1] suppressed error\n"
+            "WARNING: [Vivado 12-1] visible warning\n"
+        )
+
+        waiver_file = tmp_path / "waivers.toml"
+        waiver_file.write_text(
+            '[[waiver]]\nmessage_id = "Synth 8-1"\n'
+            'reason = "Known issue"\n'
+            'author = "test"\n'
+            'date = "2025-01-01"\n'
+        )
+
+        report_file = tmp_path / "report.json"
+
+        runner = CliRunner()
+        runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--suppress-id",
+                "Route 35-1",
+                "--waivers",
+                str(waiver_file),
+                "--report",
+                str(report_file),
+                str(log_file),
+            ],
+        )
+
+        report = json.loads(report_file.read_text())
+
+        # Total = all scope-filtered messages (3)
+        assert report["summary"]["total"] == 3
+        # 1 waived
+        assert report["summary"]["waived"] == 1
+        # 1 suppressed from display
+        assert report["summary"]["suppressed"] == 1
+        # waived section has the waived message
+        assert len(report["waived"]) == 1
+        assert report["waived"][0]["message_id"] == "Synth 8-1"
+        # suppressed section has the suppressed message
+        assert "suppressed" in report
+        assert len(report["suppressed"]) == 1
+        assert report["suppressed"][0]["message_id"] == "Route 35-1"
+        # CI sees the suppressed error as unwaived → exit 1
+        assert report["exit_code"] == 1
+
+    def test_report_suppress_pattern_counts_in_total(self, tmp_path):
+        """Suppressed messages via --suppress pattern should be in report total."""
+        log_file = tmp_path / "test.log"
+        log_file.write_text(
+            "# Vivado v2025.2\nERROR: [Test 1-1] hidden error\nINFO: [Info 1-1] visible info\n"
+        )
+
+        report_file = tmp_path / "report.json"
+
+        runner = CliRunner()
+        runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--suppress",
+                "hidden error",
+                "--report",
+                str(report_file),
+                str(log_file),
+            ],
+        )
+
+        report = json.loads(report_file.read_text())
+
+        # Total includes the suppressed error
+        assert report["summary"]["total"] == 2
+        assert report["summary"]["suppressed"] == 1
+        # CI still sees the error
+        assert report["summary"]["by_severity"]["error"] == 1
+        assert report["exit_code"] == 1

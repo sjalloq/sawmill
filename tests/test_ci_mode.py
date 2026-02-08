@@ -160,7 +160,7 @@ class TestCheckModeWithFilters:
         assert result.exit_code == 1
 
     def test_check_with_suppress_pattern(self, tmp_path):
-        """Check mode with --suppress should exclude matched errors from failure check."""
+        """Suppress affects display only — CI should still fail on suppressed errors."""
         log_file = tmp_path / "errors.log"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] known issue\n")
 
@@ -169,11 +169,11 @@ class TestCheckModeWithFilters:
             cli, ["--check", "--suppress", "known issue", "--plugin", "vivado", str(log_file)]
         )
 
-        # Error is suppressed, so should pass
-        assert result.exit_code == 0
+        # Suppression is display-only; CI still sees the error
+        assert result.exit_code == 1
 
     def test_check_with_suppress_id(self, tmp_path):
-        """Check mode with --suppress-id should exclude specific message IDs."""
+        """Suppress-id affects display only — CI should still fail on suppressed errors."""
         log_file = tmp_path / "errors.log"
         log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
 
@@ -182,8 +182,8 @@ class TestCheckModeWithFilters:
             cli, ["--check", "--suppress-id", "Test 1-1", "--plugin", "vivado", str(log_file)]
         )
 
-        # Error is suppressed by ID, so should pass
-        assert result.exit_code == 0
+        # Suppression is display-only; CI still sees the error
+        assert result.exit_code == 1
 
     def test_check_with_category_filter(self, tmp_path):
         """Check mode with category filter affects what is counted."""
@@ -410,4 +410,125 @@ class TestCheckModeEdgeCases:
         )
 
         # Only "Info 1-1" matches, which is just info
+        assert result.exit_code == 0
+
+
+class TestSuppressCIDecoupling:
+    """Tests verifying that suppressions only affect display, not CI evaluation."""
+
+    def test_suppress_does_not_affect_check_exit_code(self, tmp_path):
+        """--suppress with --check should still fail on matching errors."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text(
+            "# Vivado v2025.2\n"
+            "ERROR: [Test 1-1] critical failure\n"
+            "WARNING: [Warn 2-1] minor warning\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--check", "--suppress", "critical failure", "--plugin", "vivado", str(log_file)],
+        )
+
+        # Error is suppressed from display but CI still sees it
+        assert result.exit_code == 1
+
+    def test_suppress_id_does_not_affect_check_exit_code(self, tmp_path):
+        """--suppress-id with --check should still fail on matching errors."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] something failed\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--check", "--suppress-id", "Test 1-1", "--plugin", "vivado", str(log_file)],
+        )
+
+        # Error is suppressed from display but CI still sees it
+        assert result.exit_code == 1
+
+    def test_suppress_with_check_shows_warning(self, tmp_path):
+        """--suppress with --check should emit a warning about display-only behavior."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] error\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--check", "--suppress", "error", "--plugin", "vivado", str(log_file)],
+        )
+
+        # Warning should appear in output (stderr is mixed with stdout in CliRunner)
+        assert "display only" in result.output
+
+    def test_suppress_affects_display_in_check_mode(self, tmp_path):
+        """Suppressed messages should be hidden from stdout but CI still fails."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text(
+            "# Vivado v2025.2\nERROR: [Test 1-1] hidden error\nINFO: [Info 1-1] visible info\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--check", "--suppress", "hidden error", "--plugin", "vivado", str(log_file)],
+        )
+
+        # CI fails because error exists
+        assert result.exit_code == 1
+        # But the suppressed error should not appear in display output
+        assert "hidden error" not in result.output
+
+    def test_suppress_all_errors_ci_still_fails(self, tmp_path):
+        """Suppressing all errors should still cause CI failure."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text(
+            "# Vivado v2025.2\nERROR: [Test 1-1] error one\nERROR: [Test 2-2] error two\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--suppress",
+                "error",
+                "--plugin",
+                "vivado",
+                str(log_file),
+            ],
+        )
+
+        # Both errors suppressed from display, but CI still sees them
+        assert result.exit_code == 1
+
+    def test_waiver_still_affects_ci(self, tmp_path):
+        """Waivers (unlike suppressions) should still affect CI pass/fail."""
+        log_file = tmp_path / "errors.log"
+        log_file.write_text("# Vivado v2025.2\nERROR: [Test 1-1] waived error\n")
+
+        waiver_file = tmp_path / "waivers.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+reason = "Reviewed and accepted"
+author = "test"
+date = "2026-01-18"
+""")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--check",
+                "--plugin",
+                "vivado",
+                "--waivers",
+                str(waiver_file),
+                str(log_file),
+            ],
+        )
+
+        # Waiver properly handles CI acceptance
         assert result.exit_code == 0

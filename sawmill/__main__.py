@@ -238,11 +238,12 @@ def _generate_check_report(
     min_level: int,
     log_file: str,
     plugin_name: str,
+    suppressed_messages: list | None = None,
 ) -> dict:
     """Generate a check summary report as a dictionary.
 
     Args:
-        messages: List of unwaived messages.
+        messages: List of unwaived messages (from CI set, not display set).
         waived_messages: List of (message, waiver) tuples for waived messages.
         used_waivers: List of waivers that matched messages.
         all_waivers: All waivers that were loaded.
@@ -250,10 +251,13 @@ def _generate_check_report(
         min_level: Minimum severity level that causes failure.
         log_file: Path to the log file being analyzed.
         plugin_name: Name of the plugin used.
+        suppressed_messages: Messages hidden from display by suppress filters.
 
     Returns:
         Dictionary containing the check report.
     """
+    if suppressed_messages is None:
+        suppressed_messages = []
     # Build severity counts dynamically from plugin
     severity_levels = _get_severity_levels(plugin)
     counts: dict[str, int] = {level.id: 0 for level in severity_levels}
@@ -316,8 +320,7 @@ def _generate_check_report(
                 "severity": msg.severity,
                 "content": msg.content,
                 "line": msg.start_line,
-                "waiver_pattern": waiver.pattern,
-                "waiver_type": waiver.type,
+                "waiver_message_id": waiver.message_id,
                 "waiver_reason": waiver.reason,
             }
         )
@@ -328,15 +331,31 @@ def _generate_check_report(
         if waiver not in used_waivers:
             unused_waivers.append(
                 {
-                    "pattern": waiver.pattern,
-                    "type": waiver.type,
+                    "message_id": waiver.message_id,
                     "reason": waiver.reason,
                 }
             )
 
+    # Build suppressed list
+    suppressed_list = []
+    for msg in suppressed_messages:
+        suppressed_list.append(
+            {
+                "message_id": msg.message_id,
+                "severity": msg.severity,
+                "content": msg.content,
+                "line": msg.start_line,
+                "raw_text": msg.raw_text,
+            }
+        )
+
     # Build the report with dynamic severity counts
+    # total = all scope-filtered messages (pre-waiver, pre-suppress from CI perspective)
+    # Note: suppressed_messages are a subset of (messages + waived_messages) that were
+    # removed from display only, so they're already counted in the CI totals.
     summary = {
         "total": len(messages) + len(waived_messages),
+        "suppressed": len(suppressed_messages),
         "waived": len(waived_messages),
         "by_severity": counts,
         "waived_by_severity": waived_counts,
@@ -353,6 +372,7 @@ def _generate_check_report(
         "summary": summary,
         "issues": issues,
         "waived": waived_list,
+        "suppressed": suppressed_list,
         "unused_waivers": unused_waivers,
     }
 
@@ -394,7 +414,7 @@ def _process_log_file(
     summary: bool = False,
     group_by: str | None = None,
     top_n: int = 5,
-) -> tuple[list, dict[str, str]]:
+) -> tuple[list, list, dict[str, str]]:
     """Process a log file with the specified filters.
 
     Args:
@@ -414,7 +434,9 @@ def _process_log_file(
         top_n: Limit messages per group when using group_by.
 
     Returns:
-        Tuple of (filtered messages, severity style map).
+        Tuple of (display_messages, ci_messages, severity_style_map).
+        display_messages: Messages after all filters including suppressions (for display).
+        ci_messages: Messages after scope filters only, before suppressions (for CI evaluation).
     """
     manager = _get_plugin_manager()
     path = Path(logfile)
@@ -492,26 +514,12 @@ def _process_log_file(
             if _severity_at_or_above(msg.severity, severity, severity_level_map)
         ]
 
-    # Apply regex filter if specified
+    # Apply regex filter if specified (scope filter — affects CI)
     if filter_pattern:
         engine = FilterEngine()
         messages = engine.apply_filter(filter_pattern, messages)
 
-    # Apply suppression patterns
-    if suppress_patterns:
-        engine = FilterEngine()
-        messages = engine.apply_suppressions(list(suppress_patterns), messages)
-
-    # Apply suppress-id filters
-    if suppress_ids:
-        suppress_id_set = set(suppress_ids)
-        messages = [
-            msg
-            for msg in messages
-            if msg.message_id is None or msg.message_id not in suppress_id_set
-        ]
-
-    # Apply message ID pattern filters (include only matching)
+    # Apply message ID pattern filters (scope filter — affects CI)
     if id_patterns:
         filtered = []
         for msg in messages:
@@ -521,11 +529,28 @@ def _process_log_file(
                     break
         messages = filtered
 
-    # Apply category filters (include only matching)
+    # Apply category filters (scope filter — affects CI)
     if categories:
         category_set = {c.lower() for c in categories}
         messages = [
             msg for msg in messages if msg.category and msg.category.lower() in category_set
+        ]
+
+    # Snapshot for CI: all scope filters applied, before display-only suppressions
+    ci_messages = list(messages)
+
+    # Apply suppression patterns (display only — does NOT affect CI)
+    if suppress_patterns:
+        engine = FilterEngine()
+        messages = engine.apply_suppressions(list(suppress_patterns), messages)
+
+    # Apply suppress-id filters (display only — does NOT affect CI)
+    if suppress_ids:
+        suppress_id_set = set(suppress_ids)
+        messages = [
+            msg
+            for msg in messages
+            if msg.message_id is None or msg.message_id not in suppress_id_set
         ]
 
     # Get severity levels from plugin for aggregation and count format
@@ -540,7 +565,7 @@ def _process_log_file(
     else:
         _output_messages(console, messages, output_format, severity_style_map, severity_ids)
 
-    return messages, severity_style_map
+    return messages, ci_messages, severity_style_map
 
 
 def _output_messages(
@@ -1289,8 +1314,18 @@ def cli(
             console.print(f"[red]Error:[/red] Invalid waiver file: {e}")
             ctx.exit(1)
 
+    # Warn if suppress + check are combined (suppressions don't affect CI)
+    if check and (suppress_patterns or suppress_ids):
+        import sys
+
+        err_console = Console(file=sys.stderr)
+        err_console.print(
+            "[yellow]Warning:[/yellow] --suppress/--suppress-id affects display only, "
+            "not CI pass/fail. Use --waivers for CI acceptance.",
+        )
+
     # Process the log file
-    messages, severity_style_map = _process_log_file(
+    messages, ci_messages, severity_style_map = _process_log_file(
         ctx,
         console,
         logfile,
@@ -1307,18 +1342,29 @@ def cli(
         top_n,
     )
 
-    # Apply waivers if loaded
-    waived_messages: list = []
-    used_waivers: list[Waiver] = []
-    if waiver_matcher:
-        messages, waived_messages, used_waivers = _apply_waivers(messages, waiver_matcher)
+    # Compute suppressed messages (in CI set but removed from display by suppress filters)
+    display_id_set = {id(m) for m in messages}
+    suppressed_messages = [m for m in ci_messages if id(m) not in display_id_set]
 
-    # Show waived messages if requested
-    if show_waived and waived_messages:
+    # Apply waivers to CI message set (for CI evaluation)
+    ci_waived_messages: list = []
+    ci_used_waivers: list[Waiver] = []
+    if waiver_matcher:
+        ci_messages, ci_waived_messages, ci_used_waivers = _apply_waivers(
+            ci_messages, waiver_matcher
+        )
+
+    # Apply waivers to display message set (for --show-waived output)
+    display_waived: list = []
+    if waiver_matcher:
+        messages, display_waived, _display_used_waivers = _apply_waivers(messages, waiver_matcher)
+
+    # Show waived messages if requested (from display set)
+    if show_waived and display_waived:
         console.print("\n[bold cyan]Waived Messages:[/bold cyan]")
-        for msg, waiver in waived_messages:
+        for msg, waiver in display_waived:
             style = _get_severity_style(msg.severity, severity_style_map)
-            console.print(f"  [dim]Waived by:[/dim] {waiver.pattern} ({waiver.type})")
+            console.print(f"  [dim]Waived by:[/dim] {waiver.message_id}")
             console.print(f"  [dim]Reason:[/dim] {waiver.reason}")
             if style:
                 console.print(f"  {msg.raw_text}", style=style, markup=False)
@@ -1326,13 +1372,13 @@ def cli(
                 console.print(f"  {msg.raw_text}", markup=False)
             console.print()
 
-    # Report unused waivers if requested
+    # Report unused waivers if requested (from CI set — most complete)
     if report_unused and all_waivers:
-        unused_waivers = [w for w in all_waivers if w not in used_waivers]
+        unused_waivers = [w for w in all_waivers if w not in ci_used_waivers]
         if unused_waivers:
             console.print("\n[bold yellow]Unused Waivers:[/bold yellow]")
             for waiver in unused_waivers:
-                console.print(f"  - {waiver.pattern} ({waiver.type}): {waiver.reason}")
+                console.print(f"  - {waiver.message_id}: {waiver.reason}")
 
     # Get plugin for report and check mode
     report_plugin = None
@@ -1355,18 +1401,19 @@ def cli(
     if report_plugin:
         min_level = _get_fail_on_level(fail_on, report_plugin)
 
-    # Generate check report if requested
+    # Generate check report if requested (uses CI message set)
     if report_file:
         if report_plugin:
             report = _generate_check_report(
-                messages=messages,
-                waived_messages=waived_messages,
-                used_waivers=used_waivers,
+                messages=ci_messages,
+                waived_messages=ci_waived_messages,
+                used_waivers=ci_used_waivers,
                 all_waivers=all_waivers,
                 plugin=report_plugin,
                 min_level=min_level,
                 log_file=logfile,
                 plugin_name=used_plugin_name,
+                suppressed_messages=suppressed_messages,
             )
 
             # Write the report to file
@@ -1379,10 +1426,10 @@ def cli(
                 "[yellow]Warning:[/yellow] Cannot generate report without a valid plugin."
             )
 
-    # Check exit codes (only on unwaived messages)
+    # Check exit codes (on unwaived CI messages — suppressions do NOT affect this)
     if check:
         if report_plugin:
-            if _has_check_failures(messages, report_plugin, min_level):
+            if _has_check_failures(ci_messages, report_plugin, min_level):
                 ctx.exit(1)
         else:
             console.print("[yellow]Warning:[/yellow] Cannot check failures without a valid plugin.")

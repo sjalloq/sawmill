@@ -18,8 +18,7 @@ class TestWaiverLoader:
 tool = "vivado"
 
 [[waiver]]
-type = "id"
-pattern = "Vivado 12-3523"
+message_id = "Vivado 12-3523"
 reason = "Intentional"
 author = "test"
 date = "2026-01-18"
@@ -29,8 +28,7 @@ date = "2026-01-18"
         waivers = loader.load(waiver_file)
 
         assert len(waivers.waivers) == 1
-        assert waivers.waivers[0].type == "id"
-        assert waivers.waivers[0].pattern == "Vivado 12-3523"
+        assert waivers.waivers[0].message_id == "Vivado 12-3523"
         assert waivers.tool == "vivado"
 
     def test_invalid_waiver_rejected(self, tmp_path):
@@ -38,8 +36,8 @@ date = "2026-01-18"
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-# Missing required fields: pattern, reason, author, date
+message_id = "Test 1-1"
+# Missing required fields: reason, author, date
 """)
 
         loader = WaiverLoader()
@@ -53,22 +51,23 @@ type = "id"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Vivado 12-3523"
+message_id = "Vivado 12-3523"
 reason = "Intentional"
 author = "alice"
 date = "2026-01-18"
 
 [[waiver]]
-type = "pattern"
-pattern = "timing.*violation"
+message_id = "Synth 8-3332"
+content_match = "regex"
+content_pattern = "timing.*violation"
 reason = "Known issue"
 author = "bob"
 date = "2026-01-17"
 
 [[waiver]]
-type = "file"
-pattern = "/path/to/file.v"
+message_id = "DRC 1-100"
+content_match = "raw"
+content_pattern = "some specific text"
 reason = "Legacy code"
 author = "charlie"
 date = "2026-01-16"
@@ -78,39 +77,20 @@ date = "2026-01-16"
         waivers = loader.load(waiver_file)
 
         assert len(waivers.waivers) == 3
-        assert waivers.waivers[0].type == "id"
-        assert waivers.waivers[1].type == "pattern"
-        assert waivers.waivers[2].type == "file"
+        assert waivers.waivers[0].message_id == "Vivado 12-3523"
+        assert waivers.waivers[0].content_match is None
+        assert waivers.waivers[0].content_pattern is None
+        assert waivers.waivers[1].content_match == "regex"
+        assert waivers.waivers[1].content_pattern == "timing.*violation"
+        assert waivers.waivers[2].content_match == "raw"
 
-    def test_all_waiver_types_supported(self, tmp_path):
-        """Verify all four waiver types are supported: id, pattern, file, hash."""
+    def test_waiver_without_content_pattern(self, tmp_path):
+        """Waiver without content_pattern matches all instances of message_id."""
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
-reason = "ID match"
-author = "test"
-date = "2026-01-18"
-
-[[waiver]]
-type = "pattern"
-pattern = "error.*message"
-reason = "Pattern match"
-author = "test"
-date = "2026-01-18"
-
-[[waiver]]
-type = "file"
-pattern = "/path/to/file.v"
-reason = "File match"
-author = "test"
-date = "2026-01-18"
-
-[[waiver]]
-type = "hash"
-pattern = "abc123def456"
-reason = "Hash match"
+message_id = "Test 1-1"
+reason = "Match all instances"
 author = "test"
 date = "2026-01-18"
 """)
@@ -118,17 +98,18 @@ date = "2026-01-18"
         loader = WaiverLoader()
         waivers = loader.load(waiver_file)
 
-        assert len(waivers.waivers) == 4
-        types = {w.type for w in waivers.waivers}
-        assert types == {"id", "pattern", "file", "hash"}
+        assert len(waivers.waivers) == 1
+        assert waivers.waivers[0].content_match is None
+        assert waivers.waivers[0].content_pattern is None
 
-    def test_invalid_waiver_type_rejected(self, tmp_path):
-        """Invalid waiver type should be rejected."""
+    def test_invalid_content_match_rejected(self, tmp_path):
+        """Invalid content_match value should be rejected."""
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "invalid_type"
-pattern = "test"
+message_id = "Test 1-1"
+content_match = "invalid_type"
+content_pattern = "test"
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -137,15 +118,16 @@ date = "2026-01-18"
         loader = WaiverLoader()
         with pytest.raises(WaiverValidationError) as exc:
             loader.load(waiver_file)
-        assert "invalid waiver type" in str(exc.value).lower()
+        assert "invalid content_match" in str(exc.value).lower()
 
-    def test_invalid_regex_pattern_rejected(self, tmp_path):
-        """Invalid regex pattern should be rejected for pattern type."""
+    def test_invalid_regex_content_pattern_rejected(self, tmp_path):
+        """Invalid regex content_pattern should be rejected when content_match is regex."""
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "pattern"
-pattern = "[invalid(regex"
+message_id = "Test 1-1"
+content_match = "regex"
+content_pattern = "[invalid(regex"
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -161,7 +143,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]
-type = "id"  # Missing closing bracket above
+message_id = "Test 1-1"  # Missing closing bracket above
 """)
 
         loader = WaiverLoader()
@@ -174,8 +156,7 @@ type = "id"  # Missing closing bracket above
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "Temporary fix"
 author = "test"
 date = "2026-01-18"
@@ -194,8 +175,7 @@ ticket = "PROJ-123"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -245,8 +225,7 @@ tool = "vivado"
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -266,7 +245,7 @@ class TestWaiverValidationError:
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
+message_id = "Test 1-1"
 """)
 
         loader = WaiverLoader()
@@ -280,15 +259,13 @@ type = "id"
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Valid"
+message_id = "Valid"
 reason = "test"
 author = "test"
 date = "2026-01-18"
 
 [[waiver]]
-type = "id"
-pattern = "Missing reason field"
+message_id = "Missing reason field"
 author = "test"
 date = "2026-01-18"
 """)
@@ -321,8 +298,7 @@ class TestLoadFromString:
 tool = "vivado"
 
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -338,7 +314,7 @@ date = "2026-01-18"
         """Load from string with path for error reporting."""
         content = """
 [[waiver]]
-type = "id"
+message_id = "Test 1-1"
 # Missing fields
 """
 
@@ -362,13 +338,12 @@ type = "id"
 class TestWaiverValidation:
     """Tests for specific waiver field validation."""
 
-    def test_empty_pattern_rejected(self, tmp_path):
-        """Empty pattern should be rejected."""
+    def test_empty_message_id_rejected(self, tmp_path):
+        """Empty message_id should be rejected."""
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = ""
+message_id = ""
 reason = "test"
 author = "test"
 date = "2026-01-18"
@@ -377,15 +352,14 @@ date = "2026-01-18"
         loader = WaiverLoader()
         with pytest.raises(WaiverValidationError) as exc:
             loader.load(waiver_file)
-        assert "pattern" in str(exc.value).lower()
+        assert "message_id" in str(exc.value).lower()
 
     def test_empty_reason_rejected(self, tmp_path):
         """Empty reason should be rejected."""
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = ""
 author = "test"
 date = "2026-01-18"
@@ -401,8 +375,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "test"
 author = ""
 date = "2026-01-18"
@@ -418,8 +391,7 @@ date = "2026-01-18"
         waiver_file = tmp_path / "bad.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "Test 1-1"
+message_id = "Test 1-1"
 reason = "test"
 author = "test"
 date = ""
@@ -430,32 +402,34 @@ date = ""
             loader.load(waiver_file)
         assert "date" in str(exc.value).lower()
 
-    def test_non_pattern_type_skips_regex_validation(self, tmp_path):
-        """Non-pattern types should not validate pattern as regex."""
+    def test_raw_content_match_skips_regex_validation(self, tmp_path):
+        """Raw content_match should not validate content_pattern as regex."""
         waiver_file = tmp_path / "waivers.toml"
         waiver_file.write_text("""
 [[waiver]]
-type = "id"
-pattern = "[Vivado 12-3523]"
-reason = "ID contains brackets"
+message_id = "Test 1-1"
+content_match = "raw"
+content_pattern = "[not a valid regex"
+reason = "Literal substring match"
 author = "test"
 date = "2026-01-18"
 """)
 
         loader = WaiverLoader()
-        # Should not raise - ID patterns are literal, not regex
+        # Should not raise - raw patterns are literal, not regex
         waivers = loader.load(waiver_file)
 
-        assert waivers.waivers[0].pattern == "[Vivado 12-3523]"
+        assert waivers.waivers[0].content_pattern == "[not a valid regex"
 
-    def test_valid_regex_in_pattern_type(self, tmp_path):
-        """Valid regex should be accepted for pattern type."""
+    def test_valid_regex_in_content_pattern(self, tmp_path):
+        """Valid regex should be accepted for regex content_match."""
         waiver_file = tmp_path / "waivers.toml"
         # In TOML basic strings, backslashes must be escaped. Use literal string (single quotes).
         waiver_file.write_text("""
 [[waiver]]
-type = "pattern"
-pattern = 'timing.*violation\\s+\\d+'
+message_id = "Test 1-1"
+content_match = "regex"
+content_pattern = 'timing.*violation\\s+\\d+'
 reason = "Complex regex"
 author = "test"
 date = "2026-01-18"
@@ -464,4 +438,4 @@ date = "2026-01-18"
         loader = WaiverLoader()
         waivers = loader.load(waiver_file)
 
-        assert waivers.waivers[0].pattern == r"timing.*violation\s+\d+"
+        assert waivers.waivers[0].content_pattern == r"timing.*violation\s+\d+"
