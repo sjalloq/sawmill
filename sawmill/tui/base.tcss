@@ -1,0 +1,201 @@
+/* Sawmill base stylesheet — Nord transparent theme
+ * Derived from STYLE_SPEC.md
+ */
+
+/* === 4.1 Screen === */
+Screen {
+    background: transparent;
+}
+
+/* === 4.2 Scrollbars (global) === */
+* {
+    scrollbar-size: 1 1;
+    scrollbar-color: $primary;
+    scrollbar-background: $primary-muted;
+    scrollbar-color-hover: $primary-lighten-3;
+    scrollbar-color-active: $primary-lighten-3;
+}
+
+/* === 4.3 Panel (bordered container with focus) === */
+.panel {
+    background: transparent;
+    border: round $primary-background-lighten-3;
+    border-title-color: $primary;
+    border-title-background: transparent;
+    border-subtitle-color: $text-muted;
+    border-subtitle-background: transparent;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+.panel:focus-within {
+    border: round $primary-lighten-3;
+}
+
+/* === Header === */
+#header {
+    dock: top;
+    height: 1;
+    background: transparent;
+    color: $text;
+    text-align: center;
+    text-style: bold;
+    width: 100%;
+    padding: 0 1;
+}
+
+/* === Severity stats bar === */
+#severity-bar {
+    height: 1;
+    background: transparent;
+    padding: 0 1;
+    width: 100%;
+}
+
+/* === 4.4 Custom Footer === */
+.footer {
+    dock: bottom;
+    height: 1;
+    background: transparent;
+}
+
+.footer > * {
+    background: transparent;
+}
+
+.footer-key {
+    color: $primary;
+    text-style: bold;
+    width: auto;
+}
+
+.footer-label {
+    color: $text;
+    width: auto;
+    padding: 0 1 0 0;
+}
+
+/* === 4.7 Input Fields === */
+Input {
+    padding: 0 1;
+    height: 1;
+    border: none;
+    background: transparent;
+    color: $text;
+}
+
+Input > .input--placeholder {
+    color: $text-muted;
+}
+
+Input:focus {
+    border: none;
+}
+
+/* === Search panel === */
+#search-panel {
+    height: auto;
+    max-height: 3;
+}
+
+/* === Messages panel (main content) === */
+#messages-panel {
+    height: 1fr;
+}
+
+/* === 4.8 DataTable === */
+DataTable {
+    background: transparent;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+DataTable > .datatable--header {
+    background: transparent;
+    color: $primary;
+    text-style: bold;
+}
+
+DataTable > .datatable--header-cell {
+    background: transparent;
+    color: $primary;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary;
+    color: $background;
+}
+
+DataTable > .datatable--hover {
+    background: $surface;
+}
+
+DataTable > .datatable--odd-row {
+    background: transparent;
+}
+
+DataTable > .datatable--even-row {
+    background: $background-lighten-1;
+}
+
+/* === Detail panel === */
+#detail-panel {
+    height: auto;
+    min-height: 3;
+    max-height: 12;
+}
+
+#detail-content {
+    background: transparent;
+    padding: 0 1;
+}
+
+/* === 4.6 Buttons === */
+.btn {
+    background: transparent;
+    border: round $primary-background-lighten-3;
+    color: $text;
+    text-style: none;
+}
+
+.btn:hover {
+    background: transparent;
+    border: round $primary-lighten-3;
+    color: $primary;
+}
+
+.btn:focus {
+    background: transparent;
+    border: round $primary;
+    color: $primary;
+    text-style: bold;
+}
+
+.btn.-disabled, .btn:disabled {
+    color: $text-muted;
+    border: round $panel;
+    text-style: none;
+}
+
+/* Semantic button variants */
+.btn-danger:hover, .btn-danger:focus {
+    border: round $error;
+    color: $error;
+}
+
+.btn-success:hover, .btn-success:focus {
+    border: round $success;
+    color: $success;
+}
+
+.btn-warning:hover, .btn-warning:focus {
+    border: round $warning;
+    color: $warning;
+}
+
+/* === 4.9 Utility Classes === */
+.hidden { display: none; }
+.transparent { background: transparent; }
+.center { align: center middle; content-align: center middle; }

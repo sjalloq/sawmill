@@ -5,7 +5,10 @@ from pathlib import Path
 
 from sawmill.models.message import Message, FileRef
 from sawmill.models.plugin_api import SeverityLevel
-from sawmill.tui.app import SawmillApp, LogViewer, MessageStats, FilterInput
+from sawmill.tui.app import (
+    SawmillApp, LogViewer, MessageStats, FilterInput,
+    SORT_LINE, SORT_SEVERITY, SORT_ID, SORT_COUNT, SORT_MODES,
+)
 
 
 @pytest.fixture
@@ -236,12 +239,6 @@ class TestAppActions:
             make_message("Test warning", severity="warning"),
         ])
 
-    def test_action_filter_all(self, app):
-        """Test action_filter_all resets severity filter."""
-        app.severity_filter = {"error": True, "warning": False, "info": False}
-        app.action_filter_all()
-        assert app.severity_filter == {}
-
     def test_action_clear_filter(self, app):
         """Test action_clear_filter clears all filters."""
         app.filter_pattern = "test"
@@ -268,16 +265,180 @@ class TestAppActions:
         assert app.severity_filter == {"error": True}
         assert app.filter_pattern == "existing"
 
-    def test_keybindings_no_warning_or_error(self, app):
-        """Test that '2' and '3' keybindings are removed."""
+    def test_severity_toggle_keybindings(self, app):
+        """Test that number keys 1-4 exist for severity toggles."""
         binding_keys = [b.key for b in app.BINDINGS]
-        assert "2" not in binding_keys
-        assert "3" not in binding_keys
+        assert "1" in binding_keys
+        assert "2" in binding_keys
+        assert "3" in binding_keys
+        assert "4" in binding_keys
 
     def test_keybinding_f_exists(self, app):
         """Test that 'f' keybinding for filter modal exists."""
         binding_keys = [b.key for b in app.BINDINGS]
         assert "f" in binding_keys
+
+
+class TestSeverityToggles:
+    """Tests for severity toggle actions."""
+
+    @pytest.fixture
+    def app(self, severity_levels):
+        """Create an app with test messages."""
+        messages = [
+            make_message("Error msg", severity="error", message_id="E-001", line=1),
+            make_message("Warning msg", severity="warning", message_id="W-001", line=2),
+            make_message("Info msg", severity="info", message_id="I-001", line=3),
+        ]
+        return SawmillApp(severity_levels, messages=messages)
+
+    def test_key_to_severity_mapping(self, app):
+        """Test that number keys map to severity levels sorted by level ascending."""
+        # level 0 = info → key 1, level 1 = warning → key 2, etc.
+        assert app._key_to_severity[1] == "info"
+        assert app._key_to_severity[2] == "warning"
+        assert app._key_to_severity[3] == "critical_warning"
+        assert app._key_to_severity[4] == "error"
+
+    def test_toggle_severity_first_time(self, app):
+        """Test toggling a severity when no filter is set initializes all and flips one."""
+        app.action_toggle_sev_1()
+        # Key 1 = info, should now be hidden
+        assert app.severity_filter["info"] is False
+        # Others should remain True
+        assert app.severity_filter["error"] is True
+
+    def test_toggle_severity_back(self, app):
+        """Test toggling same severity twice returns to visible."""
+        app.action_toggle_sev_1()
+        app.action_toggle_sev_1()
+        assert app.severity_filter["info"] is True
+
+    def test_toggle_filters_messages(self, app):
+        """Test toggling a severity actually filters messages."""
+        app.action_toggle_sev_1()  # Hide info
+        app._apply_filters()
+        for msg in app.filtered_messages:
+            assert msg.severity.lower() != "info"
+
+
+class TestSortModes:
+    """Tests for sort mode cycling."""
+
+    @pytest.fixture
+    def app(self, severity_levels):
+        messages = [
+            make_message("Error B", severity="error", message_id="E-002", line=10),
+            make_message("Warning A", severity="warning", message_id="W-001", line=5),
+            make_message("Error A", severity="error", message_id="E-001", line=1),
+            make_message("Info C", severity="info", message_id="I-001", line=20),
+        ]
+        return SawmillApp(severity_levels, messages=messages)
+
+    def test_default_sort_is_line(self, app):
+        assert app.sort_mode == SORT_LINE
+
+    def test_cycle_sort(self, app):
+        """Test cycling through sort modes."""
+        app.action_cycle_sort()
+        assert app.sort_mode == SORT_SEVERITY
+        app.action_cycle_sort()
+        assert app.sort_mode == SORT_ID
+        app.action_cycle_sort()
+        assert app.sort_mode == SORT_COUNT
+        app.action_cycle_sort()
+        assert app.sort_mode == SORT_LINE
+
+    def test_sort_by_line(self, app):
+        """Test sort by line number (default)."""
+        app.sort_mode = SORT_LINE
+        app._apply_filters()
+        lines = [m.start_line for m in app.filtered_messages]
+        assert lines == sorted(lines)
+
+    def test_sort_by_severity(self, app):
+        """Test sort by severity (most severe first)."""
+        app.sort_mode = SORT_SEVERITY
+        app._apply_filters()
+        # Errors (level 3) should come before warnings (level 1) before info (level 0)
+        sevs = [m.severity for m in app.filtered_messages]
+        assert sevs[0] == "error"
+        assert sevs[-1] == "info"
+
+    def test_sort_by_id(self, app):
+        """Test sort by message ID (alphabetical)."""
+        app.sort_mode = SORT_ID
+        app._apply_filters()
+        ids = [m.message_id for m in app.filtered_messages]
+        assert ids == sorted(ids)
+
+    def test_sort_by_count(self, app):
+        """Test sort by ID frequency (most frequent first)."""
+        # Add duplicate ID
+        app._messages.append(
+            make_message("Error A dup", severity="error", message_id="E-001", line=2)
+        )
+        app.sort_mode = SORT_COUNT
+        app._apply_filters()
+        # E-001 appears twice, so its messages should come first
+        assert app.filtered_messages[0].message_id == "E-001"
+
+
+class TestSearchBarPrefixFiltering:
+    """Tests for search bar prefix filtering in _apply_filters."""
+
+    @pytest.fixture
+    def app(self, severity_levels):
+        messages = [
+            make_message("Error in module A", severity="error", message_id="E-001", line=1),
+            make_message("Warning in module B", severity="warning", message_id="W-001", line=2),
+            make_message("Info message", severity="info", message_id="I-001", line=3),
+        ]
+        return SawmillApp(severity_levels, messages=messages)
+
+    def test_sev_prefix_filters(self, app):
+        """Test sev: prefix in search bar filters by severity."""
+        app.filter_pattern = "sev:error"
+        app._apply_filters()
+        assert all(m.severity == "error" for m in app.filtered_messages)
+
+    def test_id_prefix_filters(self, app):
+        """Test id: prefix in search bar filters by message ID."""
+        app.filter_pattern = "id:E-001"
+        app._apply_filters()
+        assert len(app.filtered_messages) == 1
+        assert app.filtered_messages[0].message_id == "E-001"
+
+    def test_plain_text_regex(self, app):
+        """Test plain text in search bar acts as regex on raw_text."""
+        app.filter_pattern = "module B"
+        app._apply_filters()
+        assert len(app.filtered_messages) == 1
+        assert "module B" in app.filtered_messages[0].raw_text
+
+
+class TestMessageStatsActive:
+    """Tests for active/dimmed severity display in stats widget."""
+
+    def test_render_dimmed_severity(self, severity_levels):
+        """Test that inactive severities are rendered with dim style."""
+        stats = MessageStats(severity_levels=severity_levels)
+        stats.total = 10
+        stats.counts = {"error": 3, "warning": 5, "info": 2}
+        stats.active = {"error": True, "warning": True, "info": False,
+                        "critical_warning": True}
+        output = stats.render()
+        assert "[dim]Info: 2[/dim]" in output
+
+    def test_render_all_active(self, severity_levels):
+        """Test that all-active renders normally."""
+        stats = MessageStats(severity_levels=severity_levels)
+        stats.total = 5
+        stats.counts = {"error": 2, "warning": 3}
+        stats.active = {"error": True, "warning": True, "info": True,
+                        "critical_warning": True}
+        output = stats.render()
+        assert "[dim]" not in output
 
 
 class TestRunTui:

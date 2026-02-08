@@ -984,6 +984,11 @@ def _generate_waivers(
     default=5,
     help="Limit messages shown per group when using --group-by (default: 5, 0 = no limit)."
 )
+@click.option(
+    "--batch",
+    is_flag=True,
+    help="Run in batch mode (no TUI). Implied by any output/filter/check flags."
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -1012,6 +1017,7 @@ def cli(
     summary: bool,
     group_by: str | None,
     top_n: int,
+    batch: bool,
 ) -> None:
     """Sawmill - A terminal-based log analysis tool for EDA engineers.
 
@@ -1208,6 +1214,64 @@ def cli(
 
     if logfile is None:
         click.echo(ctx.get_help())
+        return
+
+    # Determine if batch mode is needed.
+    # Explicit --batch flag, or any output/filter/check flag implies batch.
+    is_batch = batch or any([
+        severity is not None,
+        filter_pattern is not None,
+        suppress_patterns,
+        suppress_ids,
+        id_patterns,
+        categories,
+        generate_waivers,
+        check,
+        fail_on is not None,
+        waivers is not None,
+        show_waived,
+        report_unused,
+        report_file is not None,
+        summary,
+        group_by is not None,
+    ])
+
+    # --format explicitly provided also implies batch
+    if not is_batch:
+        source = ctx.get_parameter_source("output_format")
+        if source == click.core.ParameterSource.COMMANDLINE:
+            is_batch = True
+
+    # Non-interactive environment (piped, CliRunner, etc.) implies batch
+    import sys
+    if not is_batch and not sys.stdin.isatty():
+        is_batch = True
+
+    if not is_batch:
+        # Launch TUI mode
+        from sawmill.tui import run_tui
+
+        log_path = Path(logfile)
+        manager = _get_plugin_manager()
+
+        try:
+            if plugin:
+                plugin_name = plugin
+            else:
+                plugin_name = manager.auto_detect(log_path)
+
+            plugin_instance = manager.get_plugin(plugin_name)
+            severity_levels = _get_severity_levels(plugin_instance)
+        except (NoPluginFoundError, PluginConflictError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            ctx.exit(1)
+            return
+
+        run_tui(
+            log_file=log_path,
+            plugin_name=plugin_name,
+            severity_levels=severity_levels,
+        )
         return
 
     # Handle waiver generation mode
