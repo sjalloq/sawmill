@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.events import Resize
 from textual.message import Message as TextualMessage
 from textual.reactive import reactive
@@ -86,15 +86,16 @@ class MessageStats(Static):
     def render(self) -> str:
         """Render the stats display with plugin-driven severity counts."""
         parts = [f"Total: {self.total}"]
-        for level in sorted(self._severity_levels, key=lambda s: -s.level):
+        for i, level in enumerate(sorted(self._severity_levels, key=lambda s: s.level), start=1):
             count = self._counts.get(level.id, 0)
             is_active = self._active.get(level.id, True)
+            hint = f"\\[{i}] "
             if level.style and is_active:
-                parts.append(f"[{level.style}]{level.name}: {count}[/{level.style}]")
+                parts.append(f"[{level.style}]{hint}{level.name}: {count}[/{level.style}]")
             elif not is_active:
-                parts.append(f"[dim]{level.name}: {count}[/dim]")
+                parts.append(f"[dim]{hint}{level.name}: {count}[/dim]")
             else:
-                parts.append(f"{level.name}: {count}")
+                parts.append(f"{hint}{level.name}: {count}")
         return " | ".join(parts)
 
 
@@ -303,9 +304,12 @@ class SawmillApp(App):
     # -- Compose & Mount -----------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        filename = self.log_file.name if self.log_file else "sawmill"
-        yield Static(f"sawmill \u2014 {filename}", id="header")
-        yield MessageStats(severity_levels=self._severity_levels, id="severity-bar")
+        filename = self.log_file.name if self.log_file else ""
+        with Horizontal(id="header"):
+            yield Static("sawmill", id="header-left")
+            yield Static(filename, id="header-right")
+        with Vertical(id="severity-panel", classes="panel"):
+            yield MessageStats(severity_levels=self._severity_levels, id="severity-bar")
         with Vertical(id="search-panel", classes="panel"):
             yield FilterInput(id="filter-input")
         with Vertical(id="messages-panel", classes="panel"):
@@ -338,6 +342,7 @@ class SawmillApp(App):
         self._detail_content = self.query_one("#detail-content", Static)
 
         # Border titles
+        self.query_one("#severity-panel").border_title = "Severity"
         self.query_one("#search-panel").border_title = "Search"
         self.query_one("#messages-panel").border_title = "Messages"
         self.query_one("#detail-panel").border_title = "Message Detail"

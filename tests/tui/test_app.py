@@ -435,7 +435,7 @@ class TestMessageStatsActive:
         stats.counts = {"error": 3, "warning": 5, "info": 2}
         stats.active = {"error": True, "warning": True, "info": False, "critical_warning": True}
         output = stats.render()
-        assert "[dim]Info: 2[/dim]" in output
+        assert "[dim]\\[1] Info: 2[/dim]" in output
 
     def test_render_all_active(self, severity_levels):
         """Test that all-active renders normally."""
@@ -445,6 +445,56 @@ class TestMessageStatsActive:
         stats.active = {"error": True, "warning": True, "info": True, "critical_warning": True}
         output = stats.render()
         assert "[dim]" not in output
+
+
+class TestMessageStatsOrderAndHints:
+    """Tests for ascending severity order and key hints in stats bar."""
+
+    def test_ascending_order(self, severity_levels):
+        """Test severities render in ascending order (low→high)."""
+        stats = MessageStats(severity_levels=severity_levels)
+        stats.total = 10
+        stats.counts = {"error": 3, "critical_warning": 1, "warning": 5, "info": 1}
+        output = stats.render()
+        # Info (level 0) should appear before Warning (level 1) before Error (level 3)
+        info_pos = output.index("Info")
+        warning_pos = output.index("Warning")
+        error_pos = output.index("Error")
+        assert info_pos < warning_pos < error_pos
+
+    def test_key_hints_present(self, severity_levels):
+        """Test key number hints are present in rendered output."""
+        stats = MessageStats(severity_levels=severity_levels)
+        stats.total = 4
+        stats.counts = {"error": 1, "critical_warning": 1, "warning": 1, "info": 1}
+        output = stats.render()
+        assert "\\[1] Info" in output
+        assert "\\[2] Warning" in output
+        assert "\\[3] Critical Warning" in output
+        assert "\\[4] Error" in output
+
+    def test_key_hints_with_custom_scheme(self):
+        """Test key hints work with a non-Vivado severity scheme."""
+        custom_levels = [
+            SeverityLevel(id="fatal", name="Fatal", level=3, style="red bold"),
+            SeverityLevel(id="major", name="Major", level=2, style="red"),
+            SeverityLevel(id="minor", name="Minor", level=1, style="yellow"),
+            SeverityLevel(id="note", name="Note", level=0, style="dim"),
+        ]
+        stats = MessageStats(severity_levels=custom_levels)
+        stats.total = 4
+        stats.counts = {"fatal": 1, "major": 1, "minor": 1, "note": 1}
+        output = stats.render()
+        assert "\\[1] Note" in output
+        assert "\\[2] Minor" in output
+        assert "\\[3] Major" in output
+        assert "\\[4] Fatal" in output
+        # Verify ascending order
+        note_pos = output.index("Note")
+        minor_pos = output.index("Minor")
+        major_pos = output.index("Major")
+        fatal_pos = output.index("Fatal")
+        assert note_pos < minor_pos < major_pos < fatal_pos
 
 
 class TestRunTui:

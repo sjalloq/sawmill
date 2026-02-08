@@ -34,14 +34,31 @@ Screen {
 
 /* === Header === */
 #header {
-    dock: top;
-    height: 1;
+    height: auto;
     background: transparent;
     color: $text;
-    text-align: center;
-    text-style: bold;
     width: 100%;
     padding: 0 1;
+    border-bottom: solid $primary-background-lighten-3;
+}
+
+#header-left {
+    width: 1fr;
+    height: 1;
+    text-align: left;
+    text-style: bold;
+}
+
+#header-right {
+    width: auto;
+    height: 1;
+    text-align: right;
+    color: $text-muted;
+}
+
+/* === Severity panel === */
+#severity-panel {
+    height: auto;
 }
 
 /* === Severity stats bar === */
