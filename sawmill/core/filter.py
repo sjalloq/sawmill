@@ -6,6 +6,7 @@ The FilterEngine applies filters, suppressions, and provides statistics.
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -196,3 +197,23 @@ class FilterEngine:
             match_percentage=percentage,
             per_filter=per_filter,
         )
+
+
+def match_message_id(message_id: str | None, pattern: str) -> bool:
+    """Check if a message ID matches a pattern (supports wildcards).
+
+    Uses fnmatch for glob-style pattern matching:
+    - '*' matches any sequence of characters
+    - '?' matches any single character
+
+    Args:
+        message_id: The message ID to check (may be None).
+        pattern: The pattern to match against (e.g., "Synth 8-*").
+
+    Returns:
+        True if the message ID matches the pattern.
+    """
+    if message_id is None:
+        return False
+
+    return fnmatch.fnmatch(message_id, pattern)

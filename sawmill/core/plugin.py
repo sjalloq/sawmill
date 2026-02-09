@@ -199,3 +199,17 @@ class PluginManager:
 
         # Single plugin with high confidence - return its name
         return high_confidence[0][0]
+
+
+def get_plugin_manager() -> PluginManager:
+    """Create and configure the plugin manager.
+
+    Discovers plugins via entry points (including built-in plugins
+    registered in pyproject.toml).
+
+    Returns:
+        Configured PluginManager instance.
+    """
+    manager = PluginManager()
+    manager.discover()
+    return manager

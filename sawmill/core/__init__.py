@@ -21,12 +21,20 @@ from sawmill.core.config import (
     OutputConfig,
     SuppressConfig,
 )
-from sawmill.core.filter import FilterEngine, FilterStats
+from sawmill.core.filter import FilterEngine, FilterStats, match_message_id
 from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,
     PluginError,
     PluginManager,
+    get_plugin_manager,
+)
+from sawmill.core.severity import (
+    get_severity_level_map,
+    get_severity_levels,
+    get_severity_style,
+    get_severity_style_map,
+    severity_at_or_above,
 )
 from sawmill.core.waiver import WaiverGenerator, WaiverLoader, WaiverMatcher, WaiverValidationError
 
@@ -50,4 +58,11 @@ __all__ = [
     "WaiverLoader",
     "WaiverMatcher",
     "WaiverValidationError",
+    "get_plugin_manager",
+    "get_severity_level_map",
+    "get_severity_levels",
+    "get_severity_style",
+    "get_severity_style_map",
+    "match_message_id",
+    "severity_at_or_above",
 ]
