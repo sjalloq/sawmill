@@ -17,6 +17,7 @@ import tomli
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.models.waiver import Waiver, WaiverFile
+from sawmill.utils.toml import escape_toml_basic_string
 
 
 class WaiverValidationError(Exception):
@@ -222,8 +223,24 @@ class WaiverLoader:
                 waiver_index=index,
             )
 
-        # Validate content_pattern as regex if content_match == "regex"
+        # Validate content_match / content_pattern consistency
         content_pattern = entry.get("content_pattern")
+
+        # content_match without content_pattern is meaningless — the waiver
+        # would silently become a catch-all, which is almost certainly not intended
+        if content_match is not None and not content_pattern:
+            raise WaiverValidationError(
+                f"content_match is '{content_match}' but content_pattern is not set. "
+                "Either add a content_pattern or remove content_match.",
+                path=path,
+                waiver_index=index,
+            )
+
+        # content_pattern without content_match: make the implicit raw behavior explicit
+        if content_pattern and content_match is None:
+            content_match = "raw"
+
+        # Validate content_pattern as regex if content_match == "regex"
         if content_match == "regex" and content_pattern:
             try:
                 re.compile(content_pattern)
@@ -440,7 +457,7 @@ class WaiverGenerator:
         # Add metadata section
         lines.append("[metadata]")
         if tool:
-            lines.append(f'tool = "{self._escape_toml_string(tool)}"')
+            lines.append(f'tool = "{escape_toml_basic_string(tool)}"')
         lines.append(f'generated = "{date.today().isoformat()}"')
         lines.append("")
 
@@ -515,9 +532,9 @@ class WaiverGenerator:
         lines: list[str] = []
         lines.append("[[waiver]]")
 
-        lines.append(f'message_id = "{self._escape_toml_string(message.message_id)}"')
-        lines.append(f'reason = "{self._escape_toml_string(self._reason)}"')
-        lines.append(f'author = "{self._escape_toml_string(self._author)}"')
+        lines.append(f'message_id = "{escape_toml_basic_string(message.message_id)}"')
+        lines.append(f'reason = "{escape_toml_basic_string(self._reason)}"')
+        lines.append(f'author = "{escape_toml_basic_string(self._author)}"')
         lines.append(f'date = "{date.today().isoformat()}"')
 
         # Add comment with message context
@@ -531,23 +548,6 @@ class WaiverGenerator:
         lines.append(f"# Line: {message.start_line}")
 
         return lines
-
-    def _escape_toml_string(self, value: str) -> str:
-        """Escape a string for use in TOML.
-
-        Args:
-            value: The string to escape.
-
-        Returns:
-            Escaped string safe for TOML basic strings.
-        """
-        # Escape backslashes first, then quotes and other special chars
-        result = value.replace("\\", "\\\\")
-        result = result.replace('"', '\\"')
-        result = result.replace("\n", "\\n")
-        result = result.replace("\r", "\\r")
-        result = result.replace("\t", "\\t")
-        return result
 
     def _escape_comment(self, value: str) -> str:
         """Escape a string for use in a TOML comment.

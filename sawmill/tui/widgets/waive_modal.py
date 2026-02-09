@@ -126,10 +126,13 @@ class WaiveModal(ModalScreen[dict | None]):
             yield Label("Severity:", classes="waive-field-label")
             yield Static(f"  {self._severity}", classes="waive-field-value")
 
-            yield Label("Content match:", classes="waive-field-label")
-            with RadioSet(id="waive-content-match"):
-                yield RadioButton("raw string", value=True, id="radio-raw")
-                yield RadioButton("regex", id="radio-regex")
+            yield Label("Reason:", classes="waive-field-label")
+            yield Input(
+                value="",
+                placeholder="Why is this waived?",
+                id="waive-reason-input",
+            )
+            yield Static("", id="waive-reason-error", classes="waive-error")
 
             yield Label("Pattern:", classes="waive-field-label")
             yield Input(
@@ -139,13 +142,10 @@ class WaiveModal(ModalScreen[dict | None]):
             )
             yield Static("", id="waive-pattern-hint", classes="waive-hint")
 
-            yield Label("Reason:", classes="waive-field-label")
-            yield Input(
-                value="",
-                placeholder="Why is this waived?",
-                id="waive-reason-input",
-            )
-            yield Static("", id="waive-reason-error", classes="waive-error")
+            yield Label("Content match:", classes="waive-field-label")
+            with RadioSet(id="waive-content-match"):
+                yield RadioButton("raw string", value=True, id="radio-raw")
+                yield RadioButton("regex", id="radio-regex")
 
             yield Label("Author:", classes="waive-field-label")
             yield Input(
@@ -171,6 +171,11 @@ class WaiveModal(ModalScreen[dict | None]):
             reason_input.focus()
         except Exception:
             pass
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Treat Enter on any input field as modal confirm."""
+        event.stop()
+        self.action_confirm()
 
     def action_cancel(self) -> None:
         self.dismiss(None)

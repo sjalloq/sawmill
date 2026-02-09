@@ -1,8 +1,9 @@
 """Tests for TUI waive functionality."""
 
+import inspect
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -335,3 +336,150 @@ class TestWaivedDisplay:
         app._apply_filters()
         assert len(app.filtered_messages) == 2
         assert any(m.message_id == "E-001" for m in app.filtered_messages)
+
+
+class TestWaiveModalTabOrder:
+    """Tests for WaiveModal focusable widget DOM order matching spec.
+
+    Spec tab order: Reason -> Pattern -> Content match -> Author (cycle).
+    DOM order of focusable widgets must match this to get correct Tab behavior.
+
+    Since compose() requires an active Textual app context (due to container
+    context managers), we verify DOM order by inspecting the compose source
+    and extracting the IDs of focusable widgets (Input and RadioSet) in the
+    order they appear.
+    """
+
+    def _get_focusable_widget_ids_from_source(self) -> list[str]:
+        """Extract IDs of focusable widgets from compose() source in DOM order.
+
+        Parses the compose() method source to find Input and RadioSet widget
+        IDs in the order they appear (which is the DOM/focus chain order).
+        """
+        import re as _re
+
+        source = inspect.getsource(WaiveModal.compose)
+        # Match Input(..., id="...") and RadioSet(id="...") patterns
+        # These are the focusable widgets that determine tab order
+        focusable_pattern = _re.compile(
+            r"(?:Input\(|RadioSet\()"  # Match Input( or RadioSet(
+            r".*?"  # Any args before id= (DOTALL for multi-line)
+            r'id="([^"]+)"',  # Capture the id value
+            _re.DOTALL,
+        )
+        return focusable_pattern.findall(source)
+
+    def test_focusable_widgets_in_spec_order(self):
+        """Focusable widgets appear in DOM order: Reason, Pattern, Content match, Author."""
+        ids = self._get_focusable_widget_ids_from_source()
+        assert ids == [
+            "waive-reason-input",
+            "waive-pattern-input",
+            "waive-content-match",
+            "waive-author-input",
+        ]
+
+    def test_reason_is_first_focusable_widget(self):
+        """Reason input is the first focusable widget in DOM order."""
+        ids = self._get_focusable_widget_ids_from_source()
+        assert ids[0] == "waive-reason-input"
+
+    def test_author_is_last_focusable_widget(self):
+        """Author input is the last focusable widget in DOM order."""
+        ids = self._get_focusable_widget_ids_from_source()
+        assert ids[-1] == "waive-author-input"
+
+    def test_content_match_after_pattern(self):
+        """Content match RadioSet appears after Pattern input (not before)."""
+        ids = self._get_focusable_widget_ids_from_source()
+        pattern_idx = ids.index("waive-pattern-input")
+        content_match_idx = ids.index("waive-content-match")
+        assert content_match_idx > pattern_idx
+
+    def test_exactly_four_focusable_widgets(self):
+        """There are exactly 4 focusable widgets in the modal."""
+        ids = self._get_focusable_widget_ids_from_source()
+        assert len(ids) == 4
+
+
+class TestWaiveModalInputSubmitted:
+    """Tests for Enter key handling via on_input_submitted in WaiveModal."""
+
+    def test_on_input_submitted_method_exists(self):
+        """WaiveModal has an on_input_submitted handler."""
+        modal = WaiveModal(
+            message_id="E-001",
+            severity="Error",
+            content="error content",
+        )
+        assert hasattr(modal, "on_input_submitted")
+        assert callable(modal.on_input_submitted)
+
+    def test_on_input_submitted_signature(self):
+        """on_input_submitted accepts an Input.Submitted event parameter."""
+
+        sig = inspect.signature(WaiveModal.on_input_submitted)
+        params = list(sig.parameters.keys())
+        assert "event" in params
+        # Verify annotation references Input.Submitted
+        event_param = sig.parameters["event"]
+        assert "Input.Submitted" in str(event_param.annotation)
+
+    def test_on_input_submitted_calls_action_confirm(self):
+        """on_input_submitted delegates to action_confirm."""
+        modal = WaiveModal(
+            message_id="E-001",
+            severity="Error",
+            content="error content",
+        )
+        mock_event = MagicMock()
+        with patch.object(modal, "action_confirm") as mock_confirm:
+            modal.on_input_submitted(mock_event)
+            mock_confirm.assert_called_once()
+
+    def test_on_input_submitted_stops_event(self):
+        """on_input_submitted stops the event to prevent further propagation."""
+        modal = WaiveModal(
+            message_id="E-001",
+            severity="Error",
+            content="error content",
+        )
+        mock_event = MagicMock()
+        with patch.object(modal, "action_confirm"):
+            modal.on_input_submitted(mock_event)
+            mock_event.stop.assert_called_once()
+
+    def test_on_input_submitted_stops_before_confirm(self):
+        """Event is stopped before action_confirm is called (correct ordering)."""
+        modal = WaiveModal(
+            message_id="E-001",
+            severity="Error",
+            content="error content",
+        )
+        call_order = []
+        mock_event = MagicMock()
+        mock_event.stop.side_effect = lambda: call_order.append("stop")
+        with patch.object(
+            modal, "action_confirm", side_effect=lambda: call_order.append("confirm")
+        ):
+            modal.on_input_submitted(mock_event)
+        assert call_order == ["stop", "confirm"]
+
+    def test_on_input_submitted_triggers_validation_on_empty_reason(self):
+        """Enter on input with empty reason triggers validation (not silent)."""
+        # This test verifies that action_confirm (with its validation) is called
+        # even when the event originates from an Input.Submitted. We mock
+        # action_confirm to verify delegation happens; the validation logic
+        # itself is tested via the action_confirm path in TestOnWaiveModalResult.
+        modal = WaiveModal(
+            message_id="E-001",
+            severity="Error",
+            content="error content",
+        )
+        mock_event = MagicMock()
+        with patch.object(modal, "action_confirm") as mock_confirm:
+            modal.on_input_submitted(mock_event)
+            # action_confirm is called, which will run validation
+            mock_confirm.assert_called_once()
+            # Event was stopped so Input.Submitted doesn't silently pass through
+            mock_event.stop.assert_called_once()

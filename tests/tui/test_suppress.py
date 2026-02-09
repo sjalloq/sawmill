@@ -1,5 +1,7 @@
 """Tests for TUI suppress functionality."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from sawmill.models.message import Message
@@ -69,26 +71,54 @@ class TestActionSuppress:
         return SawmillApp(severity_levels, messages=messages)
 
     def test_suppress_adds_id(self, app):
-        """Pressing suppress adds message ID to suppressed set."""
+        """Pressing suppress adds message ID to suppressed set via action_suppress()."""
         app._apply_filters()
         app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
-        # Directly test the logic without triggering watchers
-        msg = app._filtered_messages[0]
-        assert msg.message_id == "E-001"
-        current = set(app.suppressed_ids)
-        current.add(msg.message_id)
-        # Verify the set was modified correctly
-        assert "E-001" in current
+        # Patch _populate_table to prevent cascading into real widget methods
+        app._populate_table = lambda: None
+
+        assert "E-001" not in app.suppressed_ids
+        app.action_suppress()
+        assert "E-001" in app.suppressed_ids
 
     def test_suppress_sets_dirty_flag(self, app):
-        """Suppressing marks state as dirty."""
+        """Suppressing via action_suppress() marks state as dirty."""
         app._apply_filters()
         app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
-        # Simulate what action_suppress does internally
-        msg = app._filtered_messages[0]
-        assert msg.message_id is not None
-        app._suppressions_dirty = True
+        app._populate_table = lambda: None
+
+        assert app._suppressions_dirty is False
+        app.action_suppress()
         assert app._suppressions_dirty is True
+
+    def test_suppress_notification_contains_message_id(self, app):
+        """action_suppress() notifies with the suppressed message ID."""
+        app._apply_filters()
+        app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
+        app._populate_table = lambda: None
+        app.notify = MagicMock()
+
+        app.action_suppress()
+
+        app.notify.assert_called_once()
+        notification_text = app.notify.call_args[0][0]
+        assert "E-001" in notification_text
+
+    def test_unsuppress_notification_contains_message_id(self, app):
+        """action_suppress() on already-suppressed ID notifies with the un-suppressed ID."""
+        app.suppressed_ids = {"E-001"}
+        app.show_suppressed = True
+        app._apply_filters()
+        app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
+        app._populate_table = lambda: None
+        app.notify = MagicMock()
+
+        app.action_suppress()
+
+        app.notify.assert_called_once()
+        notification_text = app.notify.call_args[0][0]
+        assert "E-001" in notification_text
+        assert "Un-suppressed" in notification_text
 
     def test_suppress_message_without_id(self, app):
         """Cannot suppress a message that has no message_id."""
@@ -118,15 +148,47 @@ class TestActionSuppress:
         assert "W-001" not in remaining_ids
 
     def test_unsuppress_removes_id(self, app):
-        """Un-suppressing removes the ID from the set."""
+        """Un-suppressing via action_suppress() removes the ID from the set."""
         app.suppressed_ids = {"E-001"}
         app.show_suppressed = True
         app._apply_filters()
-        # When show_suppressed is True and we have E-001 in suppressed_ids,
-        # simulating un-suppress by removing the ID
-        current = set(app.suppressed_ids)
-        current.discard("E-001")
-        assert "E-001" not in current
+        # Patch _populate_table to prevent cascading into real widget methods
+        app._populate_table = lambda: None
+
+        # E-001 should be visible (show_suppressed is True) and in suppressed set
+        assert "E-001" in app.suppressed_ids
+        assert app._filtered_messages[0].message_id == "E-001"
+
+        app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
+        app.action_suppress()
+        assert "E-001" not in app.suppressed_ids
+
+    def test_unsuppress_sets_dirty_flag(self, app):
+        """Un-suppressing a message sets _suppressions_dirty = True.
+
+        Exercises the actual action_suppress() code path. We patch
+        _populate_table to avoid needing a fully mounted Textual widget tree.
+        """
+        # Suppress E-001 and make it visible so we can un-suppress it
+        app.suppressed_ids = {"E-001"}
+        app.show_suppressed = True
+        app._apply_filters()
+        # Reset dirty flag to simulate a previously-saved state
+        app._suppressions_dirty = False
+
+        # Verify E-001 is visible in filtered messages
+        assert app._filtered_messages[0].message_id == "E-001"
+
+        # Provide a fake log viewer with the right cursor position
+        app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
+
+        # Patch _populate_table to prevent cascading into real widget methods
+        app._populate_table = lambda: None
+
+        app.action_suppress()
+
+        assert "E-001" not in app.suppressed_ids
+        assert app._suppressions_dirty is True
 
 
 class TestToggleSuppressed:

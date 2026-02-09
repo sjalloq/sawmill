@@ -439,3 +439,138 @@ date = "2026-01-18"
         waivers = loader.load(waiver_file)
 
         assert waivers.waivers[0].content_pattern == r"timing.*violation\s+\d+"
+
+
+class TestContentMatchPatternConsistency:
+    """Tests for content_match / content_pattern validation consistency."""
+
+    def test_content_match_without_content_pattern_raises_error(self, tmp_path):
+        """content_match set without content_pattern should raise WaiverValidationError."""
+        waiver_file = tmp_path / "bad.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+content_match = "raw"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        with pytest.raises(WaiverValidationError) as exc:
+            loader.load(waiver_file)
+        assert "content_match" in str(exc.value).lower()
+        assert "content_pattern" in str(exc.value).lower()
+
+    def test_content_match_regex_without_content_pattern_raises_error(self, tmp_path):
+        """content_match='regex' without content_pattern should raise WaiverValidationError."""
+        waiver_file = tmp_path / "bad.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+content_match = "regex"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        with pytest.raises(WaiverValidationError) as exc:
+            loader.load(waiver_file)
+        assert "content_match" in str(exc.value).lower()
+        assert "content_pattern" in str(exc.value).lower()
+
+    def test_content_pattern_without_content_match_defaults_to_raw(self, tmp_path):
+        """content_pattern without content_match should default content_match to 'raw'."""
+        waiver_file = tmp_path / "waivers.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+content_pattern = "some substring"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        waivers = loader.load(waiver_file)
+
+        assert waivers.waivers[0].content_match == "raw"
+        assert waivers.waivers[0].content_pattern == "some substring"
+
+    def test_both_content_match_and_pattern_set_works(self, tmp_path):
+        """Both content_match and content_pattern set together should work fine."""
+        waiver_file = tmp_path / "waivers.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+content_match = "raw"
+content_pattern = "specific text"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        waivers = loader.load(waiver_file)
+
+        assert waivers.waivers[0].content_match == "raw"
+        assert waivers.waivers[0].content_pattern == "specific text"
+
+    def test_neither_content_match_nor_pattern_set_works(self, tmp_path):
+        """Neither content_match nor content_pattern set should work fine (catch-all)."""
+        waiver_file = tmp_path / "waivers.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Test 1-1"
+reason = "match all instances"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        waivers = loader.load(waiver_file)
+
+        assert waivers.waivers[0].content_match is None
+        assert waivers.waivers[0].content_pattern is None
+
+    def test_content_match_without_pattern_error_includes_waiver_index(self, tmp_path):
+        """Error for content_match without content_pattern should include waiver index."""
+        waiver_file = tmp_path / "bad.toml"
+        waiver_file.write_text("""
+[[waiver]]
+message_id = "Valid"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+
+[[waiver]]
+message_id = "Test 1-1"
+content_match = "raw"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+""")
+
+        loader = WaiverLoader()
+        with pytest.raises(WaiverValidationError) as exc:
+            loader.load(waiver_file)
+        # Second entry (index 1) should be reported as "waiver entry 2" (1-indexed)
+        assert "waiver entry 2" in str(exc.value)
+
+    def test_content_pattern_without_match_defaults_via_load_from_string(self):
+        """content_pattern without content_match should default to raw via load_from_string."""
+        content = """
+[[waiver]]
+message_id = "Test 1-1"
+content_pattern = "substring match"
+reason = "test"
+author = "test"
+date = "2026-01-18"
+"""
+
+        loader = WaiverLoader()
+        waivers = loader.load_from_string(content)
+
+        assert waivers.waivers[0].content_match == "raw"
+        assert waivers.waivers[0].content_pattern == "substring match"

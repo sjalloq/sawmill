@@ -12,7 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 
-class QuitConfirmModal(ModalScreen[str]):
+class QuitConfirmModal(ModalScreen[str | None]):
     """Modal screen for confirming quit with unsaved changes.
 
     Shows what unsaved items exist and offers three options:

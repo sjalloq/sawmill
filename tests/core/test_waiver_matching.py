@@ -421,3 +421,273 @@ class TestMultipleWaivers:
         assert matcher.is_waived(message1) == id_waiver
         assert matcher.is_waived(message2) == other_waiver
         assert matcher.is_waived(message3) is None
+
+
+class TestRawMatchCaseSensitivity:
+    """Tests for case sensitivity of raw substring matching."""
+
+    def test_raw_match_is_case_sensitive(self):
+        """Raw content_match uses exact case-sensitive substring comparison."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="raw",
+            content_pattern="USB_FIFO_CLK",
+            reason="async clock",
+            author="test",
+            date="2026-01-18",
+        )
+        message_lower = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="WARNING: [Test 1-1] set_input_delay usb_fifo_clk",
+            content="set_input_delay usb_fifo_clk",
+            message_id="Test 1-1",
+        )
+        message_upper = Message(
+            start_line=2,
+            end_line=2,
+            raw_text="WARNING: [Test 1-1] set_input_delay USB_FIFO_CLK",
+            content="set_input_delay USB_FIFO_CLK",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        # Lowercase text should NOT match uppercase pattern
+        assert matcher.is_waived(message_lower) is None
+        # Uppercase text should match uppercase pattern
+        assert matcher.is_waived(message_upper) == waiver
+
+    def test_raw_match_mixed_case_no_match(self):
+        """Raw match does not match when case differs in any character."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="raw",
+            content_pattern="TimingError",
+            reason="test",
+            author="test",
+            date="2026-01-18",
+        )
+        message = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="WARNING: [Test 1-1] timingerror detected",
+            content="timingerror detected",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        assert matcher.is_waived(message) is None
+
+
+class TestRegexCaseInsensitive:
+    """Tests for case-insensitive regex via (?i) flag."""
+
+    def test_regex_case_insensitive_via_inline_flag(self):
+        """Regex content_match with (?i) flag matches case-insensitively."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern=r"(?i)timing.*violation",
+            reason="timing",
+            author="test",
+            date="2026-01-18",
+        )
+        message_lower = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="ERROR: [Test 1-1] timing violation detected",
+            content="timing violation detected",
+            message_id="Test 1-1",
+        )
+        message_upper = Message(
+            start_line=2,
+            end_line=2,
+            raw_text="ERROR: [Test 1-1] TIMING VIOLATION DETECTED",
+            content="TIMING VIOLATION DETECTED",
+            message_id="Test 1-1",
+        )
+        message_mixed = Message(
+            start_line=3,
+            end_line=3,
+            raw_text="ERROR: [Test 1-1] Timing setup Violation",
+            content="Timing setup Violation",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        assert matcher.is_waived(message_lower) == waiver
+        assert matcher.is_waived(message_upper) == waiver
+        assert matcher.is_waived(message_mixed) == waiver
+
+    def test_regex_without_case_flag_is_case_sensitive(self):
+        """Regex content_match without (?i) is case-sensitive by default."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern=r"TIMING.*VIOLATION",
+            reason="timing",
+            author="test",
+            date="2026-01-18",
+        )
+        message_lower = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="ERROR: [Test 1-1] timing violation detected",
+            content="timing violation detected",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        assert matcher.is_waived(message_lower) is None
+
+
+class TestRegexDotallBehaviour:
+    """Tests for re.DOTALL behaviour in regex content matching."""
+
+    def test_dot_matches_newline_with_dotall(self):
+        """Regex '.' matches newline characters because _match_content uses re.DOTALL."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern=r"error:.+suggestion",
+            reason="test",
+            author="test",
+            date="2026-01-18",
+        )
+        # The text spans multiple lines; '.' must match '\n' for this to work
+        message = Message(
+            start_line=1,
+            end_line=3,
+            raw_text="ERROR: [Test 1-1] error: bad clock\ndetails here\nsuggestion: fix it",
+            content="error: bad clock",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        result = matcher.is_waived(message)
+
+        assert result == waiver
+
+    def test_dot_would_fail_without_dotall(self):
+        """Verify the pattern requires DOTALL to match across newlines.
+
+        Without re.DOTALL, the '+' after '.' would not cross line boundaries.
+        This test uses a pattern where '.' must cross a newline to match,
+        confirming the implementation uses DOTALL.
+        """
+        import re
+
+        pattern = r"first_line.+second_line"
+        text = "first_line\nsecond_line"
+
+        # Without DOTALL, '.' does not match newline
+        assert re.search(pattern, text) is None
+        # With DOTALL, '.' matches newline
+        assert re.search(pattern, text, re.DOTALL) is not None
+
+        # The matcher should match (it uses DOTALL)
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern=pattern,
+            reason="test",
+            author="test",
+            date="2026-01-18",
+        )
+        message = Message(
+            start_line=1,
+            end_line=2,
+            raw_text=f"PREFIX: [Test 1-1] {text}",
+            content=text,
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        assert matcher.is_waived(message) == waiver
+
+
+class TestRuntimeRegexFailure:
+    """Tests for the except re.error: return False path in _match_content."""
+
+    def test_invalid_regex_at_match_time_returns_none(self):
+        """A waiver with a regex that fails at match time is silently skipped.
+
+        This tests the except re.error: return False path in _match_content().
+        We create a Waiver directly (bypassing WaiverLoader validation) with
+        a pattern that could have been manually edited to become invalid.
+        """
+        # Create a waiver with an invalid regex directly (bypassing validation)
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern="[invalid(regex",  # Broken regex
+            reason="manually edited",
+            author="test",
+            date="2026-01-18",
+        )
+        message = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="ERROR: [Test 1-1] some content",
+            content="some content",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        # Should return None because the regex fails and _match_content returns False,
+        # and there is no catch-all waiver to fall back to
+        result = matcher.is_waived(message)
+        assert result is None
+
+    def test_invalid_regex_falls_through_to_catchall(self):
+        """When a regex waiver fails at match time, a catch-all waiver can still match."""
+        broken_waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern="[broken",  # Invalid regex
+            reason="broken pattern",
+            author="test",
+            date="2026-01-18",
+        )
+        catchall_waiver = Waiver(
+            message_id="Test 1-1",
+            reason="catch-all",
+            author="test",
+            date="2026-01-18",
+        )
+        message = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="ERROR: [Test 1-1] some content",
+            content="some content",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([broken_waiver, catchall_waiver])
+        result = matcher.is_waived(message)
+        # The broken regex returns False, so it falls through to the catch-all
+        assert result == catchall_waiver
+        assert result.reason == "catch-all"
+
+    def test_invalid_regex_does_not_raise(self):
+        """An invalid regex at match time must not propagate an exception."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern="(?P<dup>x)(?P<dup>y)",  # Duplicate group name
+            reason="test",
+            author="test",
+            date="2026-01-18",
+        )
+        message = Message(
+            start_line=1,
+            end_line=1,
+            raw_text="ERROR: [Test 1-1] xy content",
+            content="xy content",
+            message_id="Test 1-1",
+        )
+
+        matcher = WaiverMatcher([waiver])
+        # Must not raise — the except re.error catches it
+        result = matcher.is_waived(message)
+        assert result is None
