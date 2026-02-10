@@ -336,7 +336,7 @@ class SawmillApp(App):
 
         self._session_waivers: list[Waiver] = []
         self._waivers_dirty: bool = False
-        self._waiver_file_path: Path = waiver_file_path or Path("./waivers.toml")
+        self._waiver_file_path: Path | None = waiver_file_path
 
         # ID count cache for count sort mode
         self._id_counts: dict[str, int] = {}
@@ -735,7 +735,7 @@ class SawmillApp(App):
         if self._suppressions_dirty:
             try:
                 self._save_suppressions()
-                saved_parts.append(f"{len(self.suppressed_ids)} suppressions to sawmill.toml")
+                saved_parts.append(f"{len(self.suppressed_ids)} suppressions to suppress.toml")
                 self._suppressions_dirty = False
             except Exception as e:
                 self._notify_safe(f"Failed to save suppressions: {e}", severity="error")
@@ -745,7 +745,7 @@ class SawmillApp(App):
             try:
                 self._save_waivers()
                 saved_parts.append(
-                    f"{len(self._session_waivers)} waivers to {self._waiver_file_path.name}"
+                    f"{len(self._session_waivers)} waivers to {self._resolve_waiver_path().name}"
                 )
                 self._waivers_dirty = False
                 self._session_waivers = []
@@ -758,26 +758,23 @@ class SawmillApp(App):
             self._notify_safe("Nothing to save")
 
     def _save_suppressions(self) -> None:
-        """Save suppression IDs to sawmill.toml."""
-        import tomli
-        import tomli_w
+        """Save suppression IDs to .sawmill/suppress.toml."""
+        from sawmill.core.suppress import SuppressConfig, SuppressLoader
+        from sawmill.utils.dirs import ensure_sawmill_dir
 
-        config_path = Path("sawmill.toml")
+        sawmill_dir = ensure_sawmill_dir()
+        SuppressLoader().save(
+            SuppressConfig(message_ids=sorted(self.suppressed_ids)),
+            sawmill_dir / "suppress.toml",
+        )
 
-        # Load existing config
-        data: dict = {}
-        if config_path.exists():
-            content = config_path.read_text(encoding="utf-8")
-            if content.strip():
-                data = tomli.loads(content)
+    def _resolve_waiver_path(self) -> Path:
+        """Resolve the waiver file path, defaulting to .sawmill/waivers.toml."""
+        if self._waiver_file_path is None:
+            from sawmill.utils.dirs import ensure_sawmill_dir
 
-        # Replace suppression IDs with current session set
-        suppress = data.setdefault("suppress", {})
-        suppress["message_ids"] = sorted(self.suppressed_ids)
-
-        # Write back
-        with open(config_path, "wb") as f:
-            tomli_w.dump(data, f)
+            self._waiver_file_path = ensure_sawmill_dir() / "waivers.toml"
+        return self._waiver_file_path
 
     def _save_waivers(self) -> None:
         """Append session waivers to the waiver file.
@@ -785,7 +782,7 @@ class SawmillApp(App):
         Uses atomic write-to-temp-then-rename to prevent file corruption
         if the process crashes mid-write.
         """
-        waiver_path = self._waiver_file_path
+        waiver_path = self._resolve_waiver_path()
 
         # If file exists, validate it first
         if waiver_path.exists():
@@ -915,7 +912,7 @@ class SawmillApp(App):
                 severity=(msg.severity or "").title(),
                 content=msg.content,
                 author=discover_author(),
-                waiver_file_path=str(self._waiver_file_path),
+                waiver_file_path=str(self._resolve_waiver_path()),
             ),
             callback=self._on_waive_modal_result,
         )

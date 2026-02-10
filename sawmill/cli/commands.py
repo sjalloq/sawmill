@@ -454,10 +454,14 @@ def cli(
             ctx.exit(1)
             return
 
+        # Resolve waiver file path for TUI
+        waiver_file_path = Path(waivers) if waivers else None
+
         run_tui(
             log_file=log_path,
             plugin_name=plugin_name,
             severity_levels=severity_levels,
+            waiver_file_path=waiver_file_path,
         )
         return
 
@@ -466,14 +470,25 @@ def cli(
         _generate_waivers_cmd(ctx, console, logfile, plugin, waiver_level)
         return
 
-    # Load waivers if specified
+    # Load waivers — from explicit path or auto-discovered .sawmill/waivers.toml
     waiver_matcher: WaiverMatcher | None = None
     all_waivers: list[Waiver] = []
+    waiver_path: Path | None = None
     if waivers:
         waiver_path = Path(waivers)
         if not waiver_path.exists():
             console.print(f"[red]Error:[/red] Waiver file not found: {waivers}")
             ctx.exit(1)
+    else:
+        from sawmill.utils.dirs import resolve_sawmill_dir
+
+        sawmill_dir = resolve_sawmill_dir()
+        if sawmill_dir is not None:
+            candidate = sawmill_dir / "waivers.toml"
+            if candidate.exists():
+                waiver_path = candidate
+
+    if waiver_path is not None and waiver_path.exists():
         try:
             loader = WaiverLoader()
             waiver_file = loader.load(waiver_path)

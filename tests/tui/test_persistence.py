@@ -142,7 +142,7 @@ class TestOnQuitResult:
 
 
 class TestSaveSuppressions:
-    """Tests for saving suppressions to sawmill.toml."""
+    """Tests for saving suppressions to .sawmill/suppress.toml."""
 
     @pytest.fixture
     def app(self, severity_levels, tmp_path, monkeypatch):
@@ -153,23 +153,23 @@ class TestSaveSuppressions:
         ]
         return SawmillApp(severity_levels, messages=messages)
 
-    def test_save_creates_config_file(self, app, tmp_path):
-        """Saving suppressions creates sawmill.toml if it doesn't exist."""
+    def test_save_creates_suppress_file(self, app, tmp_path):
+        """Saving suppressions creates .sawmill/suppress.toml."""
         app.suppressed_ids = {"E-001", "W-001"}
         app._suppressions_dirty = True
         app._save_suppressions()
 
-        config_path = tmp_path / "sawmill.toml"
+        config_path = tmp_path / ".sawmill" / "suppress.toml"
         assert config_path.exists()
         data = tomli.loads(config_path.read_text())
         assert sorted(data["suppress"]["message_ids"]) == ["E-001", "W-001"]
 
     def test_save_replaces_existing(self, app, tmp_path):
         """Saving suppressions replaces existing IDs with session set."""
-        config_path = tmp_path / "sawmill.toml"
-        config_path.write_text(
-            '[suppress]\nmessage_ids = ["OLD-001"]\n\n[general]\ndefault_plugin = "vivado"\n'
-        )
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        config_path = sawmill_dir / "suppress.toml"
+        config_path.write_text('[suppress]\nmessage_ids = ["OLD-001"]\n')
 
         app.suppressed_ids = {"E-001"}
         app._suppressions_dirty = True
@@ -178,12 +178,12 @@ class TestSaveSuppressions:
         data = tomli.loads(config_path.read_text())
         # OLD-001 should NOT be present -- session set replaces, not merges
         assert sorted(data["suppress"]["message_ids"]) == ["E-001"]
-        # Existing sections preserved
-        assert data["general"]["default_plugin"] == "vivado"
 
     def test_save_replaces_and_deduplicates(self, app, tmp_path):
         """Saving replaces IDs with current session set (no duplicates)."""
-        config_path = tmp_path / "sawmill.toml"
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        config_path = sawmill_dir / "suppress.toml"
         config_path.write_text('[suppress]\nmessage_ids = ["E-001"]\n')
 
         app.suppressed_ids = {"E-001", "W-001"}
@@ -192,18 +192,6 @@ class TestSaveSuppressions:
 
         data = tomli.loads(config_path.read_text())
         assert sorted(data["suppress"]["message_ids"]) == ["E-001", "W-001"]
-
-    def test_save_empty_config_file(self, app, tmp_path):
-        """Saving to an empty config file works."""
-        config_path = tmp_path / "sawmill.toml"
-        config_path.write_text("")
-
-        app.suppressed_ids = {"E-001"}
-        app._suppressions_dirty = True
-        app._save_suppressions()
-
-        data = tomli.loads(config_path.read_text())
-        assert data["suppress"]["message_ids"] == ["E-001"]
 
 
 class TestSaveWaivers:
@@ -347,7 +335,7 @@ class TestSaveAll:
 
         app._save_all()
 
-        assert (tmp_path / "sawmill.toml").exists()
+        assert (tmp_path / ".sawmill" / "suppress.toml").exists()
         assert not (tmp_path / "waivers.toml").exists()
         assert app._suppressions_dirty is False
 
@@ -361,7 +349,7 @@ class TestSaveAll:
         app._save_all()
 
         assert (tmp_path / "waivers.toml").exists()
-        assert not (tmp_path / "sawmill.toml").exists()
+        assert not (tmp_path / ".sawmill" / "suppress.toml").exists()
         assert app._waivers_dirty is False
 
     def test_save_clears_session_waivers(self, app, tmp_path):
@@ -457,7 +445,9 @@ class TestUnsuppressPersistence:
 
     def test_save_after_unsuppress_writes_reduced_set(self, app, tmp_path):
         """Saving after un-suppress writes only the current session set, not a union."""
-        config_path = tmp_path / "sawmill.toml"
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        config_path = sawmill_dir / "suppress.toml"
         # Pre-populate config with two suppressed IDs
         config_path.write_text('[suppress]\nmessage_ids = ["E-001", "W-001"]\n')
 
@@ -472,7 +462,9 @@ class TestUnsuppressPersistence:
 
     def test_save_after_unsuppress_all_writes_empty_list(self, app, tmp_path):
         """Saving with empty suppressed_ids writes an empty list."""
-        config_path = tmp_path / "sawmill.toml"
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        config_path = sawmill_dir / "suppress.toml"
         config_path.write_text('[suppress]\nmessage_ids = ["E-001", "W-001"]\n')
 
         # User un-suppressed everything
@@ -521,16 +513,13 @@ class TestEmptySuppressedIdsSave:
         assert app._suppressions_dirty is False
 
     def test_save_all_with_empty_suppressed_ids_writes_config(self, app, tmp_path):
-        """_save_all() with empty suppressed_ids writes sawmill.toml with empty list."""
-        config_path = tmp_path / "sawmill.toml"
-        # Pre-populate with old suppressions
-        config_path.write_text('[suppress]\nmessage_ids = ["E-001", "W-001"]\n')
-
+        """_save_all() with empty suppressed_ids writes .sawmill/suppress.toml with empty list."""
         app.suppressed_ids = set()
         app._suppressions_dirty = True
 
         app._save_all()
 
+        config_path = tmp_path / ".sawmill" / "suppress.toml"
         assert config_path.exists()
         data = tomli.loads(config_path.read_text())
         assert data["suppress"]["message_ids"] == []
@@ -560,7 +549,7 @@ class TestEmptySuppressedIdsSave:
 
     def test_suppress_then_unsuppress_all_via_save_all(self, app, tmp_path):
         """Full workflow: suppress two IDs, un-suppress both, save clears state."""
-        config_path = tmp_path / "sawmill.toml"
+        config_path = tmp_path / ".sawmill" / "suppress.toml"
 
         # Suppress two IDs
         app.suppressed_ids = {"E-001", "W-001"}

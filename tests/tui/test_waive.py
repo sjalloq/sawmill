@@ -154,9 +154,9 @@ class TestWaiveState:
         assert app._waivers_dirty is False
 
     def test_default_waiver_file_path(self, severity_levels):
-        """Default waiver file path is ./waivers.toml."""
+        """Default waiver file path is None (resolved lazily)."""
         app = SawmillApp(severity_levels)
-        assert app._waiver_file_path == Path("./waivers.toml")
+        assert app._waiver_file_path is None
 
     def test_custom_waiver_file_path(self, severity_levels):
         """Custom waiver file path from constructor."""

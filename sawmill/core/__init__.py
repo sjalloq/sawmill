@@ -19,7 +19,6 @@ from sawmill.core.config import (
     ConfigLoader,
     GeneralConfig,
     OutputConfig,
-    SuppressConfig,
 )
 from sawmill.core.filter import FilterEngine, match_message_id
 from sawmill.core.plugin import (
@@ -36,6 +35,7 @@ from sawmill.core.severity import (
     get_severity_style_map,
     severity_at_or_above,
 )
+from sawmill.core.suppress import SuppressConfig, SuppressLoader
 from sawmill.core.waiver import WaiverGenerator, WaiverLoader, WaiverMatcher, WaiverValidationError
 
 __all__ = [
@@ -53,6 +53,7 @@ __all__ = [
     "PluginManager",
     "SeverityStats",
     "SuppressConfig",
+    "SuppressLoader",
     "WaiverGenerator",
     "WaiverLoader",
     "WaiverMatcher",

@@ -8,7 +8,6 @@ from sawmill.core.config import (
     ConfigLoader,
     GeneralConfig,
     OutputConfig,
-    SuppressConfig,
 )
 
 
@@ -63,8 +62,6 @@ color = false
         assert config.output.format == "text"
         assert config.output.color is True
         assert config.general.default_plugin is None
-        assert config.suppress.patterns == []
-        assert config.suppress.message_ids == []
 
 
 class TestDefaultValues:
@@ -78,8 +75,6 @@ class TestDefaultValues:
         assert config.output.format == "text"
         assert config.output.color is True
         assert config.general.default_plugin is None
-        assert config.suppress.patterns == []
-        assert config.suppress.message_ids == []
 
     def test_default_config_is_valid(self):
         """Default config can be created directly."""
@@ -87,7 +82,6 @@ class TestDefaultValues:
 
         assert config.output.format == "text"
         assert config.output.color is True
-        assert isinstance(config.suppress.patterns, list)
 
 
 class TestMalformedTOML:
@@ -139,71 +133,6 @@ class TestMalformedTOML:
         with pytest.raises(ConfigError) as exc:
             loader.load(bad_config)
         assert str(bad_config) in str(exc.value) or "bad.toml" in str(exc.value)
-
-
-class TestSuppressConfig:
-    """Tests for suppress section configuration."""
-
-    def test_suppress_config(self, tmp_path):
-        """Suppress patterns should be loaded from config."""
-        config_file = tmp_path / "config.toml"
-        config_file.write_text("""
-[suppress]
-patterns = ["^INFO: \\\\[.*\\\\] Launching", "DEBUG:"]
-message_ids = ["Common 17-55", "Vivado 12-3523"]
-""")
-
-        loader = ConfigLoader()
-        config = loader.load(config_file)
-
-        assert len(config.suppress.patterns) == 2
-        assert "^INFO: \\[.*\\] Launching" in config.suppress.patterns
-        assert "DEBUG:" in config.suppress.patterns
-        assert "Common 17-55" in config.suppress.message_ids
-        assert "Vivado 12-3523" in config.suppress.message_ids
-
-    def test_suppress_empty_patterns(self, tmp_path):
-        """Empty suppress patterns list is valid."""
-        config_file = tmp_path / "config.toml"
-        config_file.write_text("""
-[suppress]
-patterns = []
-message_ids = []
-""")
-
-        loader = ConfigLoader()
-        config = loader.load(config_file)
-
-        assert config.suppress.patterns == []
-        assert config.suppress.message_ids == []
-
-    def test_suppress_patterns_only(self, tmp_path):
-        """Only patterns defined, message_ids defaults to empty."""
-        config_file = tmp_path / "config.toml"
-        config_file.write_text("""
-[suppress]
-patterns = ["DEBUG:"]
-""")
-
-        loader = ConfigLoader()
-        config = loader.load(config_file)
-
-        assert config.suppress.patterns == ["DEBUG:"]
-        assert config.suppress.message_ids == []
-
-    def test_suppress_message_ids_only(self, tmp_path):
-        """Only message_ids defined, patterns defaults to empty."""
-        config_file = tmp_path / "config.toml"
-        config_file.write_text("""
-[suppress]
-message_ids = ["Common 17-55"]
-""")
-
-        loader = ConfigLoader()
-        config = loader.load(config_file)
-
-        assert config.suppress.patterns == []
-        assert config.suppress.message_ids == ["Common 17-55"]
 
 
 class TestFileNotFound:
@@ -287,7 +216,6 @@ class TestDataclasses:
         data = {
             "general": {"default_plugin": "vivado"},
             "output": {"color": False, "format": "json"},
-            "suppress": {"patterns": ["DEBUG:"], "message_ids": ["Test 1-1"]},
         }
 
         config = Config.from_dict(data)
@@ -295,8 +223,6 @@ class TestDataclasses:
         assert config.general.default_plugin == "vivado"
         assert config.output.color is False
         assert config.output.format == "json"
-        assert config.suppress.patterns == ["DEBUG:"]
-        assert config.suppress.message_ids == ["Test 1-1"]
 
     def test_general_config_from_dict(self):
         """GeneralConfig.from_dict handles missing keys."""
@@ -311,9 +237,108 @@ class TestDataclasses:
         assert output.color is True
         assert output.format == "text"
 
-    def test_suppress_config_from_dict(self):
-        """SuppressConfig.from_dict provides empty lists for missing keys."""
-        data = {}
-        suppress = SuppressConfig.from_dict(data)
-        assert suppress.patterns == []
-        assert suppress.message_ids == []
+
+class TestLoadResolved:
+    """Tests for ConfigLoader.load_resolved() method."""
+
+    def test_no_configs_returns_defaults(self, tmp_path, monkeypatch):
+        """Returns default config when no config files exist."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(tmp_path)
+
+        assert config.output.format == "text"
+        assert config.output.color is True
+        assert config.general.default_plugin is None
+
+    def test_user_config_only(self, tmp_path, monkeypatch):
+        """Loads user config when no local config exists."""
+        user_config_dir = tmp_path / ".config" / "sawmill"
+        user_config_dir.mkdir(parents=True)
+        (user_config_dir / "config.toml").write_text(
+            '[output]\ncolor = false\n[general]\ndefault_plugin = "vivado"\n'
+        )
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        # Use a subdir with no .sawmill/
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(work_dir)
+
+        assert config.output.color is False
+        assert config.general.default_plugin == "vivado"
+
+    def test_local_config_only(self, tmp_path, monkeypatch):
+        """Loads local config when no user config exists."""
+        monkeypatch.setenv("HOME", str(tmp_path))  # no .config/sawmill/
+
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        (sawmill_dir / "config.toml").write_text('[output]\nformat = "json"\n')
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(tmp_path)
+
+        assert config.output.format == "json"
+
+    def test_local_overrides_user(self, tmp_path, monkeypatch):
+        """Local config sections override user config sections."""
+        # User config
+        user_config_dir = tmp_path / ".config" / "sawmill"
+        user_config_dir.mkdir(parents=True)
+        (user_config_dir / "config.toml").write_text(
+            '[output]\nformat = "text"\ncolor = false\n[general]\ndefault_plugin = "generic"\n'
+        )
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        # Local config overrides output section
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+        sawmill_dir = work_dir / ".sawmill"
+        sawmill_dir.mkdir()
+        (sawmill_dir / "config.toml").write_text('[output]\nformat = "json"\n')
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(work_dir)
+
+        assert config.output.format == "json"  # local overrides
+        # Note: shallow merge per section means entire [output] is replaced
+        assert config.output.color is True  # reverts to default (local replaced section)
+        assert config.general.default_plugin == "generic"  # from user (not in local)
+
+    def test_dot_sawmill_dir_works(self, tmp_path, monkeypatch):
+        """Config loads from .sawmill/ directory."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        (sawmill_dir / "config.toml").write_text('[general]\ndefault_plugin = "vivado"\n')
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(tmp_path)
+        assert config.general.default_plugin == "vivado"
+
+    def test_plain_sawmill_dir_works(self, tmp_path, monkeypatch):
+        """Config loads from sawmill/ directory."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        sawmill_dir = tmp_path / "sawmill"
+        sawmill_dir.mkdir()
+        (sawmill_dir / "config.toml").write_text('[general]\ndefault_plugin = "vivado"\n')
+
+        loader = ConfigLoader()
+        config = loader.load_resolved(tmp_path)
+        assert config.general.default_plugin == "vivado"
+
+    def test_invalid_local_toml_raises_config_error(self, tmp_path, monkeypatch):
+        """Invalid TOML in local config raises ConfigError."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        sawmill_dir = tmp_path / ".sawmill"
+        sawmill_dir.mkdir()
+        (sawmill_dir / "config.toml").write_text("invalid [[[")
+
+        loader = ConfigLoader()
+        with pytest.raises(ConfigError):
+            loader.load_resolved(tmp_path)
