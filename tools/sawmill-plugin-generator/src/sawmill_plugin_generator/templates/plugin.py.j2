@@ -1,0 +1,208 @@
+"""{{ description }}"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from sawmill.models.filter_def import FilterDefinition
+from sawmill.models.message import FileRef, Message
+from sawmill.plugin import SawmillPlugin, hookimpl
+
+# TODO: Import your compiled regex patterns from patterns.py:
+# from {{ module_name }}.patterns import (
+#     _SEVERITY_PATTERNS,
+#     _MESSAGE_ID_PATTERN,
+#     _FILE_REF_PATTERN,
+#     _HEADER_PATTERN,
+# )
+
+
+class {{ class_name }}(SawmillPlugin):
+    """Parser for {{ plugin_name }} log files.
+
+    Detects and parses {{ plugin_name }} logs, extracting structured messages
+    including severity, message IDs, and file references.
+    """
+
+    name = "{{ plugin_name }}"
+    version = "0.1.0"
+    description = "{{ description }}"
+
+    @hookimpl
+    def can_handle(self, path: Path) -> float:
+        """Determine if this is a {{ plugin_name }} log file.
+
+        Examine the file name and/or initial content for {{ plugin_name }}
+        signatures. Return a confidence score from 0.0 to 1.0.
+
+        Args:
+            path: Path to the log file to check.
+
+        Returns:
+            Confidence score:
+            - 0.0: Cannot handle this file
+            - 0.5: Might be able to handle (ambiguous)
+            - 1.0: Definitely can handle this file
+        """
+        if not path.exists():
+            return 0.0
+
+        # TODO: Implement detection logic. Examples:
+        # - Check file extension or name pattern
+        # - Read first N lines and look for tool-specific header
+        # - Search for characteristic message patterns
+        return 0.0
+
+    @hookimpl
+    def load_and_parse(self, path: Path) -> list[Message]:
+        """Load and parse a {{ plugin_name }} log file into messages.
+
+        Open the file, parse each line/section into logical messages,
+        group multi-line messages, and extract severity/IDs/metadata.
+
+        Args:
+            path: Path to the log file to parse.
+
+        Returns:
+            List of Message objects. Each Message should have:
+            - start_line / end_line: Line range in source file (1-indexed)
+            - raw_text: Complete original text
+            - content: Cleaned message content
+            - severity: Severity ID matching get_severity_levels()
+            - message_id: Tool-specific ID (optional)
+            - category: Category for grouping (optional)
+            - file_ref: FileRef if message references a source file (optional)
+        """
+        if not path.exists():
+            return []
+
+        # TODO: Implement parsing logic. General approach:
+        # 1. Read the file: with open(path, encoding="utf-8", errors="replace") as f:
+        # 2. Iterate lines, detect severity from patterns
+        # 3. Group multi-line messages (indented lines, tables, etc.)
+        # 4. Extract message IDs, file references, categories
+        # 5. Create Message objects
+        return []
+
+    @hookimpl
+    def get_severity_levels(self) -> list[dict]:
+        """Define severity levels for {{ plugin_name }} logs.
+
+        REQUIRED: This hook must return the tool's severity levels.
+        Levels must use consecutive integers starting at 0.
+        Level 0 is the lowest severity; higher numbers are more severe.
+
+        Returns:
+            List of severity level dicts with keys:
+            - id: Internal identifier (lowercase)
+            - name: Display name
+            - level: Numeric level (0 = lowest)
+            - style: Rich style string for terminal display
+        """
+        # TODO: Customize these severity levels for your tool.
+        # Add or remove levels as needed. Keep levels consecutive from 0.
+        return [
+            {
+                "id": "error",
+                "name": "Error",
+                "level": 2,
+                "style": "red bold",
+            },
+            {
+                "id": "warning",
+                "name": "Warning",
+                "level": 1,
+                "style": "yellow",
+            },
+            {
+                "id": "info",
+                "name": "Info",
+                "level": 0,
+                "style": "cyan",
+            },
+        ]
+
+    @hookimpl
+    def get_filters(self) -> list[FilterDefinition]:
+        """Get pre-defined filter definitions for {{ plugin_name }} logs.
+
+        Provide filters for common use cases like filtering by severity
+        level or message category.
+
+        Returns:
+            List of FilterDefinition objects.
+        """
+        # TODO: Add tool-specific filters. Example:
+        # return [
+        #     FilterDefinition(
+        #         id="errors",
+        #         name="Errors",
+        #         pattern=r"^ERROR:",
+        #         enabled=True,
+        #         source="plugin:{{ plugin_name }}",
+        #         description="All error messages",
+        #     ),
+        # ]
+        return []
+
+    @hookimpl
+    def extract_file_reference(self, content: str) -> FileRef | None:
+        """Extract a file reference from message content.
+
+        Many log messages reference source files with line numbers.
+        Parse the content to find file path and optional line number.
+
+        Args:
+            content: The message content to search.
+
+        Returns:
+            FileRef(path=..., line=...) if found, None otherwise.
+        """
+        # TODO: Implement file reference extraction. Example:
+        # match = _FILE_REF_PATTERN.search(content)
+        # if match:
+        #     return FileRef(path=match.group(1), line=int(match.group(2)))
+        return None
+
+    @hookimpl
+    def get_grouping_fields(self) -> list[dict]:
+        """Get fields available for grouping and sorting.
+
+        Declare what dimensions are available for grouping messages.
+        Standard field types: "builtin", "metadata", "file_ref".
+
+        Returns:
+            List of field definition dicts with keys:
+            - id: Field identifier (used in --group-by)
+            - name: Display name
+            - field_type: "builtin", "metadata", or "file_ref"
+            - description: Help text
+        """
+        # TODO: Add tool-specific grouping fields if needed.
+        # Metadata fields use Message.metadata[field_id].
+        return [
+            {
+                "id": "severity",
+                "name": "Severity",
+                "field_type": "builtin",
+                "description": "Group by message severity level",
+            },
+            {
+                "id": "id",
+                "name": "Message ID",
+                "field_type": "builtin",
+                "description": "Group by tool-specific message ID",
+            },
+            {
+                "id": "file",
+                "name": "Source File",
+                "field_type": "file_ref",
+                "description": "Group by source file path",
+            },
+            {
+                "id": "category",
+                "name": "Category",
+                "field_type": "builtin",
+                "description": "Group by message category",
+            },
+        ]

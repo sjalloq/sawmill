@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sawmill-plugin-generator"
+version = "0.1.0"
+description = "Scaffold generator for sawmill plugins"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+    "click>=8.0.0",
+    "jinja2>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+sawmill-new-plugin = "sawmill_plugin_generator.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sawmill_plugin_generator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from sawmill.models.filter_def import FilterDefinition
     from sawmill.models.message import FileRef, Message
 
+SAWMILL_PLUGIN_API = "1"
+
 hookspec = pluggy.HookspecMarker("sawmill")
 
 

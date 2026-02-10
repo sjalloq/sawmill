@@ -1,0 +1,42 @@
+"""Tests for {{ plugin_name }} log parsing (load_and_parse)."""
+
+from __future__ import annotations
+
+from sawmill.models.message import Message
+
+
+class TestLoadAndParse:
+    """Tests for the load_and_parse hook."""
+
+    def test_returns_list(self, plugin, sample_log):
+        """load_and_parse should return a list."""
+        result = plugin.load_and_parse(sample_log)
+        assert isinstance(result, list)
+
+    def test_items_are_messages(self, plugin, sample_log):
+        """Each item should be a Message instance."""
+        # TODO: This test will pass once load_and_parse() is implemented
+        # and sample.log contains real {{ plugin_name }} output.
+        messages = plugin.load_and_parse(sample_log)
+        for msg in messages:
+            assert isinstance(msg, Message), f"Expected Message, got {type(msg)}"
+
+    def test_messages_have_required_fields(self, plugin, sample_log):
+        """Each message should have start_line, raw_text, and content populated."""
+        # TODO: This test will pass once load_and_parse() is implemented.
+        messages = plugin.load_and_parse(sample_log)
+        for msg in messages:
+            assert msg.start_line >= 1, "start_line should be >= 1"
+            assert msg.raw_text, "raw_text should not be empty"
+            assert msg.content, "content should not be empty"
+
+    def test_empty_file_returns_empty_list(self, plugin, tmp_path):
+        """An empty file should return an empty list."""
+        empty = tmp_path / "empty.log"
+        empty.write_text("")
+        assert plugin.load_and_parse(empty) == []
+
+    def test_missing_file_returns_empty_list(self, plugin, tmp_path):
+        """A non-existent file should return an empty list."""
+        missing = tmp_path / "missing.log"
+        assert plugin.load_and_parse(missing) == []

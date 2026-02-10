@@ -1,0 +1,35 @@
+"""Regex patterns for {{ plugin_name }} log parsing.
+
+Keep pattern definitions separate from plugin logic for readability.
+Uncomment and customise the patterns below for your tool's log format.
+"""
+
+from __future__ import annotations
+
+# import re
+
+# --- Severity detection patterns ---
+# Map severity IDs to compiled regex patterns that match the start of a log line.
+#
+# _SEVERITY_PATTERNS = {
+#     "error": re.compile(r"^ERROR:\s*"),
+#     "warning": re.compile(r"^WARNING:\s*"),
+#     "info": re.compile(r"^INFO:\s*"),
+# }
+
+# --- Message ID pattern ---
+# Extract a tool-specific message ID from a log line.
+# Example: [Category 12-345]
+#
+# _MESSAGE_ID_PATTERN = re.compile(r"\[([A-Za-z_]+ \d+-\d+)\]")
+
+# --- File reference pattern ---
+# Extract file path and line number from a log message.
+# Example: [/path/to/file.v:53]  or  /path/to/file.v:53
+#
+# _FILE_REF_PATTERN = re.compile(r"\[([^\]]+):(\d+)\]\s*$")
+
+# --- Header / signature pattern ---
+# Detect tool-specific header lines for can_handle() detection.
+#
+# _HEADER_PATTERN = re.compile(r"^#.*{{ plugin_name }}", re.IGNORECASE)
