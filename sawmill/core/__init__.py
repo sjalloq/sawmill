@@ -21,7 +21,7 @@ from sawmill.core.config import (
     OutputConfig,
     SuppressConfig,
 )
-from sawmill.core.filter import FilterEngine, FilterStats, match_message_id
+from sawmill.core.filter import FilterEngine, match_message_id
 from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,
@@ -44,7 +44,6 @@ __all__ = [
     "ConfigError",
     "ConfigLoader",
     "FilterEngine",
-    "FilterStats",
     "GeneralConfig",
     "MessageStats",
     "NoPluginFoundError",

@@ -25,7 +25,7 @@ class MockPlugin(SawmillPlugin):
 
     @hookimpl
     def get_filters(self):
-        return [FilterDefinition(id="mock", name="Mock", pattern="MOCK", enabled=True)]
+        return [FilterDefinition(id="mock", name="Mock", pattern="MOCK")]
 
 
 class AnotherMockPlugin(SawmillPlugin):

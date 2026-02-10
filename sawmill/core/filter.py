@@ -8,28 +8,10 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from dataclasses import dataclass, field
 from typing import Literal
 
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import Message
-
-
-@dataclass
-class FilterStats:
-    """Statistics about filter matches.
-
-    Attributes:
-        total_messages: Total number of messages processed.
-        matched_messages: Number of messages that matched all enabled filters.
-        match_percentage: Percentage of messages that matched (0.0-100.0).
-        per_filter: Dict mapping filter IDs to their individual match counts.
-    """
-
-    total_messages: int
-    matched_messages: int
-    match_percentage: float
-    per_filter: dict[str, int] = field(default_factory=dict)
 
 
 class FilterEngine:
@@ -71,29 +53,35 @@ class FilterEngine:
         filters: list[FilterDefinition],
         messages: list[Message],
         mode: Literal["AND", "OR"] = "AND",
+        active_ids: set[str] | None = None,
     ) -> list[Message]:
         """Apply multiple filters to messages with AND or OR logic.
 
         Args:
             filters: List of filter definitions to apply.
             messages: List of messages to filter.
-            mode: "AND" requires all enabled filters to match,
-                  "OR" requires any enabled filter to match.
+            mode: "AND" requires all active filters to match,
+                  "OR" requires any active filter to match.
+            active_ids: Set of filter IDs to apply. If None, all filters
+                are applied.
 
         Returns:
             List of messages that match according to the mode.
-            If no enabled filters, returns all messages.
+            If no active filters, returns all messages.
         """
-        # Get only enabled filters
-        enabled_filters = [f for f in filters if f.enabled]
+        # Get only active filters
+        if active_ids is not None:
+            active_filters = [f for f in filters if f.id in active_ids]
+        else:
+            active_filters = list(filters)
 
-        # If no enabled filters, return all messages
-        if not enabled_filters:
+        # If no active filters, return all messages
+        if not active_filters:
             return list(messages)
 
         # Compile all filter patterns
         compiled_filters: list[re.Pattern[str]] = []
-        for filt in enabled_filters:
+        for filt in active_filters:
             try:
                 compiled_filters.append(re.compile(filt.pattern))
             except re.error:
@@ -153,50 +141,6 @@ class FilterEngine:
         return [
             msg for msg in messages if not any(cp.search(msg.raw_text) for cp in compiled_patterns)
         ]
-
-    def get_stats(
-        self,
-        filters: list[FilterDefinition],
-        messages: list[Message],
-    ) -> FilterStats:
-        """Calculate statistics about filter matches.
-
-        Args:
-            filters: List of filter definitions to analyze.
-            messages: List of messages to analyze.
-
-        Returns:
-            FilterStats containing total counts, match counts, percentages,
-            and per-filter breakdown.
-        """
-        total = len(messages)
-
-        # Calculate per-filter match counts
-        per_filter: dict[str, int] = {}
-        enabled_filters = [f for f in filters if f.enabled]
-
-        for filt in enabled_filters:
-            try:
-                compiled = re.compile(filt.pattern)
-                count = sum(1 for msg in messages if compiled.search(msg.raw_text))
-                per_filter[filt.id] = count
-            except re.error:
-                # Invalid pattern matches nothing
-                per_filter[filt.id] = 0
-
-        # Calculate matched messages (messages matching ALL enabled filters)
-        matched = self.apply_filters(filters, messages, mode="AND")
-        matched_count = len(matched)
-
-        # Calculate percentage
-        percentage = (matched_count / total) * 100.0 if total > 0 else 0.0
-
-        return FilterStats(
-            total_messages=total,
-            matched_messages=matched_count,
-            match_percentage=percentage,
-            per_filter=per_filter,
-        )
 
 
 def match_message_id(message_id: str | None, pattern: str) -> bool:

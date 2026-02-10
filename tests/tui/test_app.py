@@ -255,24 +255,6 @@ class TestAppActions:
         assert app.filter_pattern == ""
         assert app.severity_filter == {}
 
-    def test_on_filter_modal_result_apply(self, app):
-        """Test modal result is applied correctly."""
-        result = {
-            "severity_filter": {"error": True, "warning": False, "info": False},
-            "pattern": "test pattern",
-        }
-        app._on_filter_modal_result(result)
-        assert app.severity_filter == {"error": True, "warning": False, "info": False}
-        assert app.filter_pattern == "test pattern"
-
-    def test_on_filter_modal_result_cancel(self, app):
-        """Test modal cancel does nothing."""
-        app.severity_filter = {"error": True}
-        app.filter_pattern = "existing"
-        app._on_filter_modal_result(None)
-        assert app.severity_filter == {"error": True}
-        assert app.filter_pattern == "existing"
-
     def test_severity_toggle_keybindings(self, app):
         """Test that number keys 1-4 exist for severity toggles."""
         binding_keys = [b.key for b in app.BINDINGS]
@@ -280,11 +262,6 @@ class TestAppActions:
         assert "2" in binding_keys
         assert "3" in binding_keys
         assert "4" in binding_keys
-
-    def test_keybinding_f_exists(self, app):
-        """Test that 'f' keybinding for filter modal exists."""
-        binding_keys = [b.key for b in app.BINDINGS]
-        assert "f" in binding_keys
 
 
 class TestSeverityToggles:

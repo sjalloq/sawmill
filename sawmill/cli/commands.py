@@ -282,15 +282,12 @@ def cli(
             filter_table = Table(show_header=True, header_style="bold")
             filter_table.add_column("ID", style="cyan")
             filter_table.add_column("Name")
-            filter_table.add_column("Enabled", justify="center")
             filter_table.add_column("Description")
 
             for f in filters:
-                enabled = "[green]✓[/green]" if f.enabled else "[dim]✗[/dim]"
                 filter_table.add_row(
                     f.id,
                     f.name,
-                    enabled,
                     f.description or "",
                 )
 

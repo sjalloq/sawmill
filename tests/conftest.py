@@ -14,7 +14,7 @@ def project_root():
 @pytest.fixture
 def vivado_log(project_root):
     """Full Vivado log file for integration tests."""
-    return project_root / "examples/vivado/vivado.log"
+    return project_root / "tests/fixtures/vivado.log"
 
 
 @pytest.fixture

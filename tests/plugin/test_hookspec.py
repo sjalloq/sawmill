@@ -94,7 +94,6 @@ def test_plugin_can_override_hooks():
                     id="test",
                     name="Test Filter",
                     pattern=r"test",
-                    enabled=True,
                 )
             ]
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
 
 
 class FilterDefinition(BaseModel):
@@ -20,17 +20,13 @@ class FilterDefinition(BaseModel):
         id: Unique identifier for the filter.
         name: Human-readable name for display.
         pattern: Regular expression pattern to match.
-        enabled: Whether the filter is currently active.
         source: Origin of the filter (e.g., "plugin:vivado", "config", "user").
         description: Optional description of what this filter matches.
     """
 
-    model_config = ConfigDict(frozen=False)
-
     id: str
     name: str
     pattern: str
-    enabled: bool = True
     source: str | None = None
     description: str | None = None
 

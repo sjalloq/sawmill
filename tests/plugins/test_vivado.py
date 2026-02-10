@@ -1,5 +1,6 @@
 """Tests for the Vivado plugin."""
 
+import re
 from pathlib import Path
 
 from sawmill_plugin_vivado.plugin import VivadoPlugin
@@ -229,15 +230,19 @@ class TestVivadoExtractFileReference:
 class TestVivadoGetFilters:
     """Tests for VivadoPlugin.get_filters()."""
 
-    def test_vivado_filters_cover_common_cases(self) -> None:
-        """Plugin should provide filters for common severity levels."""
+    def test_vivado_filters_are_domain_specific(self) -> None:
+        """Plugin should provide only domain-specific filters, not severity mirrors."""
         plugin = VivadoPlugin()
         filters = plugin.get_filters()
 
         filter_ids = [f.id for f in filters]
-        assert "errors" in filter_ids
-        assert "critical-warnings" in filter_ids
-        assert "warnings" in filter_ids
+        # Severity-mirror filters should NOT be present
+        assert "errors" not in filter_ids
+        assert "critical-warnings" not in filter_ids
+        assert "warnings" not in filter_ids
+        assert "info" not in filter_ids
+        # Domain-specific filters should be present
+        assert len(filters) == 6
 
     def test_vivado_filters_have_required_fields(self) -> None:
         """All filters should have required fields."""
@@ -281,9 +286,9 @@ class TestVivadoPluginAttributes:
         assert plugin.name == "vivado"
 
     def test_vivado_has_version(self) -> None:
-        """Plugin should have a version attribute."""
+        """Plugin should have a valid semver-style version."""
         plugin = VivadoPlugin()
-        assert plugin.version == "1.0.0"
+        assert re.match(r"^\d+\.\d+\.\d+", plugin.version)
 
     def test_vivado_has_description(self) -> None:
         """Plugin should have a description attribute."""

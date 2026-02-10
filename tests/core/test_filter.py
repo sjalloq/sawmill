@@ -131,8 +131,8 @@ class TestApplyFiltersAndMode:
             ),
         ]
         filters = [
-            FilterDefinition(id="1", name="Errors", pattern=r"^Error:", enabled=True),
-            FilterDefinition(id="2", name="Timing", pattern=r"timing", enabled=True),
+            FilterDefinition(id="1", name="Errors", pattern=r"^Error:"),
+            FilterDefinition(id="2", name="Timing", pattern=r"timing"),
         ]
 
         engine = FilterEngine()
@@ -141,32 +141,32 @@ class TestApplyFiltersAndMode:
         assert len(results) == 1  # Only first matches both
         assert results[0].raw_text == "Error: timing slack -0.5"
 
-    def test_disabled_filters_ignored_in_and_mode(self):
-        """Disabled filters should not affect AND mode results."""
+    def test_inactive_filters_ignored_in_and_mode(self):
+        """Filters not in active_ids should not affect AND mode results."""
         messages = [Message(start_line=1, end_line=1, raw_text="Error: test", content="test")]
         filters = [
-            FilterDefinition(id="1", name="Disabled", pattern=r"Error", enabled=False),
+            FilterDefinition(id="1", name="Inactive", pattern=r"Error"),
         ]
 
         engine = FilterEngine()
-        results = engine.apply_filters(filters, messages, mode="AND")
+        results = engine.apply_filters(filters, messages, mode="AND", active_ids=set())
 
-        # Disabled filter doesn't restrict - all messages returned
+        # No active filters - all messages returned
         assert len(results) == 1
 
-    def test_no_enabled_filters_returns_all(self):
-        """No enabled filters should return all messages."""
+    def test_no_active_filters_returns_all(self):
+        """No active filters should return all messages."""
         messages = [
             Message(start_line=1, end_line=1, raw_text="Error: test", content="test"),
             Message(start_line=2, end_line=2, raw_text="Info: test", content="test"),
         ]
         filters = [
-            FilterDefinition(id="1", name="Disabled1", pattern=r"Error", enabled=False),
-            FilterDefinition(id="2", name="Disabled2", pattern=r"Info", enabled=False),
+            FilterDefinition(id="1", name="Filter1", pattern=r"Error"),
+            FilterDefinition(id="2", name="Filter2", pattern=r"Info"),
         ]
 
         engine = FilterEngine()
-        results = engine.apply_filters(filters, messages, mode="AND")
+        results = engine.apply_filters(filters, messages, mode="AND", active_ids=set())
 
         assert len(results) == 2
 
@@ -184,8 +184,8 @@ class TestApplyFiltersAndMode:
             ),
         ]
         filters = [
-            FilterDefinition(id="1", name="Vivado ID", pattern=r"\[Vivado \d+-\d+\]", enabled=True),
-            FilterDefinition(id="2", name="Timing", pattern=r"timing", enabled=True),
+            FilterDefinition(id="1", name="Vivado ID", pattern=r"\[Vivado \d+-\d+\]"),
+            FilterDefinition(id="2", name="Timing", pattern=r"timing"),
         ]
 
         engine = FilterEngine()
@@ -206,9 +206,9 @@ class TestApplyFiltersAndMode:
             ),
         ]
         filters = [
-            FilterDefinition(id="1", name="Errors", pattern=r"ERROR", enabled=True),
-            FilterDefinition(id="2", name="Timing", pattern=r"timing", enabled=True),
-            FilterDefinition(id="3", name="Critical", pattern=r"critical", enabled=True),
+            FilterDefinition(id="1", name="Errors", pattern=r"ERROR"),
+            FilterDefinition(id="2", name="Timing", pattern=r"timing"),
+            FilterDefinition(id="3", name="Critical", pattern=r"critical"),
         ]
 
         engine = FilterEngine()
@@ -228,8 +228,8 @@ class TestApplyFiltersOrMode:
             Message(start_line=3, end_line=3, raw_text="Info: done", content="done"),
         ]
         filters = [
-            FilterDefinition(id="1", name="Timing", pattern=r"timing", enabled=True),
-            FilterDefinition(id="2", name="DRC", pattern=r"DRC", enabled=True),
+            FilterDefinition(id="1", name="Timing", pattern=r"timing"),
+            FilterDefinition(id="2", name="DRC", pattern=r"DRC"),
         ]
 
         engine = FilterEngine()
@@ -245,8 +245,8 @@ class TestApplyFiltersOrMode:
             Message(start_line=1, end_line=1, raw_text="Warning: test only", content="test"),
         ]
         filters = [
-            FilterDefinition(id="1", name="Error", pattern=r"^Error", enabled=True),
-            FilterDefinition(id="2", name="Warning", pattern=r"^Warning", enabled=True),
+            FilterDefinition(id="1", name="Error", pattern=r"^Error"),
+            FilterDefinition(id="2", name="Warning", pattern=r"^Warning"),
         ]
 
         engine = FilterEngine()
@@ -260,8 +260,8 @@ class TestApplyFiltersOrMode:
             Message(start_line=1, end_line=1, raw_text="Info: test", content="test"),
         ]
         filters = [
-            FilterDefinition(id="1", name="Error", pattern=r"^Error", enabled=True),
-            FilterDefinition(id="2", name="Warning", pattern=r"^Warning", enabled=True),
+            FilterDefinition(id="1", name="Error", pattern=r"^Error"),
+            FilterDefinition(id="2", name="Warning", pattern=r"^Warning"),
         ]
 
         engine = FilterEngine()

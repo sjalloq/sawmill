@@ -284,7 +284,6 @@ class SawmillApp(App):
         Binding("2", "toggle_sev_2", "Sev 2", show=False),
         Binding("3", "toggle_sev_3", "Sev 3", show=False),
         Binding("4", "toggle_sev_4", "Sev 4", show=False),
-        Binding("f", "open_filter", "Filter", show=False),
         Binding("f12", "screenshot", "Screenshot", show=False),
     ]
 
@@ -973,30 +972,6 @@ class SawmillApp(App):
         """Save a screenshot as SVG (Textual built-in)."""
         saved = self.save_screenshot(filename=filename, path=path)
         self.notify(f"Screenshot saved: {saved}")
-
-    def action_open_filter(self) -> None:
-        """Open the filter modal dialog."""
-        from sawmill.tui.widgets.filter_modal import FilterModal
-
-        current_filter = {
-            "severity_filter": self.severity_filter.copy()
-            if self.severity_filter
-            else {level.id: True for level in self._severity_levels},
-            "pattern": self.filter_pattern,
-        }
-        self.push_screen(
-            FilterModal(self._severity_levels, current_filter),
-            callback=self._on_filter_modal_result,
-        )
-
-    def _on_filter_modal_result(self, result: dict | None) -> None:
-        if result is None:
-            return
-        self.severity_filter = result.get("severity_filter", {})
-        pattern = result.get("pattern", "")
-        if self._filter_input:
-            self._filter_input.value = pattern
-        self.filter_pattern = pattern
 
 
 # ---------------------------------------------------------------------------

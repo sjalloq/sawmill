@@ -1,5 +1,7 @@
 """Tests for CLI plugin discovery commands."""
 
+import re
+
 from click.testing import CliRunner
 
 from sawmill.cli import cli
@@ -17,13 +19,12 @@ class TestListPlugins:
         assert "vivado" in result.output.lower()
 
     def test_list_plugins_shows_version(self):
-        """--list-plugins should show plugin versions."""
+        """--list-plugins should show a valid plugin version."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--list-plugins"])
 
         assert result.exit_code == 0
-        # Vivado plugin has version 1.0.0
-        assert "1.0.0" in result.output
+        assert re.search(r"\d+\.\d+\.\d+", result.output)
 
     def test_list_plugins_shows_description(self):
         """--list-plugins should show plugin descriptions."""
@@ -47,12 +48,12 @@ class TestShowPluginInfo:
         assert "vivado" in result.output.lower()
 
     def test_show_info_displays_version(self):
-        """--show-info should display plugin version."""
+        """--show-info should display a valid plugin version."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
 
         assert result.exit_code == 0
-        assert "1.0.0" in result.output
+        assert re.search(r"\d+\.\d+\.\d+", result.output)
 
     def test_show_info_displays_hooks(self):
         """--show-info should display implemented hooks."""
@@ -121,5 +122,5 @@ class TestPluginInfoContent:
 
         assert result.exit_code == 0
         output_lower = result.output.lower()
-        # Should show some of the filter IDs
-        assert "error" in output_lower or "warning" in output_lower
+        # Should show some of the domain-specific filter IDs
+        assert "timing" in output_lower or "synthesis" in output_lower

@@ -6,11 +6,8 @@ from sawmill.models.filter_def import FilterDefinition
 
 
 def test_filter_creation():
-    f = FilterDefinition(
-        id="test-filter", name="Test Filter", pattern=r"Error:\s+\w+", enabled=True
-    )
+    f = FilterDefinition(id="test-filter", name="Test Filter", pattern=r"Error:\s+\w+")
     assert f.id == "test-filter"
-    assert f.enabled is True
 
 
 def test_invalid_regex_rejected():
@@ -19,25 +16,17 @@ def test_invalid_regex_rejected():
             id="bad",
             name="Bad",
             pattern=r"[invalid(regex",  # Unclosed bracket
-            enabled=True,
         )
 
 
-def test_filter_toggle():
-    f = FilterDefinition(id="t", name="T", pattern="test", enabled=True)
-    f.enabled = False
-    assert f.enabled is False
-
-
 def test_filter_source_tracking():
-    f = FilterDefinition(id="t", name="T", pattern="test", enabled=True, source="plugin:vivado")
+    f = FilterDefinition(id="t", name="T", pattern="test", source="plugin:vivado")
     assert f.source == "plugin:vivado"
 
 
 def test_filter_defaults():
     """Test default values for optional fields."""
     f = FilterDefinition(id="minimal", name="Minimal", pattern="test")
-    assert f.enabled is True
     assert f.source is None
     assert f.description is None
 
@@ -48,7 +37,6 @@ def test_filter_with_description():
         id="timing",
         name="Timing Errors",
         pattern=r"timing slack.*negative",
-        enabled=True,
         description="Matches timing violations with negative slack",
     )
     assert f.description == "Matches timing violations with negative slack"
@@ -56,15 +44,15 @@ def test_filter_with_description():
 
 def test_filter_equality():
     """Filters with same values should be equal."""
-    f1 = FilterDefinition(id="a", name="A", pattern="test", enabled=True)
-    f2 = FilterDefinition(id="a", name="A", pattern="test", enabled=True)
+    f1 = FilterDefinition(id="a", name="A", pattern="test")
+    f2 = FilterDefinition(id="a", name="A", pattern="test")
     assert f1 == f2
 
 
 def test_filter_inequality():
     """Filters with different values should not be equal."""
-    f1 = FilterDefinition(id="a", name="A", pattern="test1", enabled=True)
-    f2 = FilterDefinition(id="a", name="A", pattern="test2", enabled=True)
+    f1 = FilterDefinition(id="a", name="A", pattern="test1")
+    f2 = FilterDefinition(id="a", name="A", pattern="test2")
     assert f1 != f2
 
 
@@ -74,7 +62,6 @@ def test_complex_regex_accepted():
         id="complex",
         name="Complex",
         pattern=r"^(?:ERROR|WARNING):\s+\[(\w+)\s+(\d+-\d+)\]\s+(.*)$",
-        enabled=True,
     )
     assert f.pattern == r"^(?:ERROR|WARNING):\s+\[(\w+)\s+(\d+-\d+)\]\s+(.*)$"
 
@@ -90,4 +77,4 @@ def test_invalid_regex_various():
     ]
     for pattern in invalid_patterns:
         with pytest.raises(ValueError):
-            FilterDefinition(id="bad", name="Bad", pattern=pattern, enabled=True)
+            FilterDefinition(id="bad", name="Bad", pattern=pattern)
