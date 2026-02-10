@@ -44,10 +44,8 @@ dev = [
     "mypy>=1.0.0",
     "ruff>=0.4.0",
     "pre-commit>=3.0.0",
+    "sawmill-plugin-vivado @ git+https://github.com/sjalloq/sawmill-plugin-vivado",
 ]
-
-[project.entry-points."sawmill.plugins"]
-vivado = "sawmill.plugins.vivado:VivadoPlugin"
 
 [project.scripts]
 sawmill = "sawmill.__main__:cli"
@@ -56,6 +54,9 @@ sawmill = "sawmill.__main__:cli"
 Homepage = "https://github.com/sawmill/sawmill"
 Documentation = "https://github.com/sawmill/sawmill#readme"
 Repository = "https://github.com/sawmill/sawmill"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["sawmill"]

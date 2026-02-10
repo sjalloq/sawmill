@@ -335,8 +335,9 @@ class TestGetFailOnLevel:
 
     def test_default_returns_second_lowest(self):
         """Default should return second-lowest severity level."""
+        from sawmill_plugin_vivado.plugin import VivadoPlugin
+
         from sawmill.cli.reporting import get_fail_on_level
-        from sawmill.plugins.vivado import VivadoPlugin
 
         plugin = VivadoPlugin()
         level = get_fail_on_level(None, plugin)
@@ -378,8 +379,9 @@ class TestGetFailOnLevel:
 
     def test_explicit_fail_on(self):
         """Explicit --fail-on should return that severity's level."""
+        from sawmill_plugin_vivado.plugin import VivadoPlugin
+
         from sawmill.cli.reporting import get_fail_on_level
-        from sawmill.plugins.vivado import VivadoPlugin
 
         plugin = VivadoPlugin()
         level = get_fail_on_level("error", plugin)
@@ -388,9 +390,9 @@ class TestGetFailOnLevel:
     def test_invalid_fail_on_raises(self):
         """Invalid --fail-on should raise click.BadParameter."""
         import click
+        from sawmill_plugin_vivado.plugin import VivadoPlugin
 
         from sawmill.cli.reporting import get_fail_on_level
-        from sawmill.plugins.vivado import VivadoPlugin
 
         plugin = VivadoPlugin()
         with pytest.raises(click.BadParameter, match="Unknown severity"):

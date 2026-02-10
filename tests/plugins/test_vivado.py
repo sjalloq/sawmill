@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from sawmill.plugins.vivado import VivadoPlugin
+from sawmill_plugin_vivado.plugin import VivadoPlugin
 
 
 class TestVivadoCanHandle:

@@ -3,6 +3,7 @@
 import pytest
 from click.testing import CliRunner
 from pydantic import ValidationError
+from sawmill_plugin_vivado.plugin import VivadoPlugin
 
 from sawmill.__main__ import cli
 from sawmill.core.aggregation import Aggregator, make_severity_sort_key
@@ -14,7 +15,6 @@ from sawmill.models.plugin_api import (
     grouping_fields_from_dicts,
     severity_levels_from_dicts,
 )
-from sawmill.plugins.vivado import VivadoPlugin
 
 
 class TestSeverityLevel:
