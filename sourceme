@@ -52,3 +52,5 @@ else
 fi
 
 source "$VENV_DIR/bin/activate"
+
+pre-commit install

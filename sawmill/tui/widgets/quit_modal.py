@@ -32,16 +32,6 @@ class QuitConfirmModal(ModalScreen[str | None]):
         width: 55;
         height: auto;
         max-height: 60%;
-        background: $surface;
-        border: thick $primary;
-        padding: 1 2;
-    }
-
-    #quit-modal-title {
-        text-style: bold;
-        width: 100%;
-        content-align: center middle;
-        margin-bottom: 1;
     }
 
     .quit-item {
@@ -72,8 +62,8 @@ class QuitConfirmModal(ModalScreen[str | None]):
         self._waiver_count = waiver_count
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="quit-modal-container"):
-            yield Static("Unsaved Changes", id="quit-modal-title")
+        with Vertical(id="quit-modal-container", classes="modal-container"):
+            yield Static("Unsaved Changes", id="quit-modal-title", classes="modal-title")
 
             yield Static("You have unsaved changes:")
             if self._suppression_count > 0:
@@ -89,12 +79,12 @@ class QuitConfirmModal(ModalScreen[str | None]):
                     classes="quit-item",
                 )
 
-            yield Static("")
             yield Static(
-                "Save and quit ............... Enter\n"
-                "Quit without saving ......... q\n"
-                "Cancel ...................... Escape",
+                "[bold $primary]Enter[/]   Save and quit\n"
+                "[bold $primary]q[/]       Quit without saving\n"
+                "[bold $primary]Escape[/]  Cancel",
                 id="quit-modal-options",
+                classes="modal-footer",
             )
 
     def action_cancel(self) -> None:

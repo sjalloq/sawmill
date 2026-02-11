@@ -192,7 +192,7 @@ DataTable > .datatable--even-row {
 
 .btn.-disabled, .btn:disabled {
     color: $text-muted;
-    border: round $panel;
+    border: round $primary-background-lighten-3;
     text-style: none;
 }
 
@@ -210,6 +210,195 @@ DataTable > .datatable--even-row {
 .btn-warning:hover, .btn-warning:focus {
     border: round $warning;
     color: $warning;
+}
+
+/* === Modals === */
+ModalScreen {
+    background: transparent;
+}
+
+.modal-container {
+    background: transparent;
+    border: round $primary;
+    border-title-color: $primary;
+    border-title-background: transparent;
+    padding: 1 2;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+.modal-title {
+    text-style: bold;
+    color: $primary;
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+.modal-footer {
+    margin-top: 1;
+    height: auto;
+    width: 100%;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+.modal-key {
+    color: $primary;
+    text-style: bold;
+}
+
+/* === Content match toggle buttons === */
+#waive-content-match {
+    height: auto;
+    width: auto;
+}
+
+.content-match-btn {
+    background: transparent;
+    border: round $primary-background-lighten-3;
+    color: $text-muted;
+    text-style: none;
+    min-width: 14;
+}
+
+.content-match-btn.content-match-selected {
+    border: round $primary;
+    color: $text;
+    text-style: bold;
+}
+
+.content-match-btn:focus {
+    border: round $primary-lighten-3;
+    color: $primary-lighten-3;
+}
+
+.content-match-btn.-active {
+    background: transparent;
+    tint: transparent;
+    border: round $primary-lighten-3;
+}
+
+/* === Toast notifications === */
+Toast {
+    background: transparent;
+    border: round $primary-background-lighten-3;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+Toast.-information {
+    border: round $primary;
+}
+
+Toast.-warning {
+    border: round $warning;
+}
+
+Toast.-error {
+    border: round $error;
+}
+
+.toast--title {
+    color: $text;
+    text-style: bold;
+}
+
+Toast.-information .toast--title {
+    color: $primary;
+}
+
+Toast.-warning .toast--title {
+    color: $warning;
+}
+
+Toast.-error .toast--title {
+    color: $error;
+}
+
+/* === Radio controls === */
+RadioSet {
+    background: transparent;
+    height: auto;
+    border: none;
+    padding: 0;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+RadioSet:focus {
+    border: none;
+    background-tint: transparent !important;
+}
+
+RadioSet:blur > RadioButton.-selected > .toggle--label {
+    background: transparent;
+}
+
+RadioSet:focus > RadioButton.-selected > .toggle--label {
+    background: transparent;
+    color: $primary-lighten-3;
+    text-style: bold;
+}
+
+RadioSet > RadioButton {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: $text;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+RadioSet > RadioButton > .toggle--button {
+    background: $background;
+    color: $text-muted;
+}
+
+RadioSet > RadioButton.-on > .toggle--button {
+    color: $primary-background-lighten-3;
+    background: $background;
+}
+
+RadioSet:focus > RadioButton.-on > .toggle--button {
+    color: $primary-lighten-3;
+}
+
+RadioButton {
+    background: transparent;
+    color: $text;
+    opacity: 1 !important;
+    background-tint: transparent !important;
+}
+
+RadioButton:focus {
+    background-tint: transparent !important;
+}
+
+RadioButton:focus > .toggle--label {
+    background: transparent;
+    color: $primary-lighten-3;
+    text-style: bold;
+}
+
+RadioButton:blur:hover > .toggle--label {
+    background: transparent;
+}
+
+RadioButton.-on > .toggle--button {
+    color: $primary;
+    background: $background;
+}
+
+/* === Inputs inside modals === */
+.modal-container Input {
+    border: round $primary-background-lighten-3;
+    background: transparent;
+    height: 3;
+}
+
+.modal-container Input:focus {
+    border: round $primary-lighten-3;
 }
 
 /* === 4.9 Utility Classes === */

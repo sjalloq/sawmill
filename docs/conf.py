@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 
 project = "Sawmill"
-copyright = "2025, Sawmill Contributors"
+copyright = "2026, Sawmill Contributors"
 author = "Sawmill Contributors"
 release = "0.1.0"
 

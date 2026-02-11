@@ -341,28 +341,28 @@ class TestWaivedDisplay:
 class TestWaiveModalTabOrder:
     """Tests for WaiveModal focusable widget DOM order matching spec.
 
-    Spec tab order: Reason -> Pattern -> Content match -> Author (cycle).
+    Spec tab order: Reason -> Pattern -> Content match (raw/regex) -> Author (cycle).
     DOM order of focusable widgets must match this to get correct Tab behavior.
 
     Since compose() requires an active Textual app context (due to container
     context managers), we verify DOM order by inspecting the compose source
-    and extracting the IDs of focusable widgets (Input and RadioSet) in the
+    and extracting the IDs of focusable widgets (Input and Button) in the
     order they appear.
     """
 
     def _get_focusable_widget_ids_from_source(self) -> list[str]:
         """Extract IDs of focusable widgets from compose() source in DOM order.
 
-        Parses the compose() method source to find Input and RadioSet widget
+        Parses the compose() method source to find Input and Button widget
         IDs in the order they appear (which is the DOM/focus chain order).
         """
         import re as _re
 
         source = inspect.getsource(WaiveModal.compose)
-        # Match Input(..., id="...") and RadioSet(id="...") patterns
+        # Match Input(..., id="...") and Button(id="...") patterns
         # These are the focusable widgets that determine tab order
         focusable_pattern = _re.compile(
-            r"(?:Input\(|RadioSet\()"  # Match Input( or RadioSet(
+            r"(?:Input\(|Button\()"  # Match Input( or Button(
             r".*?"  # Any args before id= (DOTALL for multi-line)
             r'id="([^"]+)"',  # Capture the id value
             _re.DOTALL,
@@ -370,12 +370,13 @@ class TestWaiveModalTabOrder:
         return focusable_pattern.findall(source)
 
     def test_focusable_widgets_in_spec_order(self):
-        """Focusable widgets appear in DOM order: Reason, Pattern, Content match, Author."""
+        """Focusable widgets appear in DOM order: Reason, Pattern, Content match buttons, Author."""
         ids = self._get_focusable_widget_ids_from_source()
         assert ids == [
             "waive-reason-input",
             "waive-pattern-input",
-            "waive-content-match",
+            "btn-raw",
+            "btn-regex",
             "waive-author-input",
         ]
 
@@ -390,16 +391,16 @@ class TestWaiveModalTabOrder:
         assert ids[-1] == "waive-author-input"
 
     def test_content_match_after_pattern(self):
-        """Content match RadioSet appears after Pattern input (not before)."""
+        """Content match buttons appear after Pattern input (not before)."""
         ids = self._get_focusable_widget_ids_from_source()
         pattern_idx = ids.index("waive-pattern-input")
-        content_match_idx = ids.index("waive-content-match")
+        content_match_idx = ids.index("btn-raw")
         assert content_match_idx > pattern_idx
 
-    def test_exactly_four_focusable_widgets(self):
-        """There are exactly 4 focusable widgets in the modal."""
+    def test_exactly_five_focusable_widgets(self):
+        """There are exactly 5 focusable widgets in the modal (3 inputs + 2 buttons)."""
         ids = self._get_focusable_widget_ids_from_source()
-        assert len(ids) == 4
+        assert len(ids) == 5
 
 
 class TestWaiveModalInputSubmitted:

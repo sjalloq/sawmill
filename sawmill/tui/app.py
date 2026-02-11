@@ -128,7 +128,7 @@ class MessageStats(Static):
         result = " | ".join(parts)
         extras = []
         if self._waived_count > 0:
-            extras.append(f"[$accent]{self._waived_count} waived[/$accent]")
+            extras.append(f"[$primary]{self._waived_count} waived[/$primary]")
         if self._suppressed_count > 0:
             extras.append(f"[dim]{self._suppressed_count} suppressed[/dim]")
         if extras:
