@@ -72,6 +72,9 @@ venv.bak/
 # ruff
 .ruff_cache/
 
+# Sphinx documentation
+docs/_build/
+
 # OS
 .DS_Store
 Thumbs.db
