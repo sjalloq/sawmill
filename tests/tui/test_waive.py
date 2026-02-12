@@ -9,7 +9,7 @@ import pytest
 
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
-from sawmill.tui.app import MessageStats, SawmillApp
+from sawmill.tui.app import SawmillApp
 from sawmill.tui.widgets.waive_modal import WaiveModal
 from sawmill.utils.author import discover_author
 
@@ -282,43 +282,6 @@ class TestOnWaiveModalResult:
         assert len(app.waived_ids) == 3
 
 
-class TestMessageStatsWaived:
-    """Tests for waived count in MessageStats widget."""
-
-    def test_waived_count_default(self, severity_levels):
-        """Waived count defaults to 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        assert stats.waived_count == 0
-
-    def test_waived_count_in_render(self, severity_levels):
-        """Waived count appears in render when > 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.counts = {"error": 3}
-        stats.waived_count = 3
-        output = stats.render()
-        assert "3 waived" in output
-
-    def test_waived_count_hidden_when_zero(self, severity_levels):
-        """Waived count not shown when 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.counts = {"error": 3}
-        stats.waived_count = 0
-        output = stats.render()
-        assert "waived" not in output
-
-    def test_both_waived_and_suppressed(self, severity_levels):
-        """Both waived and suppressed counts shown when both > 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.waived_count = 3
-        stats.suppressed_count = 5
-        output = stats.render()
-        assert "3 waived" in output
-        assert "5 suppressed" in output
-
-
 class TestWaivedDisplay:
     """Tests for waived message visual treatment."""
 
@@ -330,12 +293,16 @@ class TestWaivedDisplay:
         ]
         return SawmillApp(severity_levels, messages=messages)
 
-    def test_waived_messages_remain_visible(self, app):
-        """Waived messages are not hidden from the filtered list."""
+    def test_waived_messages_in_waived_tab(self, app):
+        """Waived messages move to the waived tab, not the main filtered list."""
         app.waived_ids = {"E-001"}
         app._apply_filters()
-        assert len(app.filtered_messages) == 2
-        assert any(m.message_id == "E-001" for m in app.filtered_messages)
+        # Main tab excludes waived messages
+        assert len(app.filtered_messages) == 1
+        assert all(m.message_id != "E-001" for m in app.filtered_messages)
+        # Waived tab contains them
+        assert len(app._waived_messages) == 1
+        assert app._waived_messages[0].message_id == "E-001"
 
 
 class TestWaiveModalTabOrder:

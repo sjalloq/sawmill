@@ -42,15 +42,28 @@ Screen {
     border-bottom: solid $primary-background-lighten-3;
 }
 
-#header-left {
-    width: 1fr;
+#header-brand {
+    width: auto;
     height: 1;
     text-align: left;
     text-style: bold;
+    padding: 0 1 0 0;
+}
+
+.header-tab {
+    width: auto;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+.header-tab.active-tab {
+    color: $text;
+    text-style: reverse;
 }
 
 #header-right {
-    width: auto;
+    width: 1fr;
     height: 1;
     text-align: right;
     color: $text-muted;

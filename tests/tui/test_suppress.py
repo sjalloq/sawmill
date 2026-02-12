@@ -6,7 +6,7 @@ import pytest
 
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
-from sawmill.tui.app import MessageStats, SawmillApp
+from sawmill.tui.app import SawmillApp
 
 
 @pytest.fixture
@@ -45,10 +45,10 @@ class TestSuppressState:
         app = SawmillApp(severity_levels)
         assert app.suppressed_ids == set()
 
-    def test_initial_show_suppressed_false(self, severity_levels):
-        """show_suppressed starts as False."""
+    def test_initial_active_tab_is_messages(self, severity_levels):
+        """active_tab starts as 'messages'."""
         app = SawmillApp(severity_levels)
-        assert app.show_suppressed is False
+        assert app.active_tab == "messages"
 
     def test_initial_suppressions_dirty_false(self, severity_levels):
         """Suppressions dirty flag starts as False."""
@@ -107,7 +107,7 @@ class TestActionSuppress:
     def test_unsuppress_notification_contains_message_id(self, app):
         """action_suppress() on already-suppressed ID notifies with the un-suppressed ID."""
         app.suppressed_ids = {"E-001"}
-        app.show_suppressed = True
+        app.active_tab = "suppressed"
         app._apply_filters()
         app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
         app._populate_table = lambda: None
@@ -150,12 +150,12 @@ class TestActionSuppress:
     def test_unsuppress_removes_id(self, app):
         """Un-suppressing via action_suppress() removes the ID from the set."""
         app.suppressed_ids = {"E-001"}
-        app.show_suppressed = True
+        app.active_tab = "suppressed"
         app._apply_filters()
         # Patch _populate_table to prevent cascading into real widget methods
         app._populate_table = lambda: None
 
-        # E-001 should be visible (show_suppressed is True) and in suppressed set
+        # E-001 should be visible on the suppressed tab
         assert "E-001" in app.suppressed_ids
         assert app._filtered_messages[0].message_id == "E-001"
 
@@ -169,14 +169,14 @@ class TestActionSuppress:
         Exercises the actual action_suppress() code path. We patch
         _populate_table to avoid needing a fully mounted Textual widget tree.
         """
-        # Suppress E-001 and make it visible so we can un-suppress it
+        # Suppress E-001 and switch to suppressed tab to see it
         app.suppressed_ids = {"E-001"}
-        app.show_suppressed = True
+        app.active_tab = "suppressed"
         app._apply_filters()
         # Reset dirty flag to simulate a previously-saved state
         app._suppressions_dirty = False
 
-        # Verify E-001 is visible in filtered messages
+        # Verify E-001 is visible on the suppressed tab
         assert app._filtered_messages[0].message_id == "E-001"
 
         # Provide a fake log viewer with the right cursor position
@@ -191,8 +191,8 @@ class TestActionSuppress:
         assert app._suppressions_dirty is True
 
 
-class TestToggleSuppressed:
-    """Tests for show_suppressed toggle."""
+class TestSuppressedTab:
+    """Tests for viewing suppressed messages via the suppressed tab."""
 
     @pytest.fixture
     def app(self, severity_levels):
@@ -203,32 +203,23 @@ class TestToggleSuppressed:
         ]
         return SawmillApp(severity_levels, messages=messages)
 
-    def test_toggle_show_suppressed(self, app):
-        """action_toggle_suppressed flips show_suppressed."""
-        assert app.show_suppressed is False
-        app.action_toggle_suppressed()
-        assert app.show_suppressed is True
-        app.action_toggle_suppressed()
-        assert app.show_suppressed is False
-
-    def test_show_suppressed_includes_suppressed(self, app):
-        """When show_suppressed is True, suppressed messages are included."""
+    def test_suppressed_tab_shows_suppressed(self, app):
+        """Switching to suppressed tab shows suppressed messages."""
         app.suppressed_ids = {"E-001"}
-        app.show_suppressed = False
         app._apply_filters()
-        assert len(app.filtered_messages) == 2
+        assert len(app.filtered_messages) == 2  # main tab excludes suppressed
 
-        app.show_suppressed = True
-        app._apply_filters()
-        assert len(app.filtered_messages) == 3
+        app.active_tab = "suppressed"
+        app._filtered_messages = app._active_message_list()
+        assert len(app._filtered_messages) == 1
+        assert app._filtered_messages[0].message_id == "E-001"
 
-    def test_suppressed_visible_with_no_suppressed_ids(self, app):
-        """Toggling show_suppressed with no suppressions changes nothing."""
+    def test_suppressed_tab_empty_with_no_suppressed_ids(self, app):
+        """Suppressed tab is empty when nothing is suppressed."""
         app._apply_filters()
-        count_before = len(app.filtered_messages)
-        app.show_suppressed = True
-        app._apply_filters()
-        assert len(app.filtered_messages) == count_before
+        app.active_tab = "suppressed"
+        app._filtered_messages = app._active_message_list()
+        assert len(app._filtered_messages) == 0
 
 
 class TestSuppressedFiltering:
@@ -273,41 +264,6 @@ class TestSuppressedFiltering:
         assert len(app.filtered_messages) == 2
 
 
-class TestMessageStatsSuppressed:
-    """Tests for suppressed count in MessageStats widget."""
-
-    def test_suppressed_count_default(self, severity_levels):
-        """Suppressed count defaults to 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        assert stats.suppressed_count == 0
-
-    def test_suppressed_count_in_render(self, severity_levels):
-        """Suppressed count appears in render when > 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.counts = {"error": 3, "warning": 5, "info": 2}
-        stats.suppressed_count = 5
-        output = stats.render()
-        assert "5 suppressed" in output
-
-    def test_suppressed_count_hidden_when_zero(self, severity_levels):
-        """Suppressed count not shown when 0."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.counts = {"error": 3}
-        stats.suppressed_count = 0
-        output = stats.render()
-        assert "suppressed" not in output
-
-    def test_suppressed_count_styled_dim(self, severity_levels):
-        """Suppressed count is rendered with dim style."""
-        stats = MessageStats(severity_levels=severity_levels)
-        stats.total = 10
-        stats.suppressed_count = 3
-        output = stats.render()
-        assert "[dim]3 suppressed[/dim]" in output
-
-
 class TestKeybindingChanges:
     """Tests for keybinding changes (sort moved from s to o)."""
 
@@ -323,8 +279,9 @@ class TestKeybindingChanges:
         binding_keys = {b.key: b.action for b in app.BINDINGS}
         assert binding_keys.get("s") == "suppress"
 
-    def test_toggle_suppressed_binding_is_v(self, severity_levels):
-        """Toggle suppressed visibility is bound to 'v'."""
+    def test_tab_navigation_bindings(self, severity_levels):
+        """Left/right arrow keys are bound to tab navigation."""
         app = SawmillApp(severity_levels)
         binding_keys = {b.key: b.action for b in app.BINDINGS}
-        assert binding_keys.get("v") == "toggle_suppressed"
+        assert binding_keys.get("left") == "prev_tab"
+        assert binding_keys.get("right") == "next_tab"

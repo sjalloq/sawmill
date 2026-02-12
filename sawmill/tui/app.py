@@ -73,8 +73,6 @@ class MessageStats(Static):
         self._severity_levels = list(severity_levels) if severity_levels else []
         self._counts: dict[str, int] = {}
         self._active: dict[str, bool] = {}
-        self._suppressed_count: int = 0
-        self._waived_count: int = 0
 
     @property
     def counts(self) -> dict[str, int]:
@@ -94,24 +92,6 @@ class MessageStats(Static):
         self._active = value
         self.refresh()
 
-    @property
-    def suppressed_count(self) -> int:
-        return self._suppressed_count
-
-    @suppressed_count.setter
-    def suppressed_count(self, value: int) -> None:
-        self._suppressed_count = value
-        self.refresh()
-
-    @property
-    def waived_count(self) -> int:
-        return self._waived_count
-
-    @waived_count.setter
-    def waived_count(self, value: int) -> None:
-        self._waived_count = value
-        self.refresh()
-
     def render(self) -> str:
         """Render the stats display with plugin-driven severity counts."""
         parts = [f"Total: {self.total}"]
@@ -125,15 +105,7 @@ class MessageStats(Static):
                 parts.append(f"[dim]{hint}{level.name}: {count}[/dim]")
             else:
                 parts.append(f"{hint}{level.name}: {count}")
-        result = " | ".join(parts)
-        extras = []
-        if self._waived_count > 0:
-            extras.append(f"[$primary]{self._waived_count} waived[/$primary]")
-        if self._suppressed_count > 0:
-            extras.append(f"[dim]{self._suppressed_count} suppressed[/dim]")
-        if extras:
-            result += " | " + "  ".join(extras)
-        return result
+        return " | ".join(parts)
 
 
 class LogViewer(DataTable):
@@ -278,8 +250,9 @@ class SawmillApp(App):
         Binding("tab", "toggle_focus", "Toggle Focus", show=False),
         Binding("o", "cycle_sort", "Sort", show=False),
         Binding("s", "suppress", "Suppress", show=False),
-        Binding("v", "toggle_suppressed", "Hidden", show=False),
         Binding("w", "waive", "Waive", show=False),
+        Binding("left", "prev_tab", "Prev Tab", show=False),
+        Binding("right", "next_tab", "Next Tab", show=False),
         Binding("1", "toggle_sev_1", "Sev 1", show=False),
         Binding("2", "toggle_sev_2", "Sev 2", show=False),
         Binding("3", "toggle_sev_3", "Sev 3", show=False),
@@ -293,8 +266,8 @@ class SawmillApp(App):
     severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True, init=False)
     sort_mode: reactive[str] = reactive(SORT_LINE, init=False)
     suppressed_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
-    show_suppressed: reactive[bool] = reactive(False, init=False)
     waived_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
+    active_tab: reactive[str] = reactive("messages", init=False)
 
     def __init__(
         self,
@@ -341,6 +314,11 @@ class SawmillApp(App):
         # ID count cache for count sort mode
         self._id_counts: dict[str, int] = {}
 
+        # Tab message lists (managed in _apply_filters, not reactive)
+        self._main_messages: list[Message] = []
+        self._waived_messages: list[Message] = []
+        self._suppressed_messages: list[Message] = []
+
     # -- Properties ----------------------------------------------------------
 
     @property
@@ -361,7 +339,10 @@ class SawmillApp(App):
     def compose(self) -> ComposeResult:
         filename = self.log_file.name if self.log_file else ""
         with Horizontal(id="header"):
-            yield Static("sawmill", id="header-left")
+            yield Static("sawmill", id="header-brand")
+            yield Static("Messages", id="tab-messages", classes="header-tab active-tab")
+            yield Static("Waived", id="tab-waived", classes="header-tab")
+            yield Static("Suppressed", id="tab-suppressed", classes="header-tab")
             yield Static(filename, id="header-right")
         with Vertical(id="severity-panel", classes="panel"):
             yield MessageStats(severity_levels=self._severity_levels, id="severity-bar")
@@ -382,6 +363,7 @@ class SawmillApp(App):
                 ("Tab", "Focus"),
                 ("1-4", "Severity"),
                 ("o", "Sort"),
+                ("\u2190\u2192", "Tab"),
                 ("s", "Suppress"),
                 ("w", "Waive"),
                 ("?", "Help"),
@@ -499,22 +481,49 @@ class SawmillApp(App):
             except re.error:
                 pass
 
-        # Apply suppression filter
-        if self.suppressed_ids and not self.show_suppressed:
-            filtered = [m for m in filtered if m.message_id not in self.suppressed_ids]
+        # Bucket into three lists: suppressed, waived, main
+        self._suppressed_messages = [
+            m for m in filtered if m.message_id is not None and m.message_id in self.suppressed_ids
+        ]
+        non_suppressed = [
+            m for m in filtered if m.message_id is None or m.message_id not in self.suppressed_ids
+        ]
+        self._waived_messages = [
+            m
+            for m in non_suppressed
+            if m.message_id is not None and m.message_id in self.waived_ids
+        ]
+        self._main_messages = [
+            m for m in non_suppressed if m.message_id is None or m.message_id not in self.waived_ids
+        ]
 
-        # Compute ID counts for count sort mode (before sorting)
+        # Select active list
+        self._filtered_messages = self._active_message_list()
+
+        # Compute ID counts for count sort mode (on active list)
         self._id_counts = {}
-        for m in filtered:
+        for m in self._filtered_messages:
             mid = m.message_id or ""
             self._id_counts[mid] = self._id_counts.get(mid, 0) + 1
 
         # Sort
-        filtered = self._sort_messages(filtered)
+        self._filtered_messages = self._sort_messages(self._filtered_messages)
 
-        self._filtered_messages = filtered
         self._update_stats()
+        self._update_tab_labels()
         self._populate_table()
+
+    def _active_message_list(self) -> list[Message]:
+        """Return the message list for the currently active tab."""
+        if self.active_tab == "waived":
+            return self._waived_messages.copy()
+        elif self.active_tab == "suppressed":
+            return self._suppressed_messages.copy()
+        return self._main_messages.copy()
+
+    def _update_tab_labels(self) -> None:
+        """Update tab label counts from the bucketed message lists."""
+        pass  # Tab labels are now static text without counts
 
     def _sort_messages(self, messages: list[Message]) -> list[Message]:
         """Sort messages according to current sort mode."""
@@ -557,22 +566,6 @@ class SawmillApp(App):
             for level in self._severity_levels
         }
 
-        # Count how many messages are suppressed (across all messages, not just filtered)
-        suppressed_count = sum(
-            1
-            for m in self._messages
-            if m.message_id is not None and m.message_id in self.suppressed_ids
-        )
-        self._stats_widget.suppressed_count = suppressed_count
-
-        # Count waived messages
-        waived_count = sum(
-            1
-            for m in self._filtered_messages
-            if m.message_id is not None and m.message_id in self.waived_ids
-        )
-        self._stats_widget.waived_count = waived_count
-
     def _populate_table(self) -> None:
         """Populate the log viewer table with filtered messages."""
         if not self._log_viewer:
@@ -589,19 +582,7 @@ class SawmillApp(App):
                 msg_id = msg.message_id or ""
                 content = self._log_viewer.truncate_text(msg.content)
 
-                # Determine visual treatment
-                is_suppressed = (
-                    self.show_suppressed
-                    and msg.message_id is not None
-                    and msg.message_id in self.suppressed_ids
-                )
-                is_waived = msg.message_id is not None and msg.message_id in self.waived_ids
-                if is_suppressed:
-                    sev_display = f"[dim]{sev.title()}[/dim]"
-                elif is_waived:
-                    sev_display = f"[dim]{sev.title()} \\[waived][/dim]"
-                else:
-                    sev_display = sev.title()
+                sev_display = sev.title()
 
                 self._log_viewer.add_row(
                     str(msg.start_line),
@@ -619,9 +600,15 @@ class SawmillApp(App):
             else:
                 self._update_detail_for_row(0)
 
-        # Update sort subtitle
+        # Update panel border title and sort subtitle
         try:
             panel = self.query_one("#messages-panel")
+            titles = {
+                "messages": "Messages",
+                "waived": "Waived",
+                "suppressed": "Suppressed",
+            }
+            panel.border_title = titles.get(self.active_tab, "Messages")
             panel.border_subtitle = f"sorted by: {self.sort_mode}"
         except Exception:
             pass
@@ -649,11 +636,57 @@ class SawmillApp(App):
     def watch_suppressed_ids(self, value: set[str]) -> None:
         self._apply_filters()
 
-    def watch_show_suppressed(self, value: bool) -> None:
-        self._apply_filters()
-
     def watch_waived_ids(self, value: set[str]) -> None:
         self._apply_filters()
+
+    def watch_active_tab(self, tab: str) -> None:
+        """Handle tab switch: swap displayed messages, update header styling."""
+        for tab_id in ("tab-messages", "tab-waived", "tab-suppressed"):
+            try:
+                widget = self.query_one(f"#{tab_id}", Static)
+                if tab_id == f"tab-{tab}":
+                    widget.add_class("active-tab")
+                else:
+                    widget.remove_class("active-tab")
+            except Exception:
+                pass
+
+        # Swap the displayed message list and repopulate
+        self._filtered_messages = self._active_message_list()
+
+        # Recompute ID counts for the new list
+        self._id_counts = {}
+        for m in self._filtered_messages:
+            mid = m.message_id or ""
+            self._id_counts[mid] = self._id_counts.get(mid, 0) + 1
+
+        self._filtered_messages = self._sort_messages(self._filtered_messages)
+        self._update_stats()
+        self._populate_table()
+        self._update_footer_hints()
+
+    def _update_footer_hints(self) -> None:
+        """Update footer keybinding hints based on the active tab."""
+        try:
+            footer = self.query_one(SawmillFooter)
+        except Exception:
+            return
+        base: list[tuple[str, str]] = [
+            ("q", "Quit"),
+            ("/", "Search"),
+            ("Tab", "Focus"),
+            ("1-4", "Severity"),
+            ("o", "Sort"),
+            ("\u2190\u2192", "Tab"),
+        ]
+        if self.active_tab == "messages":
+            base.extend([("s", "Suppress"), ("w", "Waive")])
+        elif self.active_tab == "waived":
+            base.extend([("s", "Suppress"), ("w", "Un-waive")])
+        elif self.active_tab == "suppressed":
+            base.append(("s", "Un-suppress"))
+        base.append(("?", "Help"))
+        footer.update_bindings(base)
 
     # -- Event handlers ------------------------------------------------------
 
@@ -855,41 +888,77 @@ class SawmillApp(App):
             else:
                 self._filter_input.focus()
 
+    def action_prev_tab(self) -> None:
+        """Switch to the previous tab (left arrow)."""
+        if self._filter_input and self._filter_input.has_focus:
+            return
+        tabs = ["messages", "waived", "suppressed"]
+        idx = tabs.index(self.active_tab)
+        self.active_tab = tabs[(idx - 1) % len(tabs)]
+
+    def action_next_tab(self) -> None:
+        """Switch to the next tab (right arrow)."""
+        if self._filter_input and self._filter_input.has_focus:
+            return
+        tabs = ["messages", "waived", "suppressed"]
+        idx = tabs.index(self.active_tab)
+        self.active_tab = tabs[(idx + 1) % len(tabs)]
+
     def action_cycle_sort(self) -> None:
         """Cycle through sort modes."""
         idx = SORT_MODES.index(self.sort_mode)
         self.sort_mode = SORT_MODES[(idx + 1) % len(SORT_MODES)]
 
     def action_suppress(self) -> None:
-        """Suppress or un-suppress the highlighted message by ID."""
+        """Context-sensitive suppress: un-suppress on Suppressed tab, suppress elsewhere."""
+        if self.active_tab == "suppressed":
+            self._unsuppress_current()
+        else:
+            self._suppress_current()
+
+    def _suppress_current(self) -> None:
+        """Suppress the highlighted message (from Messages or Waived tab)."""
         if not self._log_viewer or not self._filtered_messages:
             return
-
         row = self._log_viewer.cursor_row
         if row < 0 or row >= len(self._filtered_messages):
             return
-
         msg = self._filtered_messages[row]
         if msg.message_id is None:
             self.notify("Cannot suppress: message has no ID")
             return
-
         current = set(self.suppressed_ids)
-        if msg.message_id in current:
-            current.discard(msg.message_id)
-            self._suppressions_dirty = True
-            self.notify(f"Un-suppressed: {msg.message_id}")
-        else:
-            current.add(msg.message_id)
-            self._suppressions_dirty = True
-            self.notify(f"Suppressed: {msg.message_id}")
+        current.add(msg.message_id)
+        self._suppressions_dirty = True
+        self.notify(f"Suppressed: {msg.message_id}")
         self.suppressed_ids = current
 
-    def action_toggle_suppressed(self) -> None:
-        """Toggle visibility of suppressed messages."""
-        self.show_suppressed = not self.show_suppressed
+    def _unsuppress_current(self) -> None:
+        """Un-suppress the highlighted message (from Suppressed tab)."""
+        if not self._log_viewer or not self._filtered_messages:
+            return
+        row = self._log_viewer.cursor_row
+        if row < 0 or row >= len(self._filtered_messages):
+            return
+        msg = self._filtered_messages[row]
+        if msg.message_id is None:
+            return
+        current = set(self.suppressed_ids)
+        current.discard(msg.message_id)
+        self._suppressions_dirty = True
+        self.notify(f"Un-suppressed: {msg.message_id}")
+        self.suppressed_ids = current
 
     def action_waive(self) -> None:
+        """Context-sensitive waive: un-waive on Waived tab, no-op on Suppressed, waive elsewhere."""
+        if self.active_tab == "waived":
+            self._unwaive_current()
+        elif self.active_tab == "suppressed":
+            self.notify("Un-suppress first before waiving", severity="warning")
+        else:
+            self._waive_current()
+
+    def _waive_current(self) -> None:
         """Open waive modal for the highlighted message."""
         if not self._log_viewer or not self._filtered_messages:
             return
@@ -916,6 +985,34 @@ class SawmillApp(App):
             ),
             callback=self._on_waive_modal_result,
         )
+
+    def _unwaive_current(self) -> None:
+        """Un-waive the highlighted message (from Waived tab)."""
+        if not self._log_viewer or not self._filtered_messages:
+            return
+        row = self._log_viewer.cursor_row
+        if row < 0 or row >= len(self._filtered_messages):
+            return
+        msg = self._filtered_messages[row]
+        if msg.message_id is None:
+            return
+        current = set(self.waived_ids)
+        current.discard(msg.message_id)
+        self.waived_ids = current
+
+        # Remove from session waivers if present
+        was_session = any(w.message_id == msg.message_id for w in self._session_waivers)
+        self._session_waivers = [w for w in self._session_waivers if w.message_id != msg.message_id]
+        self._waivers_dirty = True
+
+        if was_session:
+            self.notify(f"Un-waived: {msg.message_id}")
+        else:
+            self.notify(
+                f"Un-waived: {msg.message_id} (for this session only \u2014 "
+                f"edit waivers.toml to remove permanently)",
+                severity="warning",
+            )
 
     def _on_waive_modal_result(self, result: dict | None) -> None:
         """Handle the result from the waive modal."""
