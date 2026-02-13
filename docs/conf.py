@@ -1,9 +1,10 @@
-# Configuration file for the Sphinx documentation builder.
+from importlib.metadata import version as _version
 
 project = "Sawmill"
 copyright = "2026, Sawmill Contributors"
 author = "Sawmill Contributors"
-release = "0.1.0"
+
+release = _version("sawmill-parser")
 
 extensions = [
     "sphinx.ext.autodoc",
