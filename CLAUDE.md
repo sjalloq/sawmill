@@ -4,7 +4,7 @@ This file provides context for Claude Code when working on the Sawmill project.
 
 ## Project Overview
 
-Sawmill is a terminal-based log analysis tool for EDA (Electronic Design Automation) engineers. It provides:
+Sawmill is a terminal-based log analysis tool for working with structured tool logs. Originally built for EDA tool output, it supports any log format via plugins. It provides:
 - Plugin-driven log parsing and analysis
 - Interactive regex-based log filtering
 - Plugin system for tool-specific log formats

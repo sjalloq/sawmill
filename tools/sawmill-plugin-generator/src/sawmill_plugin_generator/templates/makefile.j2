@@ -9,6 +9,7 @@ test:
 lint:
 	ruff check src/ tests/
 	ruff format --check src/ tests/
+	mypy src/
 
 clean:
 	rm -rf build/ dist/ *.egg-info src/*.egg-info .pytest_cache

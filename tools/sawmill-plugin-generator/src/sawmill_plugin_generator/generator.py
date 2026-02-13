@@ -13,6 +13,7 @@ SAWMILL_PLUGIN_API = "1"
 _FILE_MAP = {
     "pyproject.toml.j2": "pyproject.toml",
     "readme.md.j2": "README.md",
+    "claude.md.j2": "CLAUDE.md",
     "makefile.j2": "Makefile",
     "init.py.j2": "src/{module_name}/__init__.py",
     "plugin.py.j2": "src/{module_name}/plugin.py",
@@ -23,6 +24,7 @@ _FILE_MAP = {
     "test_severity.py.j2": "tests/test_severity.py",
     "test_plugin_contract.py.j2": "tests/test_plugin_contract.py",
     "sample_log.j2": "examples/sample.log",
+    "gitignore.j2": ".gitignore",
 }
 
 

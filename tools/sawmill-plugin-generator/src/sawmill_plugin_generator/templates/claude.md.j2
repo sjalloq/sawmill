@@ -1,0 +1,195 @@
+# {{ package_name }}
+
+{{ description }}
+
+## Task
+
+Implement a Sawmill plugin that parses **{{ plugin_name }}** log files. The scaffolding is already
+generated — your job is to fill in the TODO items and get all tests passing.
+
+## Quick Reference
+
+```bash
+# Install in dev mode (do this first)
+make install
+
+# Run tests (do this after every change)
+make test
+
+# Lint and format check
+make lint
+```
+
+## What is Sawmill?
+
+Sawmill is a terminal log analysis tool for working with structured tool logs. Plugins teach Sawmill how to parse
+tool-specific log formats. The **plugin is the sole source of truth** — the base app has zero
+hardcoded knowledge about log formats or severity levels.
+
+## Project Layout
+
+```
+{{ directory_name }}/
+├── CLAUDE.md                          # You are here
+├── pyproject.toml                     # Package metadata + entry point registration
+├── Makefile                           # install / test / lint shortcuts
+├── examples/
+│   └── sample.log                     # Real log output for testing (ADD YOUR OWN)
+├── src/{{ module_name }}/
+│   ├── __init__.py                    # Exports {{ class_name }}
+│   ├── plugin.py                      # Main plugin — implement hooks here
+│   └── patterns.py                    # Regex patterns — define patterns here
+└── tests/
+    ├── conftest.py                    # Fixtures: plugin instance + sample_log path
+    ├── test_plugin_contract.py        # Structural checks (pass immediately)
+    ├── test_detection.py              # Tests for can_handle()
+    ├── test_parsing.py                # Tests for load_and_parse()
+    └── test_severity.py               # Tests for get_severity_levels()
+```
+
+## How to Implement the Plugin
+
+Work through the hooks in this order. Run `make test` after each step.
+
+### Step 0: Add a real log file
+
+Copy real {{ plugin_name }} tool output into `examples/sample.log`. The tests use this file.
+Without real log content, detection and parsing tests will fail.
+
+### Step 1: Analyse the log format
+
+Before writing code, study `examples/sample.log` and identify:
+- **Line format**: How does each message start? Is there a prefix pattern?
+- **Severity keywords**: What words indicate error/warning/info/note?
+- **Multi-line grouping**: Are messages single-line or do they span multiple lines?
+  Look for indented continuation lines, caret indicators, context lines.
+- **Message IDs**: Does the tool emit IDs or codes (e.g. `[ID-1234]`, `[-Wflag]`)?
+- **File references**: Are source file paths and line numbers embedded in messages?
+- **Header/footer**: Are there tool banners, summaries, or non-message lines?
+
+### Step 2: Define patterns (`patterns.py`)
+
+Create compiled regex patterns based on your analysis. Typical patterns:
+- **Diagnostic pattern**: Matches the start of a new message and captures severity, file, line, etc.
+- **Message ID pattern**: Extracts tool-specific message IDs or codes.
+- **File reference pattern**: Extracts `path:line` references.
+- **Continuation pattern**: Identifies lines that belong to the previous message.
+- **Signature pattern**: A distinctive pattern for `can_handle()` detection.
+
+Keep patterns in `patterns.py` and import them in `plugin.py`.
+
+### Step 3: Customise severity levels (`get_severity_levels`)
+
+The default provides error/warning/info. Adjust to match your tool:
+- **Levels must be consecutive integers starting at 0** (0 = lowest severity).
+- **IDs must be lowercase** (e.g. "error", "warning", "note", "info").
+- The `style` field is a [Rich style string](https://rich.readthedocs.io/en/latest/style.html) (e.g. "red bold", "yellow", "cyan").
+
+### Step 4: Implement detection (`can_handle`)
+
+Read the first ~100 lines and look for your tool's signature patterns.
+Return a confidence score:
+- `0.0` — definitely not this tool
+- `0.5–0.7` — probably this tool
+- `0.8–1.0` — definitely this tool
+
+Must return `0.0` for missing files and non-matching files.
+
+### Step 5: Implement parsing (`load_and_parse`)
+
+This is the main work. General approach:
+1. Open the file with `encoding="utf-8", errors="replace"`.
+2. Iterate lines. When you see a line matching your diagnostic pattern, start a new message.
+3. Continuation lines (indented, caret indicators, context) append to the current message.
+4. When you see the next diagnostic line (or EOF), flush the current message.
+5. For each message, create a `Message` object with:
+   - `start_line` / `end_line`: 1-indexed line range in the log file
+   - `raw_text`: complete original text (all lines joined with `\n`)
+   - `content`: the cleaned message text (typically the diagnostic text after severity)
+   - `severity`: one of your declared severity IDs (e.g. "error", "warning")
+   - `message_id`: tool-specific ID if available (optional)
+   - `file_ref`: `FileRef(path=..., line=...)` if the message references a source file (optional)
+   - `category`: grouping category (optional)
+   - `metadata`: `dict[str, str]` for plugin-specific fields (optional)
+
+Must return `[]` for missing or empty files.
+
+### Step 6: Implement file reference extraction (`extract_file_reference`)
+
+Parse a content string and return `FileRef(path=..., line=...)` if it contains a file reference.
+This is called by the base app on arbitrary text, not just your parsed messages.
+
+### Step 7: Add pre-defined filters (`get_filters`)
+
+Return `FilterDefinition` objects for common filtering patterns specific to your tool.
+Each filter needs: `id`, `name`, `pattern` (regex), `source` (`"plugin:{{ plugin_name }}"`), `description`.
+
+### Step 8: Customise grouping fields (`get_grouping_fields`)
+
+The defaults (severity, id, file, category) are usually sufficient. Add tool-specific metadata
+fields if your tool provides extra dimensions (e.g. design hierarchy, build phase).
+Use `field_type: "metadata"` and populate `Message.metadata[field_id]` during parsing.
+
+## Key Data Models
+
+```python
+from sawmill.models.message import Message, FileRef
+from sawmill.models.filter_def import FilterDefinition
+from sawmill.plugin import SawmillPlugin, hookimpl
+
+# Message fields
+Message(
+    start_line=1,                            # 1-indexed, required
+    end_line=3,                              # 1-indexed, required
+    raw_text="full\noriginal\ntext",         # required
+    content="the diagnostic message",        # required
+    severity="warning",                      # must match get_severity_levels() IDs
+    message_id="some-id",                    # optional
+    category="timing",                       # optional
+    file_ref=FileRef(path="foo.sv", line=42),  # optional
+    metadata={"phase": "synthesis"},         # optional, for custom grouping
+)
+
+# Filter definition
+FilterDefinition(
+    id="my-filter",
+    name="My Filter",
+    pattern=r"regex pattern",
+    source="plugin:{{ plugin_name }}",
+    description="What this filter matches",
+)
+```
+
+## Rules and Constraints
+
+- **Severity IDs** used in messages MUST match IDs declared in `get_severity_levels()`.
+- **Severity levels** must be consecutive integers starting at 0.
+- `can_handle()` must return a `float` between 0.0 and 1.0.
+- `load_and_parse()` must return `[]` for missing or empty files.
+- `get_grouping_fields()` field_type must be one of: `"builtin"`, `"metadata"`, `"file_ref"`.
+- All files should be opened with `encoding="utf-8", errors="replace"`.
+- Follow PEP 8. Use type hints. Keep functions small and focused.
+
+## Testing
+
+The test suite has four files:
+
+| File | What it checks | Passes immediately? |
+|------|---------------|-------------------|
+| `test_plugin_contract.py` | Plugin structure and types | Yes |
+| `test_severity.py` | Severity level format and rules | Yes (uses defaults) |
+| `test_detection.py` | `can_handle()` returns correct confidence | After Step 4 |
+| `test_parsing.py` | `load_and_parse()` returns valid Messages | After Step 5 |
+
+Run `make test` and work towards **all tests passing**.
+
+## Entry Point
+
+The plugin is registered in `pyproject.toml`:
+
+```toml
+[project.entry-points."sawmill.plugins"]
+{{ entry_point_key }} = "{{ module_name }}:{{ class_name }}"
+```
+
+After `make install`, Sawmill discovers the plugin automatically.

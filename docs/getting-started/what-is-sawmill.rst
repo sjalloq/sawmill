@@ -1,8 +1,8 @@
 What is Sawmill?
 ================
 
-Sawmill is a terminal-based log analysis tool for EDA (Electronic Design
-Automation) engineers. It provides two modes of operation:
+Sawmill is a terminal-based log analysis tool for working with structured
+tool logs. It provides two modes of operation:
 
 **Interactive log browser** --- Launch ``sawmill build.log`` to open a TUI
 where you can scroll, filter, suppress, and waive messages from tools like

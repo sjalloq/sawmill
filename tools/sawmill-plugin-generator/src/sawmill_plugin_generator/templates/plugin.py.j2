@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
 from pathlib import Path
 
 from sawmill.models.filter_def import FilterDefinition
@@ -25,7 +26,7 @@ class {{ class_name }}(SawmillPlugin):
     """
 
     name = "{{ plugin_name }}"
-    version = "0.1.0"
+    version = version("{{ package_name }}")
     description = "{{ description }}"
 
     @hookimpl
@@ -138,7 +139,6 @@ class {{ class_name }}(SawmillPlugin):
         #         id="errors",
         #         name="Errors",
         #         pattern=r"^ERROR:",
-        #         enabled=True,
         #         source="plugin:{{ plugin_name }}",
         #         description="All error messages",
         #     ),

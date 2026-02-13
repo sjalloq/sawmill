@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "{{ package_name }}"
-version = "0.1.0"
+dynamic = ["version"]
 description = "{{ description }}"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,10 +22,17 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "ruff>=0.4.0",
+    "mypy>=1.0.0",
 ]
 
 [project.entry-points."sawmill.plugins"]
 {{ entry_point_key }} = "{{ module_name }}:{{ class_name }}"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/{{ module_name }}/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ module_name }}"]

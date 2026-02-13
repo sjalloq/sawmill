@@ -1,10 +1,10 @@
 Sawmill
 =======
 
-A terminal-based log analysis tool for EDA engineers.
+A plugin-driven terminal log analyzer.
 
 Sawmill provides an interactive TUI for browsing, filtering, and triaging
-EDA tool logs, plus a CLI mode for CI pipeline integration. A plugin
+structured tool logs, plus a CLI mode for CI pipeline integration. A plugin
 architecture keeps the core tool-agnostic --- plugins teach sawmill how to
 parse each tool's output.
 

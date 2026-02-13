@@ -201,9 +201,9 @@ def cli(
     top_n: int,
     batch: bool,
 ) -> None:
-    """Sawmill - A terminal-based log analysis tool for EDA engineers.
+    """Sawmill - A plugin-driven terminal log analyzer.
 
-    Analyze and filter log files from EDA tools like Vivado.
+    Analyze and filter structured log files using tool-specific plugins.
     """
     console = Console()
 

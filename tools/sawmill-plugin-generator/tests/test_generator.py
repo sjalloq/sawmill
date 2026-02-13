@@ -46,7 +46,9 @@ class TestGenerateFiles:
     EXPECTED_FILES: ClassVar[list[str]] = [
         "pyproject.toml",
         "README.md",
+        "CLAUDE.md",
         "Makefile",
+        ".gitignore",
         "src/sawmill_plugin_quartus/__init__.py",
         "src/sawmill_plugin_quartus/plugin.py",
         "src/sawmill_plugin_quartus/patterns.py",
@@ -105,6 +107,50 @@ class TestPyprojectToml:
         assert data["project"]["description"] == "My custom description"
         assert data["project"]["authors"][0]["name"] == "Custom Author"
 
+    def test_dev_deps_include_mypy(self, quartus_project):
+        """Generated pyproject.toml should include mypy in dev dependencies."""
+        content = (quartus_project / "pyproject.toml").read_text()
+        data = tomllib.loads(content)
+        dev_deps = data["project"]["optional-dependencies"]["dev"]
+        assert any("mypy" in dep for dep in dev_deps), "mypy not found in dev deps"
+
+    def test_uses_dynamic_version(self, quartus_project):
+        """Generated pyproject.toml should use dynamic version, not static."""
+        content = (quartus_project / "pyproject.toml").read_text()
+        data = tomllib.loads(content)
+        assert "version" not in data["project"], "Static version should not be present"
+        assert "version" in data["project"].get("dynamic", [])
+
+    def test_has_hatch_vcs_config(self, quartus_project):
+        """Generated pyproject.toml should have hatch-vcs build config."""
+        content = (quartus_project / "pyproject.toml").read_text()
+        data = tomllib.loads(content)
+        assert data["tool"]["hatch"]["version"]["source"] == "vcs"
+        assert "version-file" in data["tool"]["hatch"]["build"]["hooks"]["vcs"]
+
+    def test_build_requires_hatch_vcs(self, quartus_project):
+        """Generated pyproject.toml should require hatch-vcs in build-system."""
+        content = (quartus_project / "pyproject.toml").read_text()
+        data = tomllib.loads(content)
+        requires = data["build-system"]["requires"]
+        assert "hatch-vcs" in requires
+
+
+class TestGitignore:
+    """Tests for the generated .gitignore."""
+
+    def test_contains_version_py(self, quartus_project):
+        content = (quartus_project / ".gitignore").read_text()
+        assert "src/sawmill_plugin_quartus/_version.py" in content
+
+    def test_contains_pycache(self, quartus_project):
+        content = (quartus_project / ".gitignore").read_text()
+        assert "__pycache__/" in content
+
+    def test_multi_word_version_py(self, multi_word_project):
+        content = (multi_word_project / ".gitignore").read_text()
+        assert "src/sawmill_plugin_quartus_prime/_version.py" in content
+
 
 class TestPluginPy:
     """Tests for the generated plugin.py."""
@@ -128,6 +174,11 @@ class TestPluginPy:
             "get_grouping_fields",
         ]:
             assert f"def {hook}" in content, f"Missing hook: {hook}"
+
+    def test_uses_importlib_version(self, quartus_project):
+        content = (quartus_project / "src/sawmill_plugin_quartus/plugin.py").read_text()
+        assert "from importlib.metadata import version" in content
+        assert 'version = version("sawmill-plugin-quartus")' in content
 
 
 class TestInitPy:

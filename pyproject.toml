@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sawmill-parser"
 version = "0.1.0"
-description = "A configurable TUI for post-processing and filtering EDA tool logs"
+description = "A configurable TUI for post-processing and filtering structured tool logs"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

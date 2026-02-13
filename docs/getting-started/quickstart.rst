@@ -4,7 +4,7 @@ Quickstart
 Install
 -------
 
-Install sawmill and a plugin for your EDA tool:
+Install sawmill and a plugin for your tool:
 
 .. code-block:: console
 

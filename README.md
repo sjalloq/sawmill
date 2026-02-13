@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/sawmill.png" alt="Sawmill - Cutting through EDA logs" width="600">
+  <img src="assets/sawmill.png" alt="Sawmill - Cutting through the noise" width="600">
 </p>
 
 <h1 align="center">Sawmill</h1>
 
 <p align="center">
-  <strong>A terminal-based log analysis tool for EDA engineers</strong>
+  <strong>A plugin-driven terminal log analyzer</strong>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 
 ---
 
-Sawmill helps you filter, analyze, and understand complex log files from EDA tools like Vivado. Through a plugin architecture, it provides tool-specific intelligence while remaining extensible to any log format.
+Sawmill helps you filter, analyze, and understand complex log files from tools like Vivado, Quartus, and more. Through a plugin architecture, it provides tool-specific intelligence while remaining extensible to any log format.
 
 ## Features
 
