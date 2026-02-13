@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "sawmill-parser"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A configurable TUI for post-processing and filtering structured tool logs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -53,6 +53,9 @@ sawmill = "sawmill.__main__:cli"
 Homepage = "https://github.com/sawmill/sawmill"
 Documentation = "https://github.com/sawmill/sawmill#readme"
 Repository = "https://github.com/sawmill/sawmill"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.metadata]
 allow-direct-references = true

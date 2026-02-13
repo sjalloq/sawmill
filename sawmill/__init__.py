@@ -1,3 +1,5 @@
 """Sawmill - A plugin-driven terminal log analyzer."""
 
-__version__ = "0.1.0"
+from importlib.metadata import version
+
+__version__ = version("sawmill-parser")
