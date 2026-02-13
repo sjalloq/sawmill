@@ -2,11 +2,8 @@ name: Deploy docs to GitHub Pages
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "sawmill/**"
-      - ".github/workflows/docs.yml"
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
