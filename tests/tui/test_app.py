@@ -488,3 +488,44 @@ class TestRunTui:
         from sawmill.tui import SawmillApp
 
         assert SawmillApp is not None
+
+
+class TestVivadoFixtureRendering:
+    """Integration test: real Vivado log renders without markup errors."""
+
+    @pytest.fixture
+    def vivado_messages(self, vivado_log):
+        """Parse the real vivado fixture through the plugin."""
+        from sawmill_plugin_vivado.plugin import VivadoPlugin
+
+        plugin = VivadoPlugin()
+        return plugin.load_and_parse(vivado_log)
+
+    @pytest.fixture
+    def vivado_severity_levels(self):
+        from sawmill_plugin_vivado.plugin import VivadoPlugin
+
+        from sawmill.models.plugin_api import severity_levels_from_dicts
+
+        return severity_levels_from_dicts(VivadoPlugin().get_severity_levels())
+
+    async def test_vivado_fixture_renders_without_markup_error(
+        self, vivado_severity_levels, vivado_messages
+    ):
+        """Loading the real Vivado fixture must not raise MarkupError.
+
+        Vivado messages contain file paths like [/home/.../file.xdc] which
+        Rich can misinterpret as markup tags if not escaped.
+        """
+        app = SawmillApp(vivado_severity_levels, messages=vivado_messages)
+        async with app.run_test(size=(200, 50)) as pilot:
+            # Allow multiple render cycles so DataTable processes all rows
+            await pilot.pause()
+            await pilot.pause()
+            await pilot.pause()
+            table = app.query_one(LogViewer)
+            assert table.row_count > 0
+            # Scroll through rows to force rendering of all cells
+            for _ in range(min(table.row_count, 50)):
+                await pilot.press("down")
+            await pilot.pause()

@@ -177,3 +177,18 @@ class TestWaiveModalDismiss:
             await pilot.pause()
             await pilot.press("escape")
         assert result == [None]
+
+
+# --- Screenshot binding on modals ---
+
+
+class TestModalScreenshotBinding:
+    """Both modals expose an F12 screenshot binding."""
+
+    async def test_quit_modal_has_f12_binding(self):
+        keys = [b[0] for b in QuitConfirmModal.BINDINGS]
+        assert "f12" in keys
+
+    async def test_waive_modal_has_f12_binding(self):
+        keys = [b[0] for b in WaiveModal.BINDINGS]
+        assert "f12" in keys

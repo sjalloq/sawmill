@@ -70,6 +70,7 @@ class WaiveModal(ModalScreen[dict | None]):
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
         ("enter", "confirm", "Confirm"),
+        ("f12", "screenshot", "Screenshot"),
     ]
 
     def __init__(
@@ -182,6 +183,11 @@ class WaiveModal(ModalScreen[dict | None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+    def action_screenshot(self) -> None:
+        """Save a screenshot as SVG (delegates to the app)."""
+        saved = self.app.save_screenshot()
+        self.app.notify(f"Screenshot saved: {saved}")
 
     def action_confirm(self) -> None:
         """Validate and confirm the waiver."""

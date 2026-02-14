@@ -9,11 +9,7 @@ Screen {
 
 /* === 4.2 Scrollbars (global) === */
 * {
-    scrollbar-size: 1 1;
-    scrollbar-color: $primary;
-    scrollbar-background: $primary-muted;
-    scrollbar-color-hover: $primary-lighten-3;
-    scrollbar-color-active: $primary-lighten-3;
+    scrollbar-size: 0 0;
 }
 
 /* === 4.3 Panel (bordered container with focus) === */

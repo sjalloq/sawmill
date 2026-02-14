@@ -15,6 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -587,8 +588,8 @@ class SawmillApp(App):
                 self._log_viewer.add_row(
                     str(msg.start_line),
                     sev_display,
-                    msg_id,
-                    content,
+                    escape(msg_id),
+                    escape(content),
                     key=str(i),
                 )
 

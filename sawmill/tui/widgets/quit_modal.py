@@ -48,6 +48,7 @@ class QuitConfirmModal(ModalScreen[str | None]):
         ("escape", "cancel", "Cancel"),
         ("enter", "save_quit", "Save and quit"),
         ("q", "discard_quit", "Quit without saving"),
+        ("f12", "screenshot", "Screenshot"),
     ]
 
     def __init__(
@@ -95,3 +96,8 @@ class QuitConfirmModal(ModalScreen[str | None]):
 
     def action_discard_quit(self) -> None:
         self.dismiss("discard_quit")
+
+    def action_screenshot(self) -> None:
+        """Save a screenshot as SVG (delegates to the app)."""
+        saved = self.app.save_screenshot()
+        self.app.notify(f"Screenshot saved: {saved}")
