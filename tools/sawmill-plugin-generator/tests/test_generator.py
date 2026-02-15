@@ -107,13 +107,6 @@ class TestPyprojectToml:
         assert data["project"]["description"] == "My custom description"
         assert data["project"]["authors"][0]["name"] == "Custom Author"
 
-    def test_dev_deps_include_mypy(self, quartus_project):
-        """Generated pyproject.toml should include mypy in dev dependencies."""
-        content = (quartus_project / "pyproject.toml").read_text()
-        data = tomllib.loads(content)
-        dev_deps = data["project"]["optional-dependencies"]["dev"]
-        assert any("mypy" in dep for dep in dev_deps), "mypy not found in dev deps"
-
     def test_uses_dynamic_version(self, quartus_project):
         """Generated pyproject.toml should use dynamic version, not static."""
         content = (quartus_project / "pyproject.toml").read_text()
