@@ -25,6 +25,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 from textual.widgets._data_table import ColumnKey
 
+from sawmill.core.waiver import WaiverMatcher
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.tui.filter_parser import parse_filter
 from sawmill.tui.theme import register_nord_theme
@@ -267,7 +268,10 @@ class SawmillApp(App):
     severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True, init=False)
     sort_mode: reactive[str] = reactive(SORT_LINE, init=False)
     suppressed_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
-    waived_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
+    # TODO: _waiver_version is a workaround to trigger re-filtering when
+    # _waiver_matcher changes. Investigate making _waiver_matcher itself
+    # reactive, or using Textual's message system instead.
+    _waiver_version: reactive[int] = reactive(0, init=False)
     active_tab: reactive[str] = reactive("messages", init=False)
 
     def __init__(
@@ -311,6 +315,7 @@ class SawmillApp(App):
         self._session_waivers: list[Waiver] = []
         self._waivers_dirty: bool = False
         self._waiver_file_path: Path | None = waiver_file_path
+        self._waiver_matcher = WaiverMatcher([])
 
         # ID count cache for count sort mode
         self._id_counts: dict[str, int] = {}
@@ -319,6 +324,11 @@ class SawmillApp(App):
         self._main_messages: list[Message] = []
         self._waived_messages: list[Message] = []
         self._suppressed_messages: list[Message] = []
+
+    def _rebuild_waiver_matcher(self) -> None:
+        """Rebuild the WaiverMatcher from session waivers and trigger re-filter."""
+        self._waiver_matcher = WaiverMatcher(list(self._session_waivers))
+        self._waiver_version += 1
 
     # -- Properties ----------------------------------------------------------
 
@@ -490,12 +500,10 @@ class SawmillApp(App):
             m for m in filtered if m.message_id is None or m.message_id not in self.suppressed_ids
         ]
         self._waived_messages = [
-            m
-            for m in non_suppressed
-            if m.message_id is not None and m.message_id in self.waived_ids
+            m for m in non_suppressed if self._waiver_matcher.is_waived(m) is not None
         ]
         self._main_messages = [
-            m for m in non_suppressed if m.message_id is None or m.message_id not in self.waived_ids
+            m for m in non_suppressed if self._waiver_matcher.is_waived(m) is None
         ]
 
         # Select active list
@@ -637,7 +645,7 @@ class SawmillApp(App):
     def watch_suppressed_ids(self, value: set[str]) -> None:
         self._apply_filters()
 
-    def watch_waived_ids(self, value: set[str]) -> None:
+    def watch__waiver_version(self, value: int) -> None:
         self._apply_filters()
 
     def watch_active_tab(self, tab: str) -> None:
@@ -997,14 +1005,15 @@ class SawmillApp(App):
         msg = self._filtered_messages[row]
         if msg.message_id is None:
             return
-        current = set(self.waived_ids)
-        current.discard(msg.message_id)
-        self.waived_ids = current
 
-        # Remove from session waivers if present
-        was_session = any(w.message_id == msg.message_id for w in self._session_waivers)
-        self._session_waivers = [w for w in self._session_waivers if w.message_id != msg.message_id]
+        matching_waiver = self._waiver_matcher.is_waived(msg)
+        if matching_waiver is None:
+            return
+
+        was_session = any(w is matching_waiver for w in self._session_waivers)
+        self._session_waivers = [w for w in self._session_waivers if w is not matching_waiver]
         self._waivers_dirty = True
+        self._rebuild_waiver_matcher()
 
         if was_session:
             self.notify(f"Un-waived: {msg.message_id}")
@@ -1033,9 +1042,7 @@ class SawmillApp(App):
         self._session_waivers.append(waiver)
         self._waivers_dirty = True
         self.notify(f"Waived: {waiver.message_id}")
-        current = set(self.waived_ids)
-        current.add(waiver.message_id)
-        self.waived_ids = current
+        self._rebuild_waiver_matcher()
 
     def _toggle_severity(self, key_num: int) -> None:
         """Toggle visibility of a severity level by number key."""

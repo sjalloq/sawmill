@@ -9,9 +9,19 @@ import pytest
 
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
+from sawmill.models.waiver import Waiver
 from sawmill.tui.app import SawmillApp
 from sawmill.tui.widgets.waive_modal import WaiveModal
 from sawmill.utils.author import discover_author
+
+
+def _add_catchall_waivers(app: SawmillApp, message_ids: set[str]) -> None:
+    """Add catch-all waivers (no content pattern) and rebuild matcher."""
+    for mid in message_ids:
+        app._session_waivers.append(
+            Waiver(message_id=mid, reason="test", author="test", date="2026-01-01")
+        )
+    app._rebuild_waiver_matcher()
 
 
 @pytest.fixture
@@ -143,10 +153,10 @@ class TestWaiveState:
         app = SawmillApp(severity_levels)
         assert app._session_waivers == []
 
-    def test_initial_waived_ids_empty(self, severity_levels):
-        """Waived IDs set starts empty."""
+    def test_initial_waiver_matcher_empty(self, severity_levels):
+        """Waiver matcher starts with no waivers."""
         app = SawmillApp(severity_levels)
-        assert app.waived_ids == set()
+        assert app._waiver_matcher.waivers == []
 
     def test_initial_waivers_dirty_false(self, severity_levels):
         """Waivers dirty flag starts as False."""
@@ -237,15 +247,16 @@ class TestOnWaiveModalResult:
         assert waiver.author == "test@example.com"
         assert waiver.date == date.today().isoformat()
 
-    def test_result_adds_to_waived_ids(self, app):
-        """Modal result adds message ID to waived IDs set."""
+    def test_result_rebuilds_waiver_matcher(self, app):
+        """Modal result rebuilds waiver matcher with new waiver."""
         result = {
             "message_id": "E-001",
             "reason": "test",
             "author": "test",
         }
         app._on_waive_modal_result(result)
-        assert "E-001" in app.waived_ids
+        msg = make_message("Error in module A", severity="error", message_id="E-001")
+        assert app._waiver_matcher.is_waived(msg) is not None
 
     def test_result_sets_dirty_flag(self, app):
         """Modal result marks waivers as dirty."""
@@ -279,7 +290,7 @@ class TestOnWaiveModalResult:
             }
             app._on_waive_modal_result(result)
         assert len(app._session_waivers) == 3
-        assert len(app.waived_ids) == 3
+        assert len(app._waiver_matcher.waivers) == 3
 
 
 class TestWaivedDisplay:
@@ -295,7 +306,7 @@ class TestWaivedDisplay:
 
     def test_waived_messages_in_waived_tab(self, app):
         """Waived messages move to the waived tab, not the main filtered list."""
-        app.waived_ids = {"E-001"}
+        _add_catchall_waivers(app, {"E-001"})
         app._apply_filters()
         # Main tab excludes waived messages
         assert len(app.filtered_messages) == 1

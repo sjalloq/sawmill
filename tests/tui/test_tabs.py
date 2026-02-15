@@ -11,7 +11,17 @@ import pytest
 
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
+from sawmill.models.waiver import Waiver
 from sawmill.tui.app import SawmillApp
+
+
+def _add_catchall_waivers(app: SawmillApp, message_ids: set[str]) -> None:
+    """Add catch-all waivers (no content pattern) and rebuild matcher."""
+    for mid in message_ids:
+        app._session_waivers.append(
+            Waiver(message_id=mid, reason="test", author="test", date="2026-01-01")
+        )
+    app._rebuild_waiver_matcher()
 
 
 @pytest.fixture
@@ -91,7 +101,7 @@ class TestMessageBucketing:
 
     def test_main_excludes_waived_and_suppressed(self, app):
         app.suppressed_ids = {"E-001"}
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         app._apply_filters()
         main_ids = {m.message_id for m in app._main_messages}
         assert "E-001" not in main_ids
@@ -99,7 +109,7 @@ class TestMessageBucketing:
         assert "I-001" in main_ids
 
     def test_waived_tab_contains_waived_only(self, app):
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         app._apply_filters()
         assert len(app._waived_messages) == 1
         assert app._waived_messages[0].message_id == "W-001"
@@ -113,7 +123,7 @@ class TestMessageBucketing:
     def test_suppressed_takes_precedence_over_waived(self, app):
         """If a message is both suppressed and waived, it goes to Suppressed only."""
         app.suppressed_ids = {"E-001"}
-        app.waived_ids = {"E-001"}
+        _add_catchall_waivers(app, {"E-001"})
         app._apply_filters()
         assert len(app._suppressed_messages) == 1
         assert app._suppressed_messages[0].message_id == "E-001"
@@ -123,14 +133,14 @@ class TestMessageBucketing:
         app._apply_filters()
         assert len(app._suppressed_messages) == 0
 
-    def test_empty_waived_ids_no_waived_messages(self, app):
+    def test_empty_waivers_no_waived_messages(self, app):
         app._apply_filters()
         assert len(app._waived_messages) == 0
 
     def test_all_three_lists_sum_to_filtered_total(self, app):
         """Main + waived + suppressed should equal the total after filtering."""
         app.suppressed_ids = {"E-001"}
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         app._apply_filters()
         total = len(app._main_messages) + len(app._waived_messages) + len(app._suppressed_messages)
         # Should equal all 4 messages (all pass severity/regex filters)
@@ -139,7 +149,7 @@ class TestMessageBucketing:
     def test_severity_filter_applies_to_all_tabs(self, app):
         """Severity filtering applies before bucketing — affects all tabs."""
         app.suppressed_ids = {"E-001"}
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         # Only show errors
         app.severity_filter = {
             "error": True,
@@ -164,7 +174,7 @@ class TestMessageBucketing:
         assert len(app._main_messages) == 0
 
     def test_id_filter_applies_to_all_tabs(self, app):
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         app.filter_pattern = "id:W-*"
         app._apply_filters()
         # Only W-001 matches id:W-* and it's waived
@@ -184,7 +194,7 @@ class TestTabSwitching:
         ]
         app = SawmillApp(severity_levels, messages=messages)
         app.suppressed_ids = {"E-001"}
-        app.waived_ids = {"W-001"}
+        _add_catchall_waivers(app, {"W-001"})
         app._apply_filters()
         return app
 
@@ -300,14 +310,16 @@ class TestContextSensitiveKeys:
         assert "E-001" not in app.suppressed_ids
 
     def test_waive_on_waived_tab_unwaives(self, app):
-        app.waived_ids = {"E-001"}
+        _add_catchall_waivers(app, {"E-001"})
         app.active_tab = "waived"
         app._apply_filters()
         app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
         app._populate_table = lambda: None
         app.notify = MagicMock()
         app.action_waive()
-        assert "E-001" not in app.waived_ids
+        # Waiver should be removed — message no longer waived
+        msg = make_message("Error A", severity="error", message_id="E-001")
+        assert app._waiver_matcher.is_waived(msg) is None
 
     def test_waive_on_suppressed_tab_noop_with_notify(self, app):
         app.suppressed_ids = {"E-001"}
@@ -319,7 +331,7 @@ class TestContextSensitiveKeys:
         assert "Un-suppress first" in app.notify.call_args[0][0]
 
     def test_suppress_on_waived_tab_moves_to_suppressed(self, app):
-        app.waived_ids = {"E-001"}
+        _add_catchall_waivers(app, {"E-001"})
         app.active_tab = "waived"
         app._apply_filters()
         app._log_viewer = type("FakeViewer", (), {"cursor_row": 0})()
@@ -353,7 +365,7 @@ class TestRemovals:
             make_message("Error A", severity="error", message_id="E-001", line=1),
         ]
         app = SawmillApp(severity_levels, messages=messages)
-        app.waived_ids = {"E-001"}
+        _add_catchall_waivers(app, {"E-001"})
         app._apply_filters()
         # E-001 should not be in main messages at all
         assert len(app._main_messages) == 0
