@@ -13,7 +13,12 @@ from rich.console import Console
 
 from sawmill.cli.formatting import output_messages, print_grouped, print_summary
 from sawmill.core.filter import FilterEngine, match_message_id
-from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, get_plugin_manager
+from sawmill.core.plugin import (
+    NoPluginFoundError,
+    PluginConflictError,
+    get_plugin_manager,
+    select_plugin,
+)
 from sawmill.core.severity import (
     get_severity_level_map,
     get_severity_levels,
@@ -66,33 +71,17 @@ def process_log_file(
     path = Path(logfile)
 
     # Select plugin
-    if plugin_name:
-        plugin = manager.get_plugin(plugin_name)
-        if plugin is None:
-            console.print(f"[red]Error:[/red] Plugin '{plugin_name}' not found.")
-            console.print("\nAvailable plugins:")
-            for name in manager.list_plugins():
-                console.print(f"  - {name}")
-            ctx.exit(1)
-    else:
-        # Auto-detect plugin
-        try:
-            detected_name = manager.auto_detect(path)
-            plugin = manager.get_plugin(detected_name)
-        except NoPluginFoundError as e:
-            console.print("[red]Error:[/red] No plugin can handle this file.")
-            console.print(f"  {e}")
-            console.print("\nInstalled plugins:")
-            for name in manager.list_plugins():
-                console.print(f"  - {name}")
-            console.print("\nUse --plugin to specify a plugin manually.")
-            ctx.exit(1)
-        except PluginConflictError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            ctx.exit(1)
-
-    if plugin is None:
-        console.print("[red]Error:[/red] Plugin not found.")
+    try:
+        plugin = select_plugin(manager, plugin_name, path)
+    except NoPluginFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("\nInstalled plugins:")
+        for name in manager.list_plugins():
+            console.print(f"  - {name}")
+        console.print("\nUse --plugin to specify a plugin manually.")
+        ctx.exit(1)
+    except PluginConflictError as e:
+        console.print(f"[red]Error:[/red] {e}")
         ctx.exit(1)
 
     # Get severity level and style maps from plugin
@@ -170,12 +159,8 @@ def process_log_file(
 
     # Apply suppress-id filters (display only — does NOT affect CI)
     if suppress_ids:
-        suppress_id_set = set(suppress_ids)
-        messages = [
-            msg
-            for msg in messages
-            if msg.message_id is None or msg.message_id not in suppress_id_set
-        ]
+        engine = FilterEngine()
+        messages, _ = engine.apply_suppress_ids(set(suppress_ids), messages)
 
     # Get severity levels from plugin for aggregation and count format
     severity_levels = get_severity_levels(plugin)
@@ -218,33 +203,18 @@ def generate_waivers(
     manager = get_plugin_manager()
     path = Path(logfile)
 
-    # Select plugin (same logic as process_log_file)
-    if plugin_name:
-        plugin = manager.get_plugin(plugin_name)
-        if plugin is None:
-            stderr_console.print(f"[red]Error:[/red] Plugin '{plugin_name}' not found.")
-            stderr_console.print("\nAvailable plugins:")
-            for name in manager.list_plugins():
-                stderr_console.print(f"  - {name}")
-            ctx.exit(1)
-    else:
-        try:
-            detected_name = manager.auto_detect(path)
-            plugin = manager.get_plugin(detected_name)
-        except NoPluginFoundError as e:
-            stderr_console.print("[red]Error:[/red] No plugin can handle this file.")
-            stderr_console.print(f"  {e}")
-            stderr_console.print("\nInstalled plugins:")
-            for name in manager.list_plugins():
-                stderr_console.print(f"  - {name}")
-            stderr_console.print("\nUse --plugin to specify a plugin manually.")
-            ctx.exit(1)
-        except PluginConflictError as e:
-            stderr_console.print(f"[red]Error:[/red] {e}")
-            ctx.exit(1)
-
-    if plugin is None:
-        stderr_console.print("[red]Error:[/red] Plugin not found.")
+    # Select plugin
+    try:
+        plugin = select_plugin(manager, plugin_name, path)
+    except NoPluginFoundError as e:
+        stderr_console.print(f"[red]Error:[/red] {e}")
+        stderr_console.print("\nInstalled plugins:")
+        for name in manager.list_plugins():
+            stderr_console.print(f"  - {name}")
+        stderr_console.print("\nUse --plugin to specify a plugin manually.")
+        ctx.exit(1)
+    except PluginConflictError as e:
+        stderr_console.print(f"[red]Error:[/red] {e}")
         ctx.exit(1)
 
     # Load and parse the file using the plugin

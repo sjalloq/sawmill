@@ -20,6 +20,32 @@ from sawmill.models.waiver import Waiver, WaiverFile
 from sawmill.utils.toml import escape_toml_basic_string
 
 
+def waiver_to_toml(waiver: Waiver) -> str:
+    """Serialize a Waiver object to a [[waiver]] TOML block string.
+
+    Handles optional fields (content_match/pattern, expires, ticket).
+
+    Args:
+        waiver: The Waiver object to serialize.
+
+    Returns:
+        A TOML string representing the waiver entry.
+    """
+    lines: list[str] = ["[[waiver]]"]
+    lines.append(f'message_id = "{escape_toml_basic_string(waiver.message_id)}"')
+    if waiver.content_match and waiver.content_pattern:
+        lines.append(f'content_match = "{waiver.content_match}"')
+        lines.append(f'content_pattern = "{escape_toml_basic_string(waiver.content_pattern)}"')
+    lines.append(f'reason = "{escape_toml_basic_string(waiver.reason)}"')
+    lines.append(f'author = "{escape_toml_basic_string(waiver.author)}"')
+    lines.append(f'date = "{waiver.date}"')
+    if waiver.expires:
+        lines.append(f'expires = "{waiver.expires}"')
+    if waiver.ticket:
+        lines.append(f'ticket = "{escape_toml_basic_string(waiver.ticket)}"')
+    return "\n".join(lines)
+
+
 class WaiverValidationError(Exception):
     """Exception raised for waiver file validation errors.
 
@@ -529,13 +555,13 @@ class WaiverGenerator:
         if not message.message_id:
             return None
 
-        lines: list[str] = []
-        lines.append("[[waiver]]")
-
-        lines.append(f'message_id = "{escape_toml_basic_string(message.message_id)}"')
-        lines.append(f'reason = "{escape_toml_basic_string(self._reason)}"')
-        lines.append(f'author = "{escape_toml_basic_string(self._author)}"')
-        lines.append(f'date = "{date.today().isoformat()}"')
+        waiver = Waiver(
+            message_id=message.message_id,
+            reason=self._reason,
+            author=self._author,
+            date=date.today().isoformat(),
+        )
+        lines = waiver_to_toml(waiver).splitlines()
 
         # Add comment with message context
         lines.append(f"# Severity: {message.severity or 'unknown'}")

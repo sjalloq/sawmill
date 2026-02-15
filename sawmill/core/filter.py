@@ -142,6 +142,57 @@ class FilterEngine:
             msg for msg in messages if not any(cp.search(msg.raw_text) for cp in compiled_patterns)
         ]
 
+    def apply_suppress_ids(
+        self,
+        suppress_ids: set[str],
+        messages: list[Message],
+    ) -> tuple[list[Message], list[Message]]:
+        """Partition messages into kept and suppressed by message ID.
+
+        Messages whose message_id is in suppress_ids are suppressed.
+        Messages with no message_id are always kept.
+
+        Args:
+            suppress_ids: Set of message IDs to suppress.
+            messages: List of messages to partition.
+
+        Returns:
+            Tuple of (kept, suppressed) message lists.
+        """
+        if not suppress_ids:
+            return list(messages), []
+
+        kept: list[Message] = []
+        suppressed: list[Message] = []
+        for msg in messages:
+            if msg.message_id is not None and msg.message_id in suppress_ids:
+                suppressed.append(msg)
+            else:
+                kept.append(msg)
+        return kept, suppressed
+
+
+def filter_by_severity_toggles(
+    messages: list[Message],
+    toggles: dict[str, bool],
+) -> list[Message]:
+    """Filter messages by severity toggle state.
+
+    Messages with None severity are always included.
+    Severity IDs not present in toggles default to True (visible).
+
+    Args:
+        messages: List of messages to filter.
+        toggles: Dict mapping severity ID to enabled state.
+
+    Returns:
+        List of messages whose severity is enabled.
+    """
+    if not toggles:
+        return list(messages)
+
+    return [m for m in messages if m.severity is None or toggles.get(m.severity.lower(), True)]
+
 
 def match_message_id(message_id: str | None, pattern: str) -> bool:
     """Check if a message ID matches a pattern (supports wildcards).

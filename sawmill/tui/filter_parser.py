@@ -22,11 +22,13 @@ class ParsedFilter:
     Attributes:
         severities: Severity IDs to show (from sev:/severity: prefix).
         message_id: Message ID pattern (from id: prefix, supports fnmatch).
+        category: Category to filter by (from cat:/category: prefix).
         pattern: Remaining text treated as regex on raw_text.
     """
 
     severities: list[str] = field(default_factory=list)
     message_id: str | None = None
+    category: str | None = None
     pattern: str | None = None
 
 
@@ -36,6 +38,7 @@ def parse_filter(text: str) -> ParsedFilter:
     Supports prefixes:
         sev:<id> or severity:<id>  → severity filter
         id:<pattern>               → message ID filter (fnmatch wildcards)
+        cat:<name> or category:<name> → category filter
         <text>                     → regex on everything
 
     Args:
@@ -71,6 +74,12 @@ def parse_filter(text: str) -> ParsedFilter:
             _, _, value = token.partition(":")
             if value:
                 result.message_id = value
+
+        # cat: or category: prefix
+        elif lower.startswith("cat:") or lower.startswith("category:"):
+            _, _, value = token.partition(":")
+            if value:
+                result.category = value.lower()
 
         else:
             remaining.append(token)

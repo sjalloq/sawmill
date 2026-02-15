@@ -2,11 +2,14 @@
 
 from pathlib import Path
 
+import pytest
+
 from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,
     PluginError,
     PluginManager,
+    select_plugin,
 )
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.plugin import SawmillPlugin, hookimpl
@@ -171,3 +174,37 @@ def test_plugin_error_message():
 
     no_plugin_error = NoPluginFoundError("No plugin found for test.log")
     assert "No plugin found" in str(no_plugin_error)
+
+
+class TestSelectPlugin:
+    """Tests for select_plugin() helper."""
+
+    def test_select_by_name(self):
+        """select_plugin with explicit name returns the plugin."""
+        manager = PluginManager()
+        manager.register(MockPlugin())
+        plugin = select_plugin(manager, "mock", Path("test.log"))
+        assert plugin.name == "mock"
+
+    def test_select_by_name_not_found(self):
+        """select_plugin raises NoPluginFoundError for unknown name."""
+        manager = PluginManager()
+        manager.register(MockPlugin())
+        with pytest.raises(NoPluginFoundError) as exc:
+            select_plugin(manager, "nonexistent", Path("test.log"))
+        assert "nonexistent" in str(exc.value)
+        assert "mock" in str(exc.value)  # lists available plugins
+
+    def test_select_auto_detect(self):
+        """select_plugin with no name auto-detects from file path."""
+        manager = PluginManager()
+        manager.register(MockPlugin())
+        plugin = select_plugin(manager, None, Path("mock.log"))
+        assert plugin.name == "mock"
+
+    def test_select_auto_detect_no_match(self):
+        """select_plugin raises NoPluginFoundError when no plugin matches."""
+        manager = PluginManager()
+        manager.register(MockPlugin())
+        with pytest.raises(NoPluginFoundError):
+            select_plugin(manager, None, Path("unknown.log"))

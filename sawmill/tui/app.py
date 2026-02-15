@@ -7,10 +7,7 @@ header / severity bar / search / messages / detail / footer.
 
 from __future__ import annotations
 
-import fnmatch
-import os
 import re
-import tempfile
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,12 +22,12 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 from textual.widgets._data_table import ColumnKey
 
+from sawmill.core.filter import FilterEngine, filter_by_severity_toggles, match_message_id
 from sawmill.core.waiver import WaiverMatcher
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.tui.filter_parser import parse_filter
 from sawmill.tui.theme import register_nord_theme
 from sawmill.tui.widgets.footer import SawmillFooter
-from sawmill.utils.toml import escape_toml_basic_string
 
 if TYPE_CHECKING:
     from sawmill.models.message import Message
@@ -293,7 +290,7 @@ class SawmillApp(App):
         self._plugin_name = plugin_name
         self._severity_levels = list(severity_levels)
         self._severity_level_map: dict[str, int] = {
-            level.id: level.level for level in self._severity_levels
+            level.id.lower(): level.level for level in self._severity_levels
         }
         # Map numeric keys to severity IDs (sorted ascending by level: 1=lowest)
         self._key_to_severity: dict[int, str] = {}
@@ -308,10 +305,12 @@ class SawmillApp(App):
 
         # Suppress state
         self._suppressions_dirty: bool = False
+        self._suppress_patterns: list[str] = []
 
         # Waive state
         from sawmill.models.waiver import Waiver
 
+        self._file_waivers: list[Waiver] = []
         self._session_waivers: list[Waiver] = []
         self._waivers_dirty: bool = False
         self._waiver_file_path: Path | None = waiver_file_path
@@ -326,8 +325,8 @@ class SawmillApp(App):
         self._suppressed_messages: list[Message] = []
 
     def _rebuild_waiver_matcher(self) -> None:
-        """Rebuild the WaiverMatcher from session waivers and trigger re-filter."""
-        self._waiver_matcher = WaiverMatcher(list(self._session_waivers))
+        """Rebuild the WaiverMatcher from file + session waivers and trigger re-filter."""
+        self._waiver_matcher = WaiverMatcher(self._file_waivers + self._session_waivers)
         self._waiver_version += 1
 
     # -- Properties ----------------------------------------------------------
@@ -382,7 +381,7 @@ class SawmillApp(App):
         )
 
     def on_mount(self) -> None:
-        """Handle app mount — apply theme, set up widgets."""
+        """Handle app mount — apply theme, set up widgets, load saved state."""
         register_nord_theme(self)
 
         # Widget refs
@@ -399,9 +398,16 @@ class SawmillApp(App):
 
         # Columns are set up by LogViewer.on_mount via _setup_columns()
 
+        # Load config (may set default_plugin before loading messages)
+        self._load_config()
+
         # Load messages if we have a log file
         if self.log_file and not self._messages:
             self._load_messages()
+
+        # Load saved suppressions and waivers (does not mark dirty)
+        self._load_saved_suppressions()
+        self._load_saved_waivers()
 
         # Defer initial display until after layout so LogViewer knows its width
         self.call_after_refresh(self._apply_filters)
@@ -417,33 +423,72 @@ class SawmillApp(App):
         if not self.log_file:
             return
 
-        from sawmill.core.plugin import NoPluginFoundError, PluginConflictError, PluginManager
+        from sawmill.core.plugin import PluginError, get_plugin_manager, select_plugin
         from sawmill.models.plugin_api import severity_levels_from_dicts
 
-        manager = PluginManager()
-        manager.discover()
+        manager = get_plugin_manager()
 
         try:
-            if self._plugin_name:
-                plugin = manager.get_plugin(self._plugin_name)
-            else:
-                detected = manager.auto_detect(self.log_file)
-                plugin = manager.get_plugin(detected)
+            plugin = select_plugin(manager, self._plugin_name, self.log_file)
+            self._messages = plugin.load_and_parse(self.log_file)
 
-            if plugin:
-                self._messages = plugin.load_and_parse(self.log_file)
-
-                if hasattr(plugin, "get_severity_levels"):
-                    try:
-                        severity_dicts = plugin.get_severity_levels()
-                        self._severity_levels = severity_levels_from_dicts(severity_dicts)
-                        self._severity_level_map = {
-                            level.id: level.level for level in self._severity_levels
-                        }
-                    except Exception:
-                        pass
-        except (NoPluginFoundError, PluginConflictError) as e:
+            if hasattr(plugin, "get_severity_levels"):
+                try:
+                    severity_dicts = plugin.get_severity_levels()
+                    self._severity_levels = severity_levels_from_dicts(severity_dicts)
+                    self._severity_level_map = {
+                        level.id.lower(): level.level for level in self._severity_levels
+                    }
+                except Exception:
+                    pass
+        except PluginError as e:
             self.notify(f"Error loading log: {e}", severity="error")
+
+    def _load_config(self) -> None:
+        """Load config on startup and apply defaults (e.g. default_plugin)."""
+        try:
+            from sawmill.core.config import ConfigLoader
+
+            config = ConfigLoader().load_resolved()
+            if config.general.default_plugin and not self._plugin_name:
+                self._plugin_name = config.general.default_plugin
+        except Exception:
+            pass  # Config errors are non-fatal at startup
+
+    def _load_saved_suppressions(self) -> None:
+        """Load saved suppression IDs from .sawmill/suppress.toml."""
+        try:
+            from sawmill.tui.session import load_suppressions
+
+            config = load_suppressions()
+            if config.message_ids:
+                self.suppressed_ids = set(config.message_ids)
+            if config.patterns:
+                self._suppress_patterns = list(config.patterns)
+        except Exception:
+            pass  # Suppression load errors are non-fatal
+
+    def _load_saved_waivers(self) -> None:
+        """Load saved waivers from waiver file."""
+        try:
+            from sawmill.tui.session import load_waivers
+            from sawmill.utils.dirs import resolve_sawmill_dir
+
+            waiver_path = self._waiver_file_path
+            if waiver_path is None:
+                sawmill_dir = resolve_sawmill_dir()
+                if sawmill_dir is not None:
+                    candidate = sawmill_dir / "waivers.toml"
+                    if candidate.exists():
+                        waiver_path = candidate
+
+            if waiver_path and waiver_path.exists():
+                waivers = load_waivers(waiver_path)
+                if waivers:
+                    self._file_waivers = waivers
+                    self._rebuild_waiver_matcher()
+        except Exception:
+            pass  # Waiver load errors are non-fatal
 
     # -- Filtering & Sorting -------------------------------------------------
 
@@ -468,37 +513,37 @@ class SawmillApp(App):
 
         # Apply per-severity toggle filter
         if effective_sev:
-            filtered = [
-                m
-                for m in filtered
-                if m.severity is None or effective_sev.get(m.severity.lower(), True)
-            ]
+            filtered = filter_by_severity_toggles(filtered, effective_sev)
 
         # Apply id: prefix filter (fnmatch)
         if parsed.message_id:
-            id_pattern = parsed.message_id
-            filtered = [
-                m
-                for m in filtered
-                if m.message_id is not None and fnmatch.fnmatch(m.message_id, id_pattern)
-            ]
+            filtered = [m for m in filtered if match_message_id(m.message_id, parsed.message_id)]
+
+        # Apply cat: prefix filter
+        if parsed.category:
+            filtered = [m for m in filtered if m.category and m.category.lower() == parsed.category]
 
         # Apply regex pattern (remaining text)
-        regex_pattern = parsed.pattern
-        if regex_pattern:
+        if parsed.pattern:
             try:
-                compiled = re.compile(regex_pattern, re.IGNORECASE)
-                filtered = [m for m in filtered if compiled.search(m.raw_text)]
+                re.compile(parsed.pattern)
             except re.error:
-                pass
+                pass  # Invalid regex — skip filter, keep current results
+            else:
+                filtered = FilterEngine().apply_filter(
+                    parsed.pattern, filtered, case_sensitive=False
+                )
 
         # Bucket into three lists: suppressed, waived, main
-        self._suppressed_messages = [
-            m for m in filtered if m.message_id is not None and m.message_id in self.suppressed_ids
-        ]
-        non_suppressed = [
-            m for m in filtered if m.message_id is None or m.message_id not in self.suppressed_ids
-        ]
+        engine = FilterEngine()
+        non_suppressed, self._suppressed_messages = engine.apply_suppress_ids(
+            self.suppressed_ids, filtered
+        )
+
+        # Apply regex suppression patterns (from saved config)
+        if self._suppress_patterns:
+            non_suppressed = engine.apply_suppressions(self._suppress_patterns, non_suppressed)
+
         self._waived_messages = [
             m for m in non_suppressed if self._waiver_matcher.is_waived(m) is not None
         ]
@@ -801,80 +846,27 @@ class SawmillApp(App):
 
     def _save_suppressions(self) -> None:
         """Save suppression IDs to .sawmill/suppress.toml."""
-        from sawmill.core.suppress import SuppressConfig, SuppressLoader
-        from sawmill.utils.dirs import ensure_sawmill_dir
+        from sawmill.tui.session import save_suppressions
 
-        sawmill_dir = ensure_sawmill_dir()
-        SuppressLoader().save(
-            SuppressConfig(message_ids=sorted(self.suppressed_ids)),
-            sawmill_dir / "suppress.toml",
-        )
+        save_suppressions(self.suppressed_ids)
 
     def _resolve_waiver_path(self) -> Path:
         """Resolve the waiver file path, defaulting to .sawmill/waivers.toml."""
         if self._waiver_file_path is None:
-            from sawmill.utils.dirs import ensure_sawmill_dir
+            from sawmill.tui.session import resolve_waiver_path
 
-            self._waiver_file_path = ensure_sawmill_dir() / "waivers.toml"
+            self._waiver_file_path = resolve_waiver_path()
         return self._waiver_file_path
 
     def _save_waivers(self) -> None:
-        """Append session waivers to the waiver file.
+        """Append session waivers to the waiver file."""
+        from sawmill.tui.session import save_session_waivers
 
-        Uses atomic write-to-temp-then-rename to prevent file corruption
-        if the process crashes mid-write.
-        """
-        waiver_path = self._resolve_waiver_path()
-
-        # If file exists, validate it first
-        if waiver_path.exists():
-            from sawmill.core.waiver import WaiverLoader
-
-            loader = WaiverLoader()
-            loader.load(waiver_path)  # Validate existing content
-
-        # Build TOML entries for new waivers
-        entries = []
-        for waiver in self._session_waivers:
-            lines = ["[[waiver]]"]
-            lines.append(f'message_id = "{escape_toml_basic_string(waiver.message_id)}"')
-            if waiver.content_match and waiver.content_pattern:
-                lines.append(f'content_match = "{waiver.content_match}"')
-                lines.append(
-                    f'content_pattern = "{escape_toml_basic_string(waiver.content_pattern)}"'
-                )
-            lines.append(f'reason = "{escape_toml_basic_string(waiver.reason)}"')
-            lines.append(f'author = "{escape_toml_basic_string(waiver.author)}"')
-            lines.append(f'date = "{waiver.date}"')
-            entries.append("\n".join(lines))
-
-        new_content = "\n\n".join(entries) + "\n"
-
-        # Build the full file content (existing + new)
-        if waiver_path.exists():
-            existing = waiver_path.read_text(encoding="utf-8")
-            full_content = existing + "\n" + new_content
-        else:
-            header = "# Sawmill waiver file\n# Generated by sawmill TUI\n\n"
-            if self._plugin_name:
-                header += f'[metadata]\ntool = "{self._plugin_name}"\n\n'
-            full_content = header + new_content
-
-        # Write to temp file in same directory, then atomic rename
-        fd, tmp_path = tempfile.mkstemp(
-            dir=waiver_path.parent,
-            suffix=".tmp",
-            prefix=waiver_path.stem,
+        save_session_waivers(
+            self._session_waivers,
+            self._resolve_waiver_path(),
+            plugin_name=self._plugin_name,
         )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(full_content)
-            os.rename(tmp_path, str(waiver_path))
-        except BaseException:
-            # Clean up temp file on any failure, then re-raise
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
 
     def action_clear_filter(self) -> None:
         """Clear the search bar and severity filter, return focus to table."""
@@ -1011,18 +1003,22 @@ class SawmillApp(App):
             return
 
         was_session = any(w is matching_waiver for w in self._session_waivers)
+        was_file = any(w is matching_waiver for w in self._file_waivers)
         self._session_waivers = [w for w in self._session_waivers if w is not matching_waiver]
+        self._file_waivers = [w for w in self._file_waivers if w is not matching_waiver]
         self._waivers_dirty = True
         self._rebuild_waiver_matcher()
 
         if was_session:
             self.notify(f"Un-waived: {msg.message_id}")
-        else:
+        elif was_file:
             self.notify(
                 f"Un-waived: {msg.message_id} (for this session only \u2014 "
                 f"edit waivers.toml to remove permanently)",
                 severity="warning",
             )
+        else:
+            self.notify(f"Un-waived: {msg.message_id}")
 
     def _on_waive_modal_result(self, result: dict | None) -> None:
         """Handle the result from the waive modal."""

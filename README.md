@@ -88,11 +88,12 @@ sawmill vivado.log --suppress-id "Synth 8-7129"
 
 Sawmill uses a plugin architecture to support different log formats. Plugins are auto-detected based on log content.
 
-### Built-in Plugins
+### Available Plugins
 
-| Plugin | Description |
-|--------|-------------|
-| `vivado` | Xilinx Vivado synthesis and implementation logs |
+| Plugin | Repo | Description |
+|--------|--------|-------------|
+| `vivado` | https://github.com/sjalloq/sawmill-plugin-vivado | Xilinx Vivado synthesis and implementation logs |
+| `slang` | https://github.com/sjalloq/sawmill-plugin-slang | Slang System Verilog Compiler |
 
 ### External Plugins
 

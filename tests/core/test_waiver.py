@@ -1,10 +1,12 @@
-"""Tests for waiver loading and validation."""
+"""Tests for waiver loading, validation, and serialization."""
 
 from pathlib import Path
 
 import pytest
+import tomli
 
-from sawmill.core.waiver import WaiverLoader, WaiverValidationError
+from sawmill.core.waiver import WaiverLoader, WaiverValidationError, waiver_to_toml
+from sawmill.models.waiver import Waiver
 
 
 class TestWaiverLoader:
@@ -574,3 +576,105 @@ date = "2026-01-18"
 
         assert waivers.waivers[0].content_match == "raw"
         assert waivers.waivers[0].content_pattern == "substring match"
+
+
+class TestWaiverToToml:
+    """Tests for waiver_to_toml() serialization."""
+
+    def test_basic_waiver(self):
+        """Basic waiver should produce valid TOML."""
+        waiver = Waiver(
+            message_id="Vivado 12-3523",
+            reason="Intentional",
+            author="alice",
+            date="2026-01-18",
+        )
+        result = waiver_to_toml(waiver)
+
+        assert result.startswith("[[waiver]]")
+        assert 'message_id = "Vivado 12-3523"' in result
+        assert 'reason = "Intentional"' in result
+        assert 'author = "alice"' in result
+        assert 'date = "2026-01-18"' in result
+
+    def test_roundtrip_via_toml_parser(self):
+        """Serialized waiver should parse back correctly via TOML."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            reason="Known issue",
+            author="bob",
+            date="2026-02-01",
+        )
+        toml_str = waiver_to_toml(waiver)
+        parsed = tomli.loads(toml_str)
+
+        assert parsed["waiver"][0]["message_id"] == "Test 1-1"
+        assert parsed["waiver"][0]["reason"] == "Known issue"
+
+    def test_with_content_match(self):
+        """Waiver with content_match and content_pattern should include both."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            content_match="regex",
+            content_pattern="timing.*violation",
+            reason="Acceptable",
+            author="alice",
+            date="2026-01-18",
+        )
+        result = waiver_to_toml(waiver)
+
+        assert 'content_match = "regex"' in result
+        assert 'content_pattern = "timing.*violation"' in result
+
+    def test_without_content_match_omits_fields(self):
+        """Waiver without content_match should omit content fields."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            reason="Catch-all",
+            author="alice",
+            date="2026-01-18",
+        )
+        result = waiver_to_toml(waiver)
+
+        assert "content_match" not in result
+        assert "content_pattern" not in result
+
+    def test_optional_expires_field(self):
+        """Waiver with expires should include it."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            reason="Temporary",
+            author="alice",
+            date="2026-01-18",
+            expires="2026-06-01",
+        )
+        result = waiver_to_toml(waiver)
+
+        assert 'expires = "2026-06-01"' in result
+
+    def test_optional_ticket_field(self):
+        """Waiver with ticket should include it."""
+        waiver = Waiver(
+            message_id="Test 1-1",
+            reason="Tracked",
+            author="alice",
+            date="2026-01-18",
+            ticket="PROJ-123",
+        )
+        result = waiver_to_toml(waiver)
+
+        assert 'ticket = "PROJ-123"' in result
+
+    def test_escapes_special_characters(self):
+        """Special characters in fields should be properly escaped."""
+        waiver = Waiver(
+            message_id='Test "1-1"',
+            reason='Has "quotes" and \\backslash',
+            author="alice",
+            date="2026-01-18",
+        )
+        result = waiver_to_toml(waiver)
+        parsed = tomli.loads(result)
+
+        assert parsed["waiver"][0]["message_id"] == 'Test "1-1"'
+        assert parsed["waiver"][0]["reason"] == 'Has "quotes" and \\backslash'

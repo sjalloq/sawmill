@@ -1,10 +1,10 @@
 """Tests for FilterEngine.
 
 Tests cover single filter matching, AND/OR modes, suppressions,
-and edge cases like invalid regex and disabled filters.
+suppress-by-ID, severity toggle filtering, and edge cases.
 """
 
-from sawmill.core.filter import FilterEngine
+from sawmill.core.filter import FilterEngine, filter_by_severity_toggles
 from sawmill.models.filter_def import FilterDefinition
 from sawmill.models.message import Message
 
@@ -367,6 +367,118 @@ class TestApplySuppressions:
 
         assert len(results) == 1
         assert "DRC" in results[0].raw_text
+
+
+class TestApplySuppressIds:
+    """Tests for suppress-by-ID partitioning."""
+
+    def test_partitions_by_message_id(self):
+        """Messages with matching IDs go to suppressed list."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id="ID-1"),
+            Message(start_line=2, end_line=2, raw_text="E: b", content="b", message_id="ID-2"),
+            Message(start_line=3, end_line=3, raw_text="E: c", content="c", message_id="ID-3"),
+        ]
+        engine = FilterEngine()
+        kept, suppressed = engine.apply_suppress_ids({"ID-2"}, messages)
+
+        assert len(kept) == 2
+        assert len(suppressed) == 1
+        assert suppressed[0].message_id == "ID-2"
+
+    def test_empty_suppress_ids_keeps_all(self):
+        """Empty suppress set returns all messages as kept."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id="ID-1"),
+        ]
+        engine = FilterEngine()
+        kept, suppressed = engine.apply_suppress_ids(set(), messages)
+
+        assert len(kept) == 1
+        assert len(suppressed) == 0
+
+    def test_none_message_id_always_kept(self):
+        """Messages with no message_id are always kept."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id=None),
+            Message(start_line=2, end_line=2, raw_text="E: b", content="b", message_id="ID-1"),
+        ]
+        engine = FilterEngine()
+        kept, suppressed = engine.apply_suppress_ids({"ID-1"}, messages)
+
+        assert len(kept) == 1
+        assert kept[0].message_id is None
+        assert len(suppressed) == 1
+
+    def test_preserves_order(self):
+        """Kept and suppressed lists preserve original order."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="1", content="1", message_id="A"),
+            Message(start_line=2, end_line=2, raw_text="2", content="2", message_id="B"),
+            Message(start_line=3, end_line=3, raw_text="3", content="3", message_id="A"),
+        ]
+        engine = FilterEngine()
+        kept, suppressed = engine.apply_suppress_ids({"A"}, messages)
+
+        assert [m.start_line for m in kept] == [2]
+        assert [m.start_line for m in suppressed] == [1, 3]
+
+
+class TestFilterBySeverityToggles:
+    """Tests for severity toggle filtering."""
+
+    def test_filters_by_toggle(self):
+        """Messages with disabled severity are excluded."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E", content="", severity="error"),
+            Message(start_line=2, end_line=2, raw_text="W", content="", severity="warning"),
+            Message(start_line=3, end_line=3, raw_text="I", content="", severity="info"),
+        ]
+        result = filter_by_severity_toggles(
+            messages, {"error": True, "warning": False, "info": True}
+        )
+
+        assert len(result) == 2
+        assert result[0].severity == "error"
+        assert result[1].severity == "info"
+
+    def test_none_severity_always_included(self):
+        """Messages with None severity are always kept."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="N", content="", severity=None),
+            Message(start_line=2, end_line=2, raw_text="E", content="", severity="error"),
+        ]
+        result = filter_by_severity_toggles(messages, {"error": False})
+
+        assert len(result) == 1
+        assert result[0].severity is None
+
+    def test_unknown_id_defaults_to_true(self):
+        """Severity IDs not in toggles default to visible."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="X", content="", severity="unknown"),
+        ]
+        result = filter_by_severity_toggles(messages, {"error": True})
+
+        assert len(result) == 1
+
+    def test_empty_toggles_returns_all(self):
+        """Empty toggles dict returns all messages."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E", content="", severity="error"),
+        ]
+        result = filter_by_severity_toggles(messages, {})
+
+        assert len(result) == 1
+
+    def test_case_insensitive_matching(self):
+        """Severity matching should be case-insensitive."""
+        messages = [
+            Message(start_line=1, end_line=1, raw_text="E", content="", severity="ERROR"),
+        ]
+        result = filter_by_severity_toggles(messages, {"error": False})
+
+        assert len(result) == 0
 
 
 class TestEdgeCases:

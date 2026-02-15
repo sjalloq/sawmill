@@ -11,6 +11,7 @@ class TestParsedFilter:
         pf = ParsedFilter()
         assert pf.severities == []
         assert pf.message_id is None
+        assert pf.category is None
         assert pf.pattern is None
 
 
@@ -95,6 +96,24 @@ class TestParseFilter:
         """Test multiple severity prefixes."""
         result = parse_filter("sev:error sev:warning")
         assert result.severities == ["error", "warning"]
+
+    def test_category_prefix_short(self):
+        """Test cat: prefix."""
+        result = parse_filter("cat:Synth")
+        assert result.category == "synth"
+        assert result.pattern is None
+
+    def test_category_prefix_long(self):
+        """Test category: prefix."""
+        result = parse_filter("category:Constraints")
+        assert result.category == "constraints"
+
+    def test_category_with_other_prefixes(self):
+        """Test cat: combined with sev: and text."""
+        result = parse_filter("sev:error cat:DRC timing")
+        assert result.severities == ["error"]
+        assert result.category == "drc"
+        assert result.pattern == "timing"
 
     def test_unbalanced_quotes_fallback(self):
         """Test fallback to split on unbalanced quotes."""

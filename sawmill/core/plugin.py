@@ -201,6 +201,43 @@ class PluginManager:
         return high_confidence[0][0]
 
 
+def select_plugin(
+    manager: PluginManager,
+    plugin_name: str | None,
+    path: Path,
+) -> SawmillPlugin:
+    """Select the appropriate plugin for a log file.
+
+    If plugin_name is given, looks it up by name.
+    Otherwise, auto-detects from the file.
+
+    Args:
+        manager: The plugin manager with registered plugins.
+        plugin_name: Explicit plugin name, or None for auto-detect.
+        path: Path to the log file.
+
+    Returns:
+        The selected plugin instance.
+
+    Raises:
+        NoPluginFoundError: If the named plugin doesn't exist or
+            no plugin can handle the file.
+        PluginConflictError: If multiple plugins claim the file.
+    """
+    if plugin_name:
+        plugin = manager.get_plugin(plugin_name)
+        if plugin is None:
+            available = ", ".join(manager.list_plugins()) or "(none)"
+            raise NoPluginFoundError(f"Plugin '{plugin_name}' not found. Available: {available}")
+        return plugin
+
+    detected_name = manager.auto_detect(path)
+    plugin = manager.get_plugin(detected_name)
+    if plugin is None:
+        raise NoPluginFoundError(f"Auto-detected plugin '{detected_name}' not found in registry")
+    return plugin
+
+
 def get_plugin_manager() -> PluginManager:
     """Create and configure the plugin manager.
 

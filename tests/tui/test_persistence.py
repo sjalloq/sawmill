@@ -642,7 +642,7 @@ class TestAtomicWaiverWrite:
 
         # Simulate a write failure by making os.rename raise an error
         with (
-            patch("sawmill.tui.app.os.rename", side_effect=OSError("disk full")),
+            patch("sawmill.tui.session.os.rename", side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
             app._save_waivers()
@@ -656,7 +656,7 @@ class TestAtomicWaiverWrite:
 
         # Simulate rename failure
         with (
-            patch("sawmill.tui.app.os.rename", side_effect=OSError("disk full")),
+            patch("sawmill.tui.session.os.rename", side_effect=OSError("disk full")),
             pytest.raises(OSError),
         ):
             app._save_waivers()
@@ -676,7 +676,7 @@ class TestAtomicWaiverWrite:
             raise OSError("write failed")
 
         with (
-            patch("sawmill.tui.app.os.fdopen", side_effect=failing_fdopen),
+            patch("sawmill.tui.session.os.fdopen", side_effect=failing_fdopen),
             pytest.raises(IOError, match="write failed"),
         ):
             app._save_waivers()
