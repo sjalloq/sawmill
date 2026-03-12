@@ -27,6 +27,53 @@ from sawmill.models.waiver import Waiver
 
 click.rich_click.TEXT_MARKUP = "rich"
 click.rich_click.SHOW_ARGUMENTS = True
+click.rich_click.OPTION_GROUPS = {
+    "sawmill": [
+        {
+            "name": "General",
+            "options": [
+                "--version",
+                "--list-plugins",
+                "--plugin",
+                "--show-info",
+                "--batch",
+                "--help",
+            ],
+        },
+        {
+            "name": "Filtering (works in both TUI and batch mode)",
+            "options": [
+                "--severity",
+                "--filter",
+                "--suppress",
+                "--suppress-id",
+                "--id",
+                "--category",
+                "--waivers",
+            ],
+        },
+        {
+            "name": "Batch mode (implies --batch)",
+            "options": [
+                "--check",
+                "--fail-on",
+                "--show-waived",
+                "--report-unused",
+                "--report",
+                "--generate-waivers",
+                "--waiver-level",
+                "--summary",
+                "--group-by",
+                "--top",
+                "--format",
+            ],
+        },
+        {
+            "name": "Display",
+            "options": ["--list-severity", "--list-groupings"],
+        },
+    ],
+}
 
 
 def _get_implemented_hooks(plugin) -> list[str]:
@@ -169,7 +216,7 @@ def _get_implemented_hooks(plugin) -> list[str]:
 @click.option(
     "--batch",
     is_flag=True,
-    help="Run in batch mode (no TUI). Implied by any output/filter/check flags.",
+    help="Force batch mode (no TUI).",
 )
 @click.pass_context
 def cli(
@@ -404,19 +451,13 @@ def cli(
         return
 
     # Determine if batch mode is needed.
-    # Explicit --batch flag, or any output/filter/check flag implies batch.
+    # Explicit --batch flag, or batch-only flags imply batch.
+    # Filtering flags (--severity, --filter, --suppress, etc.) work in both modes.
     is_batch = batch or any(
         [
-            severity is not None,
-            filter_pattern is not None,
-            suppress_patterns,
-            suppress_ids,
-            id_patterns,
-            categories,
             generate_waivers,
             check,
             fail_on is not None,
-            waivers is not None,
             show_waived,
             report_unused,
             report_file is not None,

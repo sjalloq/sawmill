@@ -56,9 +56,9 @@ docs = [
 sawmill = "sawmill.__main__:cli"
 
 [project.urls]
-Homepage = "https://github.com/sawmill/sawmill"
-Documentation = "https://github.com/sawmill/sawmill#readme"
-Repository = "https://github.com/sawmill/sawmill"
+Homepage = "https://github.com/sjalloq/sawmill"
+Documentation = "https://sjalloq.github.io/sawmill"
+Repository = "https://github.com/sjalloq/sawmill"
 
 [tool.hatch.version]
 source = "vcs"
