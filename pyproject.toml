@@ -44,7 +44,6 @@ dev = [
     "mypy>=1.0.0",
     "ruff>=0.4.0",
     "pre-commit>=3.0.0",
-    "sawmill-plugin-vivado @ git+https://github.com/sjalloq/sawmill-plugin-vivado.git",
 ]
 docs = [
     "sphinx",
@@ -63,9 +62,6 @@ Repository = "https://github.com/sawmill/sawmill"
 
 [tool.hatch.version]
 source = "vcs"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["sawmill"]
