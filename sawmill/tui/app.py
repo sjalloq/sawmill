@@ -257,6 +257,7 @@ class SawmillApp(App):
         Binding("3", "toggle_sev_3", "Sev 3", show=False),
         Binding("4", "toggle_sev_4", "Sev 4", show=False),
         Binding("f12", "screenshot", "Screenshot", show=False),
+        Binding("question_mark", "help", "Help", show=False),
     ]
 
     # Reactive properties — all use init=False to prevent watcher calls during
@@ -1065,6 +1066,12 @@ class SawmillApp(App):
 
     def action_toggle_sev_4(self) -> None:
         self._toggle_severity(4)
+
+    def action_help(self) -> None:
+        """Show keybinding help modal."""
+        from sawmill.tui.widgets.help_modal import HelpModal
+
+        self.push_screen(HelpModal())
 
     def action_screenshot(self, filename: str | None = None, path: str | None = None) -> None:
         """Save a screenshot as SVG (Textual built-in)."""
