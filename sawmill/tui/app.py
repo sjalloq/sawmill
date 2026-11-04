@@ -506,7 +506,7 @@ class SawmillApp(App):
         This is the single rendering path. All state changes that affect the
         display go through reactive watchers which call this method.
         """
-        filtered = self._messages.copy()
+        filtered = self._messages
 
         # Parse the search bar for prefix filters
         parsed = parse_filter(self.filter_pattern)
@@ -552,12 +552,13 @@ class SawmillApp(App):
         if self._suppress_patterns:
             non_suppressed = engine.apply_suppressions(self._suppress_patterns, non_suppressed)
 
-        self._waived_messages = [
-            m for m in non_suppressed if self._waiver_matcher.is_waived(m) is not None
-        ]
-        self._main_messages = [
-            m for m in non_suppressed if self._waiver_matcher.is_waived(m) is None
-        ]
+        waived: list[Message] = []
+        main: list[Message] = []
+        is_waived = self._waiver_matcher.is_waived
+        for m in non_suppressed:
+            (main if is_waived(m) is None else waived).append(m)
+        self._waived_messages = waived
+        self._main_messages = main
 
         # Select active list
         self._filtered_messages = self._active_message_list()
@@ -578,10 +579,10 @@ class SawmillApp(App):
     def _active_message_list(self) -> list[Message]:
         """Return the message list for the currently active tab."""
         if self.active_tab == "waived":
-            return self._waived_messages.copy()
+            return self._waived_messages
         elif self.active_tab == "suppressed":
-            return self._suppressed_messages.copy()
-        return self._main_messages.copy()
+            return self._suppressed_messages
+        return self._main_messages
 
     def _update_tab_labels(self) -> None:
         """Update tab label counts from the bucketed message lists."""
