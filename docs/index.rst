@@ -35,6 +35,14 @@ parse each tool's output.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Performance
+
+   performance/overview
+   performance/plugin-api-2
+   performance/store-investigation
+
+.. toctree::
+   :maxdepth: 2
    :caption: Reference
 
    reference/cli-reference

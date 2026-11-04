@@ -88,11 +88,13 @@ extension, or first few lines of the file:
            pass
        return 0.0
 
-``load_and_parse(path) -> list[Message]`` (optional)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``load_and_parse(path) -> Iterator[Message]`` (optional)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Open the file, parse every line, group multi-line messages, and return
-a flat list of ``Message`` objects:
+Open the file, parse it line by line, group multi-line messages, and
+``yield`` each ``Message`` as soon as it is complete. Since plugin API 2
+this hook is a generator; returning a list still works but forces the
+whole log into memory. See :doc:`/performance/plugin-api-2`.
 
 .. code-block:: python
 
@@ -100,20 +102,24 @@ a flat list of ``Message`` objects:
 
    @hookimpl
    def load_and_parse(self, path):
-       messages = []
-       with open(path, errors="replace") as f:
+       f = open(path, errors="replace")  # open eagerly: errors surface here
+       return self._iter_messages(f)
+
+   def _iter_messages(self, f):
+       try:
            for line_num, line in enumerate(f, start=1):
                severity, msg_id, content = self._parse_line(line)
                if severity:
-                   messages.append(Message(
+                   yield Message(
                        start_line=line_num,
                        end_line=line_num,
                        raw_text=line.rstrip(),
                        content=content,
                        severity=severity,
                        message_id=msg_id,
-                   ))
-       return messages
+                   )
+       finally:
+           f.close()
 
 ``get_severity_levels() -> list[dict]`` (**required**)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -235,9 +241,20 @@ The typical workflow is:
    message ID format, and multi-line grouping rules.
 2. Write regex patterns in ``patterns.py``.
 3. Implement ``can_handle()`` to detect the tool's log files.
-4. Implement ``load_and_parse()`` to parse lines into messages.
+4. Implement ``load_and_parse()`` as a generator that yields messages.
 5. Implement ``get_severity_levels()`` with the correct level mapping.
 6. Optionally add ``get_filters()`` for common categories.
+
+Performance checklist
+---------------------
+
+- Make ``load_and_parse()`` a generator; read with ``for line in f``,
+  never ``readlines()``.
+- Open the file eagerly so missing-file errors are raised at the call.
+- Use one combined regex per line; avoid a dict per match.
+- Intern repeated strings and share or omit ``metadata`` dicts.
+
+Details and measurements: :doc:`/performance/plugin-api-2`.
 
 Testing
 -------

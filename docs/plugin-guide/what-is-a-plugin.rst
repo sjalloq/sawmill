@@ -22,10 +22,10 @@ interface:
    Detection --- examine a file and return a confidence score (0.0 to
    1.0) indicating how well this plugin can parse it.
 
-``load_and_parse(path) -> list[Message]``
-   Parsing --- open the file, parse every line, group multi-line
-   messages, extract severity and message IDs, and return a flat list
-   of ``Message`` objects.
+``load_and_parse(path) -> Iterator[Message]``
+   Parsing --- open the file, parse it line by line, group multi-line
+   messages, extract severity and message IDs, and yield each
+   ``Message`` as it is completed (plugin API 2).
 
 ``get_severity_levels() -> list[dict]`` (**required**)
    Define the tool's severity levels with ``id``, ``name``, ``level``
