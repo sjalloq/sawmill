@@ -8,6 +8,7 @@ header / severity bar / search / messages / detail / footer.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -120,6 +121,8 @@ class LogViewer(DataTable):
         Binding("k", "cursor_up", "Up", show=False),
         Binding("g", "scroll_top", "Top", show=False),
         Binding("G", "scroll_bottom", "Bottom", show=False),
+        Binding("home", "scroll_top", "Top", show=False),
+        Binding("end", "scroll_bottom", "Bottom", show=False),
     ]
 
     class FlexWidthChanged(TextualMessage):
@@ -141,6 +144,61 @@ class LogViewer(DataTable):
         self.cursor_type = "row"
         self.zebra_stripes = True
         self._flex_col_width: int = 40
+        # Windowing: the table holds rows [window_start, window_start + row_count)
+        # of a longer list of total_rows. ``navigate`` moves the cursor to an
+        # absolute index over the full list; the owner re-windows as needed.
+        self.window_start: int = 0
+        self.total_rows: int = 0
+        self.navigate: Callable[[int], None] | None = None
+        self.on_scroll_edge: Callable[[int], None] | None = None
+
+    @property
+    def page_rows(self) -> int:
+        """Number of data rows visible at once."""
+        height = self.scrollable_content_region.height - (
+            self.header_height if self.show_header else 0
+        )
+        return max(1, height)
+
+    def _absolute_cursor(self) -> int:
+        return self.window_start + self.cursor_row
+
+    def _go(self, target: int) -> None:
+        if self.navigate is None or self.total_rows <= 0:
+            return
+        self._set_hover_cursor(False)
+        self.navigate(max(0, min(target, self.total_rows - 1)))
+
+    def action_cursor_up(self) -> None:
+        if self.navigate is None:
+            return super().action_cursor_up()
+        self._go(self._absolute_cursor() - 1)
+
+    def action_cursor_down(self) -> None:
+        if self.navigate is None:
+            return super().action_cursor_down()
+        self._go(self._absolute_cursor() + 1)
+
+    def action_page_up(self) -> None:
+        if self.navigate is None:
+            return super().action_page_up()
+        self._go(self._absolute_cursor() - self.page_rows)
+
+    def action_page_down(self) -> None:
+        if self.navigate is None:
+            return super().action_page_down()
+        self._go(self._absolute_cursor() + self.page_rows)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Re-window when mouse-wheel scrolling hits the edge of the window."""
+        super().watch_scroll_y(old_value, new_value)
+        if self.on_scroll_edge is None or self.row_count == 0:
+            return
+        if new_value > old_value and new_value >= self.max_scroll_y:
+            if self.window_start + self.row_count < self.total_rows:
+                self.on_scroll_edge(1)
+        elif new_value < old_value and new_value <= 0 and self.window_start > 0:
+            self.on_scroll_edge(-1)
 
     def on_mount(self) -> None:
         self._setup_columns()
@@ -210,10 +268,15 @@ class LogViewer(DataTable):
         return text[: self._flex_col_width - 1] + "\u2026"
 
     def action_scroll_top(self) -> None:
-        self.move_cursor(row=0)
+        if self.navigate is not None:
+            self._go(0)
+        else:
+            self.move_cursor(row=0)
 
     def action_scroll_bottom(self) -> None:
-        if self.row_count > 0:
+        if self.navigate is not None:
+            self._go(self.total_rows - 1)
+        elif self.row_count > 0:
             self.move_cursor(row=self.row_count - 1)
 
 
@@ -288,6 +351,10 @@ class SawmillApp(App):
         self.log_file = log_file
         self._messages: list[Message] = messages or []
         self._filtered_messages: list[Message] = []
+        # Windowing state: the table shows _filtered_messages[_window_start:...]
+        self._window_start: int = 0
+        self._cursor_index: int = 0
+        self._shown_window_size: int = 0
         self._plugin_name = plugin_name
         self._severity_levels = list(severity_levels)
         self._severity_level_map: dict[str, int] = {
@@ -629,52 +696,154 @@ class SawmillApp(App):
             for level in self._severity_levels
         }
 
-    def _populate_table(self) -> None:
-        """Populate the log viewer table with filtered messages."""
+    WINDOW_MIN = 200
+
+    def _window_size(self) -> int:
+        """Rows held in the table: three screens, at least WINDOW_MIN."""
+        visible = self._log_viewer.page_rows if self._log_viewer else 0
+        return max(3 * visible, self.WINDOW_MIN)
+
+    def _window_margin(self) -> int:
+        """Distance from a window edge at which the window slides."""
+        return self._log_viewer.page_rows if self._log_viewer else 1
+
+    def _current_index(self) -> int:
+        """Absolute index into _filtered_messages of the highlighted row."""
+        if not self._log_viewer:
+            return self._cursor_index
+        return self._window_start + self._log_viewer.cursor_row
+
+    def _current_message(self) -> Message | None:
+        idx = self._current_index()
+        if 0 <= idx < len(self._filtered_messages):
+            return self._filtered_messages[idx]
+        return None
+
+    def _centred_start(self, index: int) -> int:
+        size = self._window_size()
+        return max(0, min(index - size // 2, len(self._filtered_messages) - size))
+
+    def _navigate_to(self, index: int) -> None:
+        """Move the cursor to an absolute index, sliding the window if needed."""
+        total = len(self._filtered_messages)
+        if not self._log_viewer or total == 0:
+            return
+        index = max(0, min(index, total - 1))
+        self._cursor_index = index
+        start = self._window_start
+        end = start + self._log_viewer.row_count
+        margin = self._window_margin()
+        near_top = index < start + margin and start > 0
+        near_bottom = index >= end - margin and end < total
+        if start <= index < end and not (near_top or near_bottom):
+            self._log_viewer.move_cursor(row=index - start)
+            return
+        # Keep the cursor at the same screen offset across the re-window
+        screen_offset = self._log_viewer.cursor_row - round(self._log_viewer.scroll_y)
+        screen_offset = max(0, min(screen_offset, self._log_viewer.page_rows - 1))
+        self._window_start = self._centred_start(index)
+        self._populate_table(screen_offset=screen_offset)
+
+    def on_resize(self, event: Resize) -> None:
+        """Grow the window if the table can now show more rows than it holds."""
+        del event
+        self.call_after_refresh(self._rewindow_if_too_small)
+
+    def _rewindow_if_too_small(self) -> None:
         if not self._log_viewer:
             return
+        if self._window_size() > self._shown_window_size and self._log_viewer.row_count < len(
+            self._filtered_messages
+        ):
+            self._populate_table()
 
-        # Preserve cursor position across repopulation
-        prev_row = self._log_viewer.cursor_row
+    def _on_scroll_edge(self, direction: int) -> None:
+        """Mouse wheel reached a window edge: slide the window by half its size."""
+        if not self._log_viewer:
+            return
+        total = len(self._filtered_messages)
+        size = self._window_size()
+        top = round(self._log_viewer.scroll_y)
+        first_visible = self._window_start + top
+        new_start = self._window_start + direction * (size // 2)
+        new_start = max(0, min(new_start, total - size))
+        if new_start == self._window_start:
+            return
+        self._window_start = new_start
+        # Keep the cursor if it is still inside the new window, else drag it
+        # to the first visible row.
+        if not (new_start <= self._cursor_index < new_start + size):
+            self._cursor_index = max(new_start, min(first_visible, new_start + size - 1))
+        self._populate_table(scroll_top_index=first_visible)
+
+    def _populate_table(
+        self,
+        screen_offset: int | None = None,
+        scroll_top_index: int | None = None,
+    ) -> None:
+        """Fill the table with the window of _filtered_messages around the cursor."""
+        if not self._log_viewer:
+            return
+        viewer = self._log_viewer
+        viewer.navigate = self._navigate_to
+        viewer.on_scroll_edge = self._on_scroll_edge
+
+        total = len(self._filtered_messages)
+        size = self._window_size()
+        self._cursor_index = max(0, min(self._cursor_index, total - 1)) if total else 0
+        start = max(0, min(self._window_start, total - size))
+        if not (start <= self._cursor_index < start + size):
+            start = self._centred_start(self._cursor_index)
+        self._window_start = start
+        self._shown_window_size = size
+        viewer.window_start = start
+        viewer.total_rows = total
 
         with self.batch_update():
-            self._log_viewer.clear()
+            viewer.clear()
 
-            for i, msg in enumerate(self._filtered_messages):
+            window = self._filtered_messages[start : start + size]
+            for i, msg in enumerate(window, start):
                 sev = msg.severity or ""
                 msg_id = msg.message_id or ""
-                content = self._log_viewer.truncate_text(msg.content)
-
-                sev_display = sev.title()
-
-                self._log_viewer.add_row(
+                content = viewer.truncate_text(msg.content)
+                viewer.add_row(
                     str(msg.start_line),
-                    sev_display,
+                    sev.title(),
                     escape(msg_id),
                     escape(content),
                     key=str(i),
                 )
 
-            # Restore cursor position (clamped to valid range)
-            if self._filtered_messages:
-                restored_row = min(prev_row, len(self._filtered_messages) - 1)
-                self._log_viewer.move_cursor(row=restored_row)
-                self._update_detail_for_row(restored_row)
-            else:
-                self._update_detail_for_row(0)
+            if window:
+                row = self._cursor_index - start
+                keep_scroll = screen_offset is not None or scroll_top_index is not None
+                viewer.move_cursor(row=row, scroll=not keep_scroll)
+                if scroll_top_index is not None:
+                    top = scroll_top_index - start
+                    viewer.call_after_refresh(viewer.scroll_to, y=top, animate=False)
+                elif screen_offset is not None:
+                    top = max(0, row - screen_offset)
+                    viewer.call_after_refresh(viewer.scroll_to, y=top, animate=False)
+            self._update_detail_for_row(self._cursor_index)
 
-        # Update panel border title and sort subtitle
+        self._update_panel_titles()
+
+    def _update_panel_titles(self) -> None:
+        """Update panel border title, position and sort subtitle."""
         try:
             panel = self.query_one("#messages-panel")
-            titles = {
-                "messages": "Messages",
-                "waived": "Waived",
-                "suppressed": "Suppressed",
-            }
-            panel.border_title = titles.get(self.active_tab, "Messages")
-            panel.border_subtitle = f"sorted by: {self.sort_mode}"
         except Exception:
-            pass
+            return
+        titles = {
+            "messages": "Messages",
+            "waived": "Waived",
+            "suppressed": "Suppressed",
+        }
+        panel.border_title = titles.get(self.active_tab, "Messages")
+        total = len(self._filtered_messages)
+        position = f"row {self._cursor_index + 1} of {total} \u00b7 " if total else ""
+        panel.border_subtitle = f"{position}sorted by: {self.sort_mode}"
 
     def _update_detail_for_row(self, row_index: int) -> None:
         """Update the detail panel for a given row index."""
@@ -763,8 +932,22 @@ class SawmillApp(App):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Update detail panel when a row is highlighted."""
-        if event.cursor_row is not None:
-            self._update_detail_for_row(event.cursor_row)
+        if event.cursor_row is None or event.data_table is not self._log_viewer:
+            return
+        # Read the live cursor, not event.cursor_row: re-windowing clears and
+        # refills the table, so queued events can carry stale relative rows.
+        index = self._current_index()
+        self._cursor_index = index
+        self._update_detail_for_row(index)
+        self._update_panel_titles()
+        # Mouse clicks can land near a window edge; slide if so.
+        total = len(self._filtered_messages)
+        end = self._window_start + self._log_viewer.row_count
+        margin = self._window_margin()
+        if (index < self._window_start + margin and self._window_start > 0) or (
+            index >= end - margin and end < total
+        ):
+            self.call_after_refresh(self._navigate_to, index)
 
     def on_log_viewer_flex_width_changed(self, event: LogViewer.FlexWidthChanged) -> None:
         """Re-truncate message cells when the flex column width changes."""
@@ -775,7 +958,9 @@ class SawmillApp(App):
         if not self._log_viewer or not self._filtered_messages:
             return
         with self.batch_update():
-            for i, msg in enumerate(self._filtered_messages):
+            start = self._window_start
+            window = self._filtered_messages[start : start + self._log_viewer.row_count]
+            for i, msg in enumerate(window, start):
                 content = self._log_viewer.truncate_text(msg.content)
                 self._log_viewer.update_cell(
                     str(i),
@@ -930,10 +1115,9 @@ class SawmillApp(App):
         """Suppress the highlighted message (from Messages or Waived tab)."""
         if not self._log_viewer or not self._filtered_messages:
             return
-        row = self._log_viewer.cursor_row
-        if row < 0 or row >= len(self._filtered_messages):
+        msg = self._current_message()
+        if msg is None:
             return
-        msg = self._filtered_messages[row]
         if msg.message_id is None:
             self.notify("Cannot suppress: message has no ID")
             return
@@ -947,10 +1131,9 @@ class SawmillApp(App):
         """Un-suppress the highlighted message (from Suppressed tab)."""
         if not self._log_viewer or not self._filtered_messages:
             return
-        row = self._log_viewer.cursor_row
-        if row < 0 or row >= len(self._filtered_messages):
+        msg = self._current_message()
+        if msg is None:
             return
-        msg = self._filtered_messages[row]
         if msg.message_id is None:
             return
         current = set(self.suppressed_ids)
@@ -973,11 +1156,9 @@ class SawmillApp(App):
         if not self._log_viewer or not self._filtered_messages:
             return
 
-        row = self._log_viewer.cursor_row
-        if row < 0 or row >= len(self._filtered_messages):
+        msg = self._current_message()
+        if msg is None:
             return
-
-        msg = self._filtered_messages[row]
         if msg.message_id is None:
             self.notify("Cannot waive: message has no ID")
             return
@@ -1000,10 +1181,9 @@ class SawmillApp(App):
         """Un-waive the highlighted message (from Waived tab)."""
         if not self._log_viewer or not self._filtered_messages:
             return
-        row = self._log_viewer.cursor_row
-        if row < 0 or row >= len(self._filtered_messages):
+        msg = self._current_message()
+        if msg is None:
             return
-        msg = self._filtered_messages[row]
         if msg.message_id is None:
             return
 
