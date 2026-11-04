@@ -6,6 +6,7 @@ Plugins use the @hookimpl decorator to register their implementations.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
     from sawmill.models.filter_def import FilterDefinition
     from sawmill.models.message import FileRef, Message
 
-SAWMILL_PLUGIN_API = "1"
+SAWMILL_PLUGIN_API = "2"
 
 hookspec = pluggy.HookspecMarker("sawmill")
 
@@ -49,22 +50,28 @@ class SawmillHookSpec:
         ...
 
     @hookspec
-    def load_and_parse(self, path: Path) -> list[Message]:  # type: ignore[empty-body]
+    def load_and_parse(self, path: Path) -> Iterator[Message]:  # type: ignore[empty-body]
         """Load and parse the log file into messages.
 
-        This is the primary parsing hook. Plugins should:
-        1. Open and read the file (handling encoding issues)
-        2. Parse each line/section into logical messages
-        3. Group multi-line messages into single Message objects
-        4. Extract severity, message IDs, and other metadata
+        This is the primary parsing hook. Plugins MUST be generators (or
+        otherwise return an iterator) so the base app can stream large
+        logs without holding every line in memory at once.
+
+        Implementations should:
+        1. Open the file and stream line-by-line (`for line in f`, not
+           `f.readlines()`) so memory is O(in-flight message), not O(file).
+        2. Parse each line/section into logical messages.
+        3. Group multi-line messages into single Message objects.
+        4. Extract severity, message IDs, and other metadata.
+        5. `yield` each completed Message as soon as it is built.
 
         Args:
             path: Path to the log file to parse.
 
-        Returns:
-            List of Message objects, each representing a complete logical
-            message (single or multi-line). Messages should have start_line
-            and end_line set correctly for multi-line messages.
+        Yields:
+            Message objects, each representing a complete logical message
+            (single or multi-line). Messages should have start_line and
+            end_line set correctly for multi-line messages.
         """
         ...
 

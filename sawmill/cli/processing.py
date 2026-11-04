@@ -17,6 +17,7 @@ from sawmill.core.plugin import (
     NoPluginFoundError,
     PluginConflictError,
     get_plugin_manager,
+    load_messages,
     select_plugin,
 )
 from sawmill.core.severity import (
@@ -116,8 +117,11 @@ def process_log_file(
                 console.print("\nUse --list-severity to see all available levels.")
                 ctx.exit(1)
 
-    # Load and parse the file using the plugin
-    messages = plugin.load_and_parse(path)
+    # Load and parse the file using the plugin.
+    # PR1: the plugin now streams via Iterator[Message]; the base app
+    # still consumes eagerly. PR3 will move this onto a background
+    # worker and drop the list() collapse.
+    messages = list(load_messages(plugin, path))
 
     # Apply severity filter
     if severity:
@@ -217,8 +221,9 @@ def generate_waivers(
         stderr_console.print(f"[red]Error:[/red] {e}")
         ctx.exit(1)
 
-    # Load and parse the file using the plugin
-    messages = plugin.load_and_parse(path)
+    # Load and parse the file using the plugin (eager collapse — see note in
+    # process_file for the streaming migration plan).
+    messages = list(load_messages(plugin, path))
 
     # Get severity levels from plugin
     severity_levels = get_severity_levels(plugin)

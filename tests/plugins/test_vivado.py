@@ -70,7 +70,7 @@ class TestVivadoLoadAndParse:
             "WARNING: [Vivado 12-3523] Component name change\nINFO: [Synth 8-1] Done\n"
         )
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         assert len(messages) == 2
         assert messages[0].severity == "warning"
@@ -83,7 +83,7 @@ class TestVivadoLoadAndParse:
         log_file = tmp_path / "vivado.log"
         log_file.write_text("CRITICAL WARNING: [Constraints 18-4427] Override warning\n")
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         assert len(messages) == 1
         assert messages[0].severity == "critical_warning"
@@ -95,7 +95,7 @@ class TestVivadoLoadAndParse:
         log_file = tmp_path / "vivado.log"
         log_file.write_text("ERROR: [Route 35-9] Routing failed\n")
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         assert len(messages) == 1
         assert messages[0].severity == "error"
@@ -112,7 +112,7 @@ class TestVivadoLoadAndParse:
             "INFO: [Synth 8-1] Next message\n"
         )
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         # Should be 2 messages, not 4 lines
         assert len(messages) == 2
@@ -127,7 +127,7 @@ class TestVivadoLoadAndParse:
         log_file = tmp_path / "vivado.log"
         log_file.write_text("INFO: [Synth 8-6157] synthesizing module\n")
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         assert len(messages) == 1
         assert messages[0].category == "synth"
@@ -138,7 +138,7 @@ class TestVivadoLoadAndParse:
         log_file = tmp_path / "empty.log"
         log_file.write_text("")
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
         assert messages == []
 
     def test_vivado_handles_nonexistent_file(self, tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ class TestVivadoLoadAndParse:
         plugin = VivadoPlugin()
         log_file = tmp_path / "nonexistent.log"
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
         assert messages == []
 
     def test_vivado_extracts_content(self, tmp_path: Path) -> None:
@@ -155,7 +155,7 @@ class TestVivadoLoadAndParse:
         log_file = tmp_path / "vivado.log"
         log_file.write_text("WARNING: [Vivado 12-3523] Component name change attempted\n")
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         assert len(messages) == 1
         assert "Component name change attempted" in messages[0].content
@@ -174,7 +174,7 @@ class TestVivadoLoadAndParse:
             "WARNING: [Vivado 12-3523] Second message\n"
         )
 
-        messages = plugin.load_and_parse(log_file)
+        messages = list(plugin.load_and_parse(log_file))
 
         # Should only have the two actual messages
         assert len(messages) == 2
@@ -302,7 +302,7 @@ class TestVivadoIntegration:
     def test_vivado_parses_real_log(self, vivado_log: Path) -> None:
         """Plugin should parse the real Vivado log file."""
         plugin = VivadoPlugin()
-        messages = plugin.load_and_parse(vivado_log)
+        messages = list(plugin.load_and_parse(vivado_log))
 
         # Should have many messages
         assert len(messages) > 100
@@ -322,7 +322,7 @@ class TestVivadoIntegration:
     def test_vivado_extracts_file_refs_from_real_log(self, vivado_log: Path) -> None:
         """Plugin should extract file references from real log."""
         plugin = VivadoPlugin()
-        messages = plugin.load_and_parse(vivado_log)
+        messages = list(plugin.load_and_parse(vivado_log))
 
         # Find messages with file references
         messages_with_refs = [m for m in messages if m.file_ref is not None]

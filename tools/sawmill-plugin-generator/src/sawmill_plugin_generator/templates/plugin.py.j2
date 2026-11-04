@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from importlib.metadata import version
 from pathlib import Path
 
@@ -55,17 +56,19 @@ class {{ class_name }}(SawmillPlugin):
         return 0.0
 
     @hookimpl
-    def load_and_parse(self, path: Path) -> list[Message]:
-        """Load and parse a {{ plugin_name }} log file into messages.
+    def load_and_parse(self, path: Path) -> Iterator[Message]:
+        """Stream a {{ plugin_name }} log file as parsed messages.
 
-        Open the file, parse each line/section into logical messages,
-        group multi-line messages, and extract severity/IDs/metadata.
+        Open the file and iterate line-by-line (`for line in f:`) — do NOT
+        call `f.readlines()`, which holds the entire file in memory. Build
+        each logical message and `yield` it as soon as it is complete so
+        the base app can start drawing before parsing finishes.
 
         Args:
             path: Path to the log file to parse.
 
-        Returns:
-            List of Message objects. Each Message should have:
+        Yields:
+            Message objects, each with:
             - start_line / end_line: Line range in source file (1-indexed)
             - raw_text: Complete original text
             - content: Cleaned message content
@@ -75,15 +78,16 @@ class {{ class_name }}(SawmillPlugin):
             - file_ref: FileRef if message references a source file (optional)
         """
         if not path.exists():
-            return []
+            return
 
         # TODO: Implement parsing logic. General approach:
-        # 1. Read the file: with open(path, encoding="utf-8", errors="replace") as f:
-        # 2. Iterate lines, detect severity from patterns
-        # 3. Group multi-line messages (indented lines, tables, etc.)
-        # 4. Extract message IDs, file references, categories
-        # 5. Create Message objects
-        return []
+        # with open(path, encoding="utf-8", errors="replace") as f:
+        #     for line_num, raw in enumerate(f, 1):
+        #         line = raw.rstrip("\n")
+        #         # detect severity, group multi-line messages, build Message
+        #         yield Message(...)
+        return
+        yield  # pragma: no cover — makes this a generator
 
     @hookimpl
     def get_severity_levels(self) -> list[dict]:

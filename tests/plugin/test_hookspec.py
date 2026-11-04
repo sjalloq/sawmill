@@ -34,7 +34,7 @@ def test_base_plugin_has_defaults():
     plugin = TestPlugin()
     # Default implementations should return empty/None (opt-out)
     assert plugin.can_handle(Path("test.log")) == 0.0
-    assert plugin.load_and_parse(Path("test.log")) == []
+    assert list(plugin.load_and_parse(Path("test.log"))) == []
     assert plugin.get_filters() == []
 
 
@@ -78,14 +78,12 @@ def test_plugin_can_override_hooks():
 
         @hookimpl
         def load_and_parse(self, path):
-            return [
-                Message(
-                    start_line=1,
-                    end_line=1,
-                    raw_text="Test message",
-                    content="Test message",
-                )
-            ]
+            yield Message(
+                start_line=1,
+                end_line=1,
+                raw_text="Test message",
+                content="Test message",
+            )
 
         @hookimpl
         def get_filters(self):
@@ -110,7 +108,7 @@ def test_plugin_can_override_hooks():
     assert plugin.can_handle(Path("other.log")) == 0.0
 
     # Test load_and_parse
-    messages = plugin.load_and_parse(Path("test.log"))
+    messages = list(plugin.load_and_parse(Path("test.log")))
     assert len(messages) == 1
     assert messages[0].content == "Test message"
 

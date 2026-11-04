@@ -6,18 +6,28 @@ via Python entry points and registration with pluggy.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pluggy
 
 from sawmill.plugin import SawmillHookSpec, SawmillPlugin
 
 if TYPE_CHECKING:
-    pass
+    from sawmill.models.message import Message
 
 # Entry point group name for sawmill plugins
 ENTRY_POINT_GROUP = "sawmill.plugins"
+
+
+def load_messages(plugin: Any, path: Path) -> Iterator[Message]:
+    """Call ``plugin.load_and_parse(path)`` and return an iterator.
+
+    Plugin API 2 returns an iterator; legacy (API 1) plugins return a list.
+    Wrapping in ``iter()`` lets both work and passes iterators through unchanged.
+    """
+    return iter(plugin.load_and_parse(path))
 
 
 class PluginError(Exception):

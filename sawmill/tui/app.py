@@ -424,14 +424,21 @@ class SawmillApp(App):
         if not self.log_file:
             return
 
-        from sawmill.core.plugin import PluginError, get_plugin_manager, select_plugin
+        from sawmill.core.plugin import (
+            PluginError,
+            get_plugin_manager,
+            load_messages,
+            select_plugin,
+        )
         from sawmill.models.plugin_api import severity_levels_from_dicts
 
         manager = get_plugin_manager()
 
         try:
             plugin = select_plugin(manager, self._plugin_name, self.log_file)
-            self._messages = plugin.load_and_parse(self.log_file)
+            # PR1: collapse the streaming iterator eagerly; PR3 will
+            # consume incrementally on a background worker.
+            self._messages = list(load_messages(plugin, self.log_file))
 
             if hasattr(plugin, "get_severity_levels"):
                 try:

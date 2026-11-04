@@ -499,7 +499,7 @@ class TestVivadoFixtureRendering:
         from sawmill_plugin_vivado.plugin import VivadoPlugin
 
         plugin = VivadoPlugin()
-        return plugin.load_and_parse(vivado_log)
+        return list(plugin.load_and_parse(vivado_log))
 
     @pytest.fixture
     def vivado_severity_levels(self):

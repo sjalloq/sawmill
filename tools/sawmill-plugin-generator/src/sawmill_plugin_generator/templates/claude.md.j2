@@ -97,11 +97,15 @@ Must return `0.0` for missing files and non-matching files.
 
 ### Step 5: Implement parsing (`load_and_parse`)
 
-This is the main work. General approach:
+This is the main work. **`load_and_parse` must be a generator** — `yield`
+each `Message` as soon as it is complete so the base app can stream large
+logs. Do not call `f.readlines()`; iterate line-by-line.
+
+General approach:
 1. Open the file with `encoding="utf-8", errors="replace"`.
-2. Iterate lines. When you see a line matching your diagnostic pattern, start a new message.
-3. Continuation lines (indented, caret indicators, context) append to the current message.
-4. When you see the next diagnostic line (or EOF), flush the current message.
+2. Iterate lines (`for line in f:`). When you see a line matching your diagnostic pattern, start a new message.
+3. Continuation lines (indented, caret indicators, context) append to the current message buffer.
+4. When you see the next diagnostic line (or EOF), `yield` the completed message.
 5. For each message, create a `Message` object with:
    - `start_line` / `end_line`: 1-indexed line range in the log file
    - `raw_text`: complete original text (all lines joined with `\n`)
@@ -112,7 +116,8 @@ This is the main work. General approach:
    - `category`: grouping category (optional)
    - `metadata`: `dict[str, str]` for plugin-specific fields (optional)
 
-Must return `[]` for missing or empty files.
+Must yield no messages for missing or empty files (use bare `return` to
+short-circuit the generator).
 
 ### Step 6: Implement file reference extraction (`extract_file_reference`)
 
@@ -165,7 +170,7 @@ FilterDefinition(
 - **Severity IDs** used in messages MUST match IDs declared in `get_severity_levels()`.
 - **Severity levels** must be consecutive integers starting at 0.
 - `can_handle()` must return a `float` between 0.0 and 1.0.
-- `load_and_parse()` must return `[]` for missing or empty files.
+- `load_and_parse()` must be a generator (`yield Message(...)`), not a list-returning function. It must yield no messages for missing or empty files.
 - `get_grouping_fields()` field_type must be one of: `"builtin"`, `"metadata"`, `"file_ref"`.
 - All files should be opened with `encoding="utf-8", errors="replace"`.
 - Follow PEP 8. Use type hints. Keep functions small and focused.

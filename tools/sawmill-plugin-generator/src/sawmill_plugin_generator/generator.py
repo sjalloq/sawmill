@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jinja2 import Environment, PackageLoader
 
-SAWMILL_PLUGIN_API = "1"
+SAWMILL_PLUGIN_API = "2"
 
 # Template file → output path (relative to project root)
 _FILE_MAP = {

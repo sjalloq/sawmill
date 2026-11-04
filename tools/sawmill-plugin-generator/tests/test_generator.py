@@ -92,7 +92,7 @@ class TestPyprojectToml:
     def test_has_plugin_api_version(self, quartus_project):
         content = (quartus_project / "pyproject.toml").read_text()
         data = tomllib.loads(content)
-        assert data["tool"]["sawmill"]["plugin_api"] == "1"
+        assert data["tool"]["sawmill"]["plugin_api"] == "2"
 
     def test_custom_description(self, tmp_path):
         names = derive_names("mytool")

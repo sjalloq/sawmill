@@ -15,12 +15,16 @@ Usage:
 
         @hookimpl
         def load_and_parse(self, path):
-            # Parse the log file
-            return [...]
+            # Stream the log file line-by-line and yield Message objects
+            with open(path) as f:
+                for line in f:
+                    ...
+                    yield message
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,7 +58,7 @@ class SawmillPlugin:
 
     Optional hooks (have defaults):
         can_handle(): Detection (default: 0.0)
-        load_and_parse(): Parsing (default: empty list)
+        load_and_parse(): Parsing (default: empty iterator)
         get_filters(): Pre-defined filters (default: empty list)
         get_grouping_fields(): Grouping options (default: standard fields)
         extract_file_reference(): File ref extraction (default: None)
@@ -104,18 +108,20 @@ class SawmillPlugin:
         return 0.0
 
     @hookimpl
-    def load_and_parse(self, path: Path) -> list[Message]:
-        """Default implementation: returns empty list.
+    def load_and_parse(self, path: Path) -> Iterator[Message]:
+        """Default implementation: yields no messages.
 
-        Subclasses should override this to parse the log file.
+        Subclasses should override this as a generator that yields
+        Message objects one at a time as they are parsed.
 
         Args:
             path: Path to the log file to parse.
 
-        Returns:
-            Empty list by default.
+        Yields:
+            Nothing by default.
         """
-        return []
+        return
+        yield  # pragma: no cover — makes this a generator
 
     @hookimpl
     def get_filters(self) -> list[FilterDefinition]:
