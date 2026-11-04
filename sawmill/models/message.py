@@ -2,25 +2,33 @@
 
 These models represent the core data structures for log messages.
 Plugins create Message instances; the base app is just an orchestrator.
+
+Both are plain @dataclass(slots=True) types. Pydantic validation overhead
+was removed in PR2 — at 1M messages it cost ~1 KB extra resident memory
+per object and gave no value, since plugins build messages from their own
+regex matches and don't need runtime field coercion.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
-from pydantic import BaseModel, ConfigDict
 
-
-class FileRef(BaseModel):
+@dataclass(slots=True, frozen=True)
+class FileRef:
     """Reference to a source file location extracted from a log message."""
-
-    model_config = ConfigDict(frozen=True)
 
     path: str
     line: int | None = None
 
+    def __post_init__(self) -> None:
+        if self.line is not None:
+            object.__setattr__(self, "line", int(self.line))
 
-class Message(BaseModel):
+
+@dataclass(slots=True)
+class Message:
     """A logical log message (single or multi-line).
 
     Plugins handle grouping of multi-line messages and create Message instances.
@@ -40,8 +48,6 @@ class Message(BaseModel):
             "hierarchy", "phase", "clock_domain", etc.
     """
 
-    model_config = ConfigDict(frozen=False)
-
     start_line: int
     end_line: int
     raw_text: str
@@ -50,7 +56,12 @@ class Message(BaseModel):
     message_id: str | None = None
     category: str | None = None
     file_ref: FileRef | None = None
-    metadata: dict[str, str] = {}
+    metadata: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Cheap coercion of line numbers, standing in for Pydantic's.
+        self.start_line = int(self.start_line)
+        self.end_line = int(self.end_line)
 
     def matches_filter(self, pattern: str, case_sensitive: bool = True) -> bool:
         """Check if this message matches the given regex pattern.

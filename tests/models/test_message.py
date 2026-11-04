@@ -113,3 +113,22 @@ def test_message_inequality():
     msg1 = Message(start_line=1, end_line=1, raw_text="ERROR: test1", content="test1")
     msg2 = Message(start_line=1, end_line=1, raw_text="ERROR: test2", content="test2")
     assert msg1 != msg2
+
+
+def test_message_coerces_line_numbers():
+    """String line numbers are coerced to int."""
+    msg = Message(start_line="3", end_line="4", raw_text="x", content="x")
+    assert msg.start_line == 3 and isinstance(msg.start_line, int)
+    assert msg.end_line == 4 and isinstance(msg.end_line, int)
+
+
+def test_message_int_line_numbers_unchanged():
+    msg = Message(start_line=7, end_line=8, raw_text="x", content="x")
+    assert (msg.start_line, msg.end_line) == (7, 8)
+
+
+def test_fileref_coerces_line():
+    ref = FileRef(path="a.v", line="12")
+    assert ref.line == 12 and isinstance(ref.line, int)
+    assert FileRef(path="a.v", line=5).line == 5
+    assert FileRef(path="a.v").line is None
