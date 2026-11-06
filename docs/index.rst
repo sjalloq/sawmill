@@ -54,3 +54,4 @@ parse each tool's output.
    :caption: Development
 
    development/contributing
+   development/manifest-design
