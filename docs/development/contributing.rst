@@ -68,37 +68,6 @@ Run manually:
 
    $ pre-commit run --all-files
 
-Docker dev loop
----------------
-
-The ``ralph-loop.sh`` script runs Claude Code in a Docker container for
-autonomous development iterations:
-
-.. code-block:: console
-
-   $ ./ralph-loop.sh --iterations 3
-   $ ./ralph-loop.sh --continuous
-
-Options:
-
-``--iterations N``
-   Run N iterations (default: 1).
-
-``--continuous``
-   Run until all tasks complete or an error occurs.
-
-``--dry-run``
-   Show what would be done without executing.
-
-``--no-docker``
-   Run directly on the host instead of in a container.
-
-``--interactive``
-   Drop into an interactive shell after each iteration.
-
-The ``Dockerfile`` builds a container with Python 3.11, Node.js, and
-Claude Code CLI pre-installed.
-
 Building docs
 -------------
 
@@ -106,8 +75,8 @@ Install documentation dependencies and build:
 
 .. code-block:: console
 
-   $ pip install -r docs/requirements.txt
-   $ cd docs && make html
+   $ uv sync --all-extras
+   $ python -m sphinx -b html docs docs/_build/html
 
 The built documentation is in ``docs/_build/html/``. Open
 ``docs/_build/html/index.html`` in a browser to review.
