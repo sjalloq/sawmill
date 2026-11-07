@@ -12,11 +12,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pathspec import GitIgnoreSpec
+
 from sawmill.core.manifest import ManifestLoader
 from sawmill.models.manifest import Manifest, Target
 
 _SAWMILL_DIR = ".sawmill"
 _MANIFEST_FILE = "manifest.toml"
+_GITIGNORE = ".gitignore"
 
 
 class DiscoveryError(Exception):
@@ -61,15 +64,59 @@ def resolve_roots(
     return [cwd if cwd is not None else Path.cwd()]
 
 
+def _read_gitignore(directory: Path) -> GitIgnoreSpec | None:
+    """Compile ``directory/.gitignore`` if present, else return None."""
+    try:
+        text = (directory / _GITIGNORE).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    return GitIgnoreSpec.from_lines(text.splitlines())
+
+
+def _is_ignored(path: Path, specs: Sequence[tuple[Path, GitIgnoreSpec]]) -> bool:
+    """Return True if directory ``path`` is ignored by ``specs`` (innermost last)."""
+    for base, spec in reversed(specs):
+        rel = path.relative_to(base).as_posix() + "/"
+        include = spec.check_file(rel).include
+        if include is not None:
+            return bool(include)
+    return False
+
+
 def _walk(root: Path) -> list[Path]:
-    """Return every ``.sawmill/manifest.toml`` under ``root``."""
+    """Return every ``.sawmill/manifest.toml`` under ``root``.
+
+    Hidden directories and ``.git`` are skipped and symlinked directories
+    are not followed. Directories ignored by a ``.gitignore`` in ``root`` or
+    below are not entered; the innermost ``.gitignore`` with a matching
+    pattern decides. ``.gitignore`` files above ``root``, ``.git/info/exclude``
+    and the user's global excludes are not consulted.
+    """
     found: list[Path] = []
-    for dirpath, dirnames, _ in os.walk(root, followlinks=False):
-        if _SAWMILL_DIR in dirnames:
-            candidate = Path(dirpath) / _SAWMILL_DIR / _MANIFEST_FILE
-            if candidate.is_file():
-                found.append(candidate)
-        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != ".git"]
+    stack: list[tuple[Path, list[tuple[Path, GitIgnoreSpec]]]] = [(root, [])]
+    while stack:
+        directory, parent_specs = stack.pop()
+        candidate = directory / _SAWMILL_DIR / _MANIFEST_FILE
+        if candidate.is_file():
+            found.append(candidate)
+        spec = _read_gitignore(directory)
+        specs = [*parent_specs, (directory, spec)] if spec is not None else parent_specs
+        try:
+            with os.scandir(directory) as it:
+                entries = list(it)
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            try:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+            except OSError:
+                continue
+            child = Path(entry.path)
+            if not _is_ignored(child, specs):
+                stack.append((child, specs))
     return found
 
 

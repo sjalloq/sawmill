@@ -253,3 +253,67 @@ def test_resolve_targets_overrides_default_empty(tmp_path: Path) -> None:
     _write_vars(tmp_path, "m")
     refs = resolve_targets(discover_manifests([tmp_path]), [])
     assert all(r.overrides == {} for r in refs)
+
+
+def _found(root: Path) -> set[str]:
+    """Return manifest names discovered under ``root``."""
+    return {m.name for m in discover_manifests([root])}
+
+
+def test_gitignore_prunes_ignored_dirs(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("run.*/\n")
+    _write(tmp_path / "run.top" / "proj", "ignored")
+    _write(tmp_path / "src" / "proj", "kept")
+    assert _found(tmp_path) == {"kept"}
+
+
+def test_gitignore_negation_keeps_dir(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("run.*/\n!run.keep/\n")
+    _write(tmp_path / "run.keep" / "proj", "kept")
+    _write(tmp_path / "run.top" / "proj", "ignored")
+    assert _found(tmp_path) == {"kept"}
+
+
+def test_gitignore_nested_applies_below_its_dir(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / ".gitignore").write_text("out/\n")
+    _write(tmp_path / "a" / "out" / "proj", "ignored")
+    _write(tmp_path / "b" / "out" / "proj", "kept")
+    assert _found(tmp_path) == {"kept"}
+
+
+def test_gitignore_inner_overrides_outer(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("out/\n")
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / ".gitignore").write_text("!out/\n")
+    _write(tmp_path / "a" / "out" / "proj", "kept")
+    _write(tmp_path / "b" / "out" / "proj", "ignored")
+    assert _found(tmp_path) == {"kept"}
+
+
+def test_gitignore_anchored_pattern(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("/build/\n")
+    _write(tmp_path / "build" / "proj", "ignored")
+    _write(tmp_path / "x" / "build" / "proj", "kept")
+    assert _found(tmp_path) == {"kept"}
+
+
+def test_gitignore_pruned_dirs_not_entered(tmp_path: Path) -> None:
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root ignores directory permissions")
+    (tmp_path / ".gitignore").write_text("run.*/\n")
+    run = tmp_path / "run.top"
+    _write(run / "proj", "ignored")
+    (run / ".gitignore").write_bytes(b"\xff\xfe\x80bad\n")
+    _write(tmp_path / "src", "kept")
+    run.chmod(0)
+    try:
+        assert _found(tmp_path) == {"kept"}
+    finally:
+        run.chmod(0o755)
+
+
+def test_gitignore_above_root_not_consulted(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("proj/\n")
+    _write(tmp_path / "sub" / "proj", "kept")
+    assert _found(tmp_path / "sub") == {"kept"}
