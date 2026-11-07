@@ -157,7 +157,7 @@ class LogViewer(DataTable):
 
     # Fixed columns: (key, label, width)
     FIXED_COLUMNS = [
-        ("status", "St", 4),
+        ("status", "Status", 8),
         ("line", "Line", 8),
         ("severity", "Severity", 14),
         ("msg_id", "ID", 20),
@@ -172,6 +172,7 @@ class LogViewer(DataTable):
         self.cursor_type = "row"
         self.zebra_stripes = True
         self._flex_col_width: int = 40
+        self.show_status: bool = False
         # Windowing: the table holds rows [window_start, window_start + row_count)
         # of a longer list of total_rows. ``navigate`` moves the cursor to an
         # absolute index over the full list; the owner re-windows as needed.
@@ -236,8 +237,23 @@ class LogViewer(DataTable):
         del event
         self.call_after_refresh(self._sync_columns_to_current_width)
 
+    def active_fixed_columns(self) -> list[tuple[str, str, int]]:
+        """Return the fixed columns currently shown (status only when enabled)."""
+        if self.show_status:
+            return list(self.FIXED_COLUMNS)
+        return [c for c in self.FIXED_COLUMNS if c[0] != "status"]
+
+    def set_show_status(self, flag: bool) -> None:
+        """Show or hide the status column, rebuilding columns on change."""
+        if flag == self.show_status:
+            return
+        self.show_status = flag
+        self.clear(columns=True)
+        self._setup_columns()
+        self._sync_columns_to_current_width()
+
     def _setup_columns(self) -> None:
-        for key, label, width in self.FIXED_COLUMNS:
+        for key, label, width in self.active_fixed_columns():
             self.add_column(label, key=key, width=width)
         self.add_column(
             self.FLEX_COL_LABEL,
@@ -252,9 +268,10 @@ class LogViewer(DataTable):
         return self.size.width or self.app.console.size.width
 
     def _calculate_flex_width(self, table_width: int) -> int:
-        fixed_total = sum(w for _, _, w in self.FIXED_COLUMNS)
+        fixed = self.active_fixed_columns()
+        fixed_total = sum(w for _, _, w in fixed)
         # 2 chars spacing per column boundary
-        column_spacing = (len(self.FIXED_COLUMNS) + 1) * 2
+        column_spacing = (len(fixed) + 1) * 2
         flex_width = table_width - fixed_total - column_spacing
         return max(self.FLEX_COL_MIN, flex_width)
 
@@ -779,6 +796,7 @@ class SawmillApp(App):
         hidden = state.hidden_ids if state.show_all else set()
 
         with self.batch_update():
+            viewer.set_show_status(state.show_all)
             viewer.clear()
 
             window = self._filtered_messages[start : start + size]
@@ -789,14 +807,15 @@ class SawmillApp(App):
                 status = ("W" if id(msg) in waived else "") + (
                     "H" if msg.message_id and msg.message_id in hidden else ""
                 )
-                viewer.add_row(
-                    status,
+                cells = [
                     str(msg.start_line),
                     sev.title(),
                     escape(msg_id),
                     escape(content),
-                    key=str(i),
-                )
+                ]
+                if state.show_all:
+                    cells.insert(0, status)
+                viewer.add_row(*cells, key=str(i))
 
             if window:
                 row = self._cursor_index - start

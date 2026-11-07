@@ -800,7 +800,9 @@ class TestTabSwitching:
             out = {}
             for r in range(table.row_count):
                 key = table.coordinate_to_cell_key((r, 0)).row_key
-                out[str(table.get_cell(key, "msg_id"))] = str(table.get_cell(key, "status"))
+                has_status = "status" in [str(k.value) for k in table.columns]
+                status = str(table.get_cell(key, "status")) if has_status else ""
+                out[str(table.get_cell(key, "msg_id"))] = status
             return out
 
         async with app.run_test(size=(120, 40)) as pilot:
@@ -831,8 +833,62 @@ class TestTabSwitching:
             await _settle(pilot)
             assert app._active_state().show_all
 
+    async def test_status_column_only_when_show_all(self, severity_levels):
+        app = make_app(
+            [
+                make_message("e", "error", "E-1", line=1),
+                make_message("w", "warning", "W-1", line=2),
+                make_message("i", "info", "I-1", line=3),
+            ],
+            severity_levels,
+            rules=[Rule(id="W-1", comment="fine")],
+        )
+        app._active_state().hidden_ids = {"I-1"}
+
+        def keys() -> list[str]:
+            return [str(k.value) for k in app.query_one(LogViewer).columns]
+
+        def statuses() -> dict[str, str]:
+            table = app.query_one(LogViewer)
+            out = {}
+            for r in range(table.row_count):
+                key = table.coordinate_to_cell_key((r, 0)).row_key
+                out[str(table.get_cell(key, "msg_id"))] = str(table.get_cell(key, "status"))
+            return out
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await _settle(pilot)
+            assert keys() == ["line", "severity", "msg_id", "message"]
+            app.query_one(LogViewer).focus()
+            await pilot.press("v")
+            await _settle(pilot)
+            assert keys() == ["status", "line", "severity", "msg_id", "message"]
+            assert statuses() == {"E-1": "", "W-1": "W", "I-1": "H"}
+            await pilot.press("v")
+            await _settle(pilot)
+            assert keys() == ["line", "severity", "msg_id", "message"]
+
+    async def test_status_column_follows_tab_state(self, severity_levels):
+        app = SawmillApp(_two_targets(severity_levels), single_log=False)
+
+        def keys() -> list[str]:
+            return [str(k.value) for k in app.query_one(LogViewer).columns]
+
+        async with app.run_test(size=(120, 40)) as pilot:
+            await _settle(pilot)
+            app.query_one(LogViewer).focus()
+            await pilot.press("v")
+            await _settle(pilot)
+            assert keys()[0] == "status"
+            await pilot.press("right")
+            await _settle(pilot)
+            assert "status" not in keys()
+            await pilot.press("left")
+            await _settle(pilot)
+            assert keys()[0] == "status"
+
     def test_status_column_first_in_fixed_columns(self):
-        assert LogViewer.FIXED_COLUMNS[0] == ("status", "St", 4)
+        assert LogViewer.FIXED_COLUMNS[0] == ("status", "Status", 8)
         assert [k for k, _, _ in LogViewer.FIXED_COLUMNS] == [
             "status",
             "line",

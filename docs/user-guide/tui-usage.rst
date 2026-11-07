@@ -50,7 +50,7 @@ One tab per target. The table merges messages from every log of the target:
 ============ ================================================================
 Column       Content
 ============ ================================================================
-St           Status: ``W`` waived, ``H`` hidden, blank otherwise
+Status       Only with show-all (``v``): ``W`` waived, ``H`` hidden
 Line         Line number in the log
 Severity     Severity id
 ID           Message ID
@@ -61,7 +61,8 @@ The selected message's log path, relative to the project root, is shown on
 the lower border of the detail panel.
 
 By default only unwaived, unhidden messages are shown. Press ``v`` to show
-waived and hidden rows as well, marked in the ``St`` column.
+waived and hidden rows as well; a ``Status`` column appears with them,
+marking each row.
 
 Press ``o`` to cycle the sort order: line, severity, ID, count.
 
