@@ -64,10 +64,10 @@ def resolve_roots(
     return [cwd if cwd is not None else Path.cwd()]
 
 
-def _read_gitignore(directory: Path) -> GitIgnoreSpec | None:
-    """Compile ``directory/.gitignore`` if present, else return None."""
+def _read_gitignore(directory: Path, name: str = _GITIGNORE) -> GitIgnoreSpec | None:
+    """Compile ``directory/name`` (default ``.gitignore``) if present, else None."""
     try:
-        text = (directory / _GITIGNORE).read_text(encoding="utf-8", errors="ignore")
+        text = (directory / name).read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return None
     return GitIgnoreSpec.from_lines(text.splitlines())
@@ -83,17 +83,44 @@ def _is_ignored(path: Path, specs: Sequence[tuple[Path, GitIgnoreSpec]]) -> bool
     return False
 
 
+def _ancestor_specs(root: Path) -> list[tuple[Path, GitIgnoreSpec]]:
+    """Return ignore specs from the enclosing git repository above ``root``.
+
+    Searches ``root`` (resolved) and its parents for a ``.git`` entry. If
+    found, returns ``.git/info/exclude`` followed by each ``.gitignore``
+    from the repository top down to ``root``'s parent, outermost first.
+    ``root``'s own ``.gitignore`` is not included. Returns an empty list
+    when ``root`` is not inside a git repository.
+    """
+    root = root.resolve()
+    top = next((d for d in (root, *root.parents) if (d / ".git").exists()), None)
+    if top is None:
+        return []
+    specs: list[tuple[Path, GitIgnoreSpec]] = []
+    exclude = _read_gitignore(top, ".git/info/exclude")
+    if exclude is not None:
+        specs.append((top, exclude))
+    for directory in reversed(root.parents[: len(root.parents) - len(top.parents)]):
+        spec = _read_gitignore(directory)
+        if spec is not None:
+            specs.append((directory, spec))
+    return specs
+
+
 def _walk(root: Path) -> list[Path]:
     """Return every ``.sawmill/manifest.toml`` under ``root``.
 
     Hidden directories and ``.git`` are skipped and symlinked directories
-    are not followed. Directories ignored by a ``.gitignore`` in ``root`` or
-    below are not entered; the innermost ``.gitignore`` with a matching
-    pattern decides. ``.gitignore`` files above ``root``, ``.git/info/exclude``
-    and the user's global excludes are not consulted.
+    are not followed. Directories ignored by git are not entered: if
+    ``root`` is inside a git repository, ``.git/info/exclude`` and every
+    ``.gitignore`` from the repository top down to ``root`` are applied,
+    plus those below ``root``; otherwise only ``.gitignore`` files in
+    ``root`` or below. The innermost matching pattern decides. The user's
+    global excludes (``core.excludesFile``) are not consulted.
     """
+    root = root.resolve()
     found: list[Path] = []
-    stack: list[tuple[Path, list[tuple[Path, GitIgnoreSpec]]]] = [(root, [])]
+    stack: list[tuple[Path, list[tuple[Path, GitIgnoreSpec]]]] = [(root, _ancestor_specs(root))]
     while stack:
         directory, parent_specs = stack.pop()
         candidate = directory / _SAWMILL_DIR / _MANIFEST_FILE

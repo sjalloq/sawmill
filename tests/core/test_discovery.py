@@ -10,6 +10,7 @@ import pytest
 from sawmill.core.discovery import (
     DiscoveryError,
     TargetRef,
+    _ancestor_specs,
     discover_manifests,
     load_single_manifest,
     resolve_roots,
@@ -313,7 +314,74 @@ def test_gitignore_pruned_dirs_not_entered(tmp_path: Path) -> None:
         run.chmod(0o755)
 
 
-def test_gitignore_above_root_not_consulted(tmp_path: Path) -> None:
+def test_gitignore_above_root_not_consulted_without_git(tmp_path: Path) -> None:
+    """With no enclosing git repository, ancestor ``.gitignore`` files are unused."""
     (tmp_path / ".gitignore").write_text("proj/\n")
     _write(tmp_path / "sub" / "proj", "kept")
     assert _found(tmp_path / "sub") == {"kept"}
+
+
+def _fsynth_repo(tmp_path: Path) -> Path:
+    (tmp_path / ".gitignore").write_text("/fpga/fsynth/run*\n")
+    fsynth = tmp_path / "fpga" / "fsynth"
+    _write(fsynth / "run.top" / "proj", "ignored")
+    _write(fsynth / "src" / "proj", "kept")
+    return fsynth
+
+
+def test_gitignore_from_repo_top_applied(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    assert _found(_fsynth_repo(tmp_path)) == {"kept"}
+
+
+def test_gitignore_from_repo_top_git_file(tmp_path: Path) -> None:
+    (tmp_path / ".git").write_text("gitdir: /elsewhere\n")
+    assert _found(_fsynth_repo(tmp_path)) == {"kept"}
+
+
+def test_git_info_exclude_applied(tmp_path: Path) -> None:
+    (tmp_path / ".git" / "info").mkdir(parents=True)
+    (tmp_path / ".git" / "info" / "exclude").write_text("out/\n")
+    fsynth = tmp_path / "fsynth"
+    _write(fsynth / "out" / "proj", "ignored")
+    _write(fsynth / "src" / "proj", "kept")
+    assert _found(fsynth) == {"kept"}
+
+
+def test_intermediate_gitignore_applied(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "fpga").mkdir()
+    (tmp_path / "fpga" / ".gitignore").write_text("fsynth/build/\n")
+    fsynth = tmp_path / "fpga" / "fsynth"
+    _write(fsynth / "build" / "proj", "ignored")
+    _write(fsynth / "src" / "proj", "kept")
+    assert _found(fsynth) == {"kept"}
+
+
+def test_inner_negation_overrides_repo_top(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".gitignore").write_text("out/\n")
+    fsynth = tmp_path / "fsynth"
+    fsynth.mkdir()
+    (fsynth / ".gitignore").write_text("!out/\n")
+    _write(fsynth / "out" / "proj", "kept")
+    assert _found(fsynth) == {"kept"}
+
+
+def test_ancestor_specs_exclude_root_own_gitignore(tmp_path: Path) -> None:
+    (tmp_path / ".git" / "info").mkdir(parents=True)
+    (tmp_path / ".git" / "info" / "exclude").write_text("x/\n")
+    (tmp_path / ".gitignore").write_text("y/\n")
+    root = tmp_path / "a" / "b"
+    root.mkdir(parents=True)
+    (tmp_path / "a" / ".gitignore").write_text("z/\n")
+    (root / ".gitignore").write_text("w/\n")
+    bases = [base for base, _ in _ancestor_specs(root)]
+    top = tmp_path.resolve()
+    assert bases == [top, top, top / "a"]
+
+
+def test_ancestor_specs_empty_without_git(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("y/\n")
+    (tmp_path / "a").mkdir()
+    assert _ancestor_specs(tmp_path / "a") == []

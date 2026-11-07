@@ -194,11 +194,11 @@ more roots. Roots, highest precedence first:
 The walk:
 
 - skips hidden directories other than ``.sawmill``, and ``.git``;
-- does not enter directories ignored by a ``.gitignore`` at or below the
-  root, with git's rules for nesting, negation and anchoring. Keep build
-  output ignored and the walk stays fast on large trees. ``.gitignore``
-  files above the root, ``.git/info/exclude`` and global excludes are not
-  read;
+- does not enter directories that git would ignore: it applies
+  ``.git/info/exclude`` and every ``.gitignore`` from the top of the
+  enclosing repository down, with git's rules for nesting, negation and
+  anchoring. Keep build output ignored and the walk stays fast on large
+  trees. Global excludes (``core.excludesFile``) are not read;
 - does not follow symbolic links;
 - loads a manifest reached from overlapping roots once;
 - fails if two manifests have the same ``name``.
