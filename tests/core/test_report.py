@@ -125,6 +125,9 @@ def test_report_target_fields_and_counts_order(tmp_path: Path) -> None:
     assert t["plugin"] == "fake"
     assert t["fail_on"] == "warning"
     assert t["fail_on_level"] == 1
+    keys = list(t)
+    assert keys.index("vars") == keys.index("fail_on_level") + 1
+    assert t["vars"] == {}
     assert t["passed"] is False
     assert t["no_logs"] is False
     assert list(t["counts"]) == ["error", "warning", "info", "other"]
@@ -244,3 +247,18 @@ def test_report_generated_is_utc_iso(tmp_path: Path) -> None:
     assert generated.tzinfo is not None
     assert generated.utcoffset() is not None
     assert generated.utcoffset().total_seconds() == 0  # type: ignore[union-attr]
+
+
+def test_report_vars_resolved_mapping(tmp_path: Path) -> None:
+    sawmill_dir = tmp_path / ".sawmill"
+    refs = _project(
+        tmp_path,
+        _manifest(logs='["run.${build}/*.log"]').replace(
+            '[manifest]\nname = "proj"\n', '[manifest]\nname = "proj"\n\n[vars]\nbuild = "top"\n'
+        ),
+        logs={"run.top/a.log": LOG},
+    )
+    assert sawmill_dir.exists()
+    ref = TargetRef(refs[0].manifest, refs[0].target, overrides={"build": "top", "x": "1"})
+    t = build_report(_run([ref]))["targets"][0]
+    assert t["vars"] == {"build": "top", "x": "1"}

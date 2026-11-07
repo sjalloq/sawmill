@@ -95,6 +95,52 @@ configuration error.
 A target whose globs match no file fails ``check`` and shows as empty in
 ``view``.
 
+.. _build-variables:
+
+Build variables
+^^^^^^^^^^^^^^^
+
+Some flows choose the build directory per make target, for example
+``run.<target>``. A static ``logs`` glob cannot name it, and one manifest
+target per make target duplicates the target list. Instead, declare
+variables in an optional ``[vars]`` table and reference them as
+``${name}``:
+
+.. code-block:: toml
+
+   [manifest]
+   name = "fpga"
+   report = "run.${build}/sawmill-report.json"
+
+   [vars]
+   build = "top"                              # default value
+
+   [[target]]
+   name = "pnr"
+   plugin = "vivado"
+   logs = ["run.${build}/pnr/job_*/vivado.log"]
+
+.. code-block:: console
+
+   $ sawmill check                    # uses run.top/
+   $ sawmill check --var build=sub    # uses run.sub/
+
+- Keys are identifiers; values are strings. ``[vars]`` only provides
+  defaults; ``--var NAME=VALUE`` (repeatable) overrides or supplies a value
+  and need not match a ``[vars]`` key. Values no manifest references are
+  ignored.
+- ``${name}`` expands in every ``logs`` entry and in ``report`` only, not in
+  ``rules``, ``name`` or ``plugin``. A ``$`` not followed by ``{`` is
+  literal; an unterminated ``${`` is a manifest error.
+- ``--var`` is accepted by ``check``, ``report``, ``rules unused``,
+  ``rules generate`` and ``view``.
+- A variable with no value is an error (exit 2) naming the target and the
+  variable. It is only checked when a target runs or the report path is
+  resolved, so ``rules list`` needs no value and has no ``--var`` option.
+- The resolved values are recorded in the ``check`` header (for example
+  ``[build=sub]``), the JSON report and JUnit properties; see
+  :doc:`/reference/file-formats`.
+
 Plugin options
 ^^^^^^^^^^^^^^
 

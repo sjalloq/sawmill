@@ -9,7 +9,14 @@ from pathlib import Path
 import rich_click as click
 from rich.console import Console
 
-from sawmill.cli.common import emit_warnings, manifest_options, run_selected, write_report_file
+from sawmill.cli.common import (
+    emit_warnings,
+    manifest_options,
+    parse_vars,
+    run_selected,
+    var_options,
+    write_report_file,
+)
 from sawmill.core.plugin import get_plugin_manager
 from sawmill.core.report import build_report
 from sawmill.core.runner import LogResult, TargetResult
@@ -21,8 +28,15 @@ _INDENT = "    "
 
 
 def target_header(result: TargetResult) -> str:
-    """Return the ``== name (plugin, fail_on=id)`` header line."""
-    return f"== {result.qualified_name} ({result.plugin_name}, fail_on={result.fail_on})"
+    """Return the ``== name (plugin, fail_on=id) [k=v, ...]`` header line.
+
+    The ``[k=v, ...]`` suffix lists the resolved build variables, sorted by
+    name, and is omitted when there are none.
+    """
+    line = f"== {result.qualified_name} ({result.plugin_name}, fail_on={result.fail_on})"
+    if result.vars:
+        line += " [" + ", ".join(f"{k}={result.vars[k]}" for k in sorted(result.vars)) + "]"
+    return line
 
 
 def severity_columns(result: TargetResult, counts: dict[str, int]) -> str:
@@ -141,6 +155,7 @@ def report_text_lines(results: Sequence[TargetResult]) -> list[str]:
     help="Also write the JSON report to PATH.",
 )
 @manifest_options
+@var_options
 @click.pass_context
 def check(
     ctx: click.Context,
@@ -150,10 +165,18 @@ def check(
     report_path: Path | None,
     manifest_path: Path | None,
     roots: tuple[Path, ...],
+    var_args: tuple[str, ...],
 ) -> None:
     """Run manifest targets and exit non-zero on unwaived failures."""
+    overrides = parse_vars(var_args)
     results = run_selected(
-        manifest_path, roots, names, all_targets, fail_on, manager=get_plugin_manager()
+        manifest_path,
+        roots,
+        names,
+        all_targets,
+        fail_on,
+        manager=get_plugin_manager(),
+        overrides=overrides,
     )
     emit_warnings(results)
     console = Console(highlight=False, soft_wrap=True)

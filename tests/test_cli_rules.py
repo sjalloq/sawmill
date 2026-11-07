@@ -364,3 +364,43 @@ def test_rules_in_help() -> None:
     out = CliRunner().invoke(cli, ["rules", "--help"]).output
     for cmd in ("list", "unused", "generate"):
         assert cmd in out
+
+
+# -- --var --------------------------------------------------------------------
+
+
+def _vars_project(tmp_path: Path) -> None:
+    _project(
+        tmp_path,
+        _manifest(
+            '\n[vars]\nbuild = "top"\n',
+            _target(logs='["run.${build}/*.log"]', extra='rules = ["r.toml"]'),
+        ),
+        rules={"r.toml": _rules('id = "S-1"')},
+        logs={
+            "run.top/a.log": "INFO top\n",
+            "run.sub/a.log": "ERROR [S-1] sub\nWARNING [S-2] sub2\n",
+        },
+    )
+
+
+def test_rules_unused_accepts_var(tmp_path: Path) -> None:
+    _vars_project(tmp_path)
+    assert "r.toml#1" in _run(tmp_path, "unused").output
+    result = _run(tmp_path, "unused", "--var", "build=sub")
+    assert result.exit_code == 0, result.output
+    assert "No unused rules." in result.output
+
+
+def test_rules_generate_accepts_var(tmp_path: Path) -> None:
+    _vars_project(tmp_path)
+    result = _run(tmp_path, "generate", "t", "--var", "build=sub")
+    assert result.exit_code == 0, result.output
+    assert "S-2" in result.output
+
+
+def test_rules_list_rejects_var(tmp_path: Path) -> None:
+    _vars_project(tmp_path)
+    result = _run(tmp_path, "list", "--var", "x=y")
+    assert result.exit_code == 2
+    assert "No such option" in result.output

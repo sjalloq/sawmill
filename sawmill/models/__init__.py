@@ -1,7 +1,7 @@
 """Data models for sawmill."""
 
 from sawmill.models.filter_def import FilterDefinition
-from sawmill.models.manifest import Manifest, Target
+from sawmill.models.manifest import Manifest, Target, VariableError, expand
 from sawmill.models.message import FileRef, Message
 from sawmill.models.plugin_api import (
     DEFAULT_GROUPING_FIELDS,
@@ -23,6 +23,8 @@ __all__ = [
     "RuleFile",
     "SeverityLevel",
     "Target",
+    "VariableError",
+    "expand",
     "grouping_fields_from_dicts",
     "severity_levels_from_dicts",
 ]

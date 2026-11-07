@@ -27,6 +27,8 @@ def _add_properties(suite: ET.Element, target: dict[str, Any]) -> None:
     add("waived", target["waived"])
     add("unwaived", target["unwaived"])
     add("fail_on", target["fail_on"])
+    for name in sorted(target["vars"]):
+        add(f"vars.{name}", target["vars"][name])
     add("plugin", target["plugin"])
     if target["rules_unused"]:
         add("rules_unused", ", ".join(r["display"] for r in target["rules_unused"]))

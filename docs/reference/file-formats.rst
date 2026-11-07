@@ -15,13 +15,16 @@ Location: ``<project root>/.sawmill/manifest.toml``. Full description in
    [manifest]
    name = "soc"                              # required
    rules = ["vivado.toml"]                    # plugin-wide rule files
-   report = "build/sawmill-report.json"
+   report = "build/${build}/sawmill-report.json"
    fail_on = "warning"
+
+   [vars]                                     # optional defaults for ${name}
+   build = "top"
 
    [[target]]
    name = "pnr"                               # required
    plugin = "vivado"                          # required
-   logs = ["build/pnr/job_*/vivado.log"]      # required, non-empty
+   logs = ["build/${build}/pnr/job_*/vivado.log"]  # required, non-empty
    rules = ["vivado-pnr.toml"]
    fail_on = "critical_warning"
    unused_rules = "warn"                      # warn | ignore
@@ -36,6 +39,7 @@ Key                       Type   Default              Notes
 ``manifest.rules``        list   ``[]``               Files in ``.sawmill/rules/``
 ``manifest.report``       string none                 Relative to the project root
 ``manifest.fail_on``      string plugin default       Severity id
+``vars.<name>``           string none                 Default for ``${name}``
 ``target.name``           string (required)           Unique within the manifest
 ``target.plugin``         string (required)           Installed plugin name
 ``target.logs``           list   (required)           Globs relative to the project root
@@ -46,6 +50,13 @@ Key                       Type   Default              Notes
 ========================= ====== ==================== ====================================
 
 The plugin default ``fail_on`` is the plugin's second-lowest severity level.
+
+``[vars]`` keys are identifiers (``[A-Za-z_][A-Za-z0-9_]*``). ``${name}`` is
+expanded in every ``logs`` entry and in ``report``, not in ``rules``,
+``name`` or ``plugin``. ``--var NAME=VALUE`` overrides or supplies a value.
+A ``$`` not followed by ``{`` is literal; an unterminated ``${`` is a
+manifest error. A reference with no value is an error (exit 2) when the
+target runs or the report path is resolved.
 
 Rule files
 ----------
@@ -63,7 +74,7 @@ Location: ``<project root>/.sawmill/rules/*.toml``. Full description in
    id = "Synth 8-7080"
    regex = "u_dbg_.*"
    file = "**/rtl/dbg/*.sv"
-   logs = ["build/pnr/job_3/vivado.log"]
+   logs = ["build/top/pnr/job_3/vivado.log"]
    severity = "warning"
    max_count = 2
    per = "log"                # log | target; needs max_count
@@ -110,6 +121,7 @@ Written by ``sawmill report`` (default format) and ``sawmill check
          "plugin": "vivado",
          "fail_on": "critical_warning",
          "fail_on_level": 2,
+         "vars": {"build": "top"},
          "passed": false,
          "no_logs": false,
          "counts": {"error": 0, "critical_warning": 1, "warning": 7, "info": 120, "other": 0},
@@ -117,7 +129,7 @@ Written by ``sawmill report`` (default format) and ``sawmill check
          "unwaived": 123,
          "logs": [
            {
-             "path": "build/pnr/job_3/vivado.log",
+             "path": "build/top/pnr/job_3/vivado.log",
              "passed": false,
              "counts": {"error": 0, "critical_warning": 1, "warning": 7, "info": 120, "other": 0},
              "waived": 5,
@@ -149,7 +161,7 @@ Written by ``sawmill report`` (default format) and ``sawmill check
              "id": "Synth 8-7080",
              "regex": "u_dbg_.*",
              "file_glob": null,
-             "logs": ["build/pnr/job_3/vivado.log"],
+             "logs": ["build/top/pnr/job_3/vivado.log"],
              "severity": null,
              "max_count": 2,
              "per": "log",
@@ -161,7 +173,7 @@ Written by ``sawmill report`` (default format) and ``sawmill check
          "overflows": [
            {
              "rule": {"display": "vivado-pnr.toml#1", "...": "rule_ref fields"},
-             "scope": "build/pnr/job_3/vivado.log",
+             "scope": "build/top/pnr/job_3/vivado.log",
              "count": 3,
              "max_count": 2
            }
@@ -194,6 +206,7 @@ Field               Meaning
 ``plugin``          Plugin name
 ``fail_on``         Effective severity id
 ``fail_on_level``   Its numeric level
+``vars``            Resolved manifest variables, name to value; ``{}`` when none
 ``passed``          No failing log and at least one log
 ``no_logs``         True when the globs matched nothing
 ``counts``          Severity id to count, most severe first, then ``other``
@@ -248,10 +261,11 @@ JUnit XML
          <property name="waived" value="5" />
          <property name="unwaived" value="123" />
          <property name="fail_on" value="critical_warning" />
+         <property name="vars.build" value="top" />
          <property name="plugin" value="vivado" />
        </properties>
-       <testcase classname="soc:pnr" name="build/pnr/job_0/vivado.log" />
-       <testcase classname="soc:pnr" name="build/pnr/job_3/vivado.log">
+       <testcase classname="soc:pnr" name="build/top/pnr/job_0/vivado.log" />
+       <testcase classname="soc:pnr" name="build/top/pnr/job_3/vivado.log">
          <failure message="1 unwaived messages at or above critical_warning" type="failure">critical_warning [Timing 38-282] The design failed to meet the timing requirements.</failure>
        </testcase>
      </testsuite>
@@ -262,7 +276,8 @@ JUnit XML
   ``<failure>`` with one line per failing message.
 - A target with no logs has one failing ``(no logs)`` test case.
 - Properties: ``counts.<severity>`` for each severity and ``other``,
-  ``waived``, ``unwaived``, ``fail_on``, ``plugin``, and ``rules_unused``
+  ``waived``, ``unwaived``, ``fail_on``, ``vars.<name>`` for each
+  resolved variable, ``plugin``, and ``rules_unused``
   (comma-separated display names) when non-empty.
 
 User config.toml

@@ -14,7 +14,7 @@ from typing import Any
 import tomli
 from pydantic import ValidationError
 
-from sawmill.models.manifest import Manifest, Target
+from sawmill.models.manifest import IDENT_RE, Manifest, Target, find_unterminated
 
 _MANIFEST_HEADER_RE = re.compile(r"^[ \t]*\[manifest\]", re.MULTILINE)
 _TARGET_HEADER_RE = re.compile(r"^[ \t]*\[\[target\]\]", re.MULTILINE)
@@ -103,7 +103,7 @@ class ManifestLoader:
             self._line_of(content, m.start()) for m in _TARGET_HEADER_RE.finditer(content)
         ]
 
-        unknown_top = sorted(set(data) - {"manifest", "target"})
+        unknown_top = sorted(set(data) - {"manifest", "target", "vars"})
         if unknown_top:
             raise ManifestError(f"Unknown top-level key(s): {', '.join(unknown_top)}", path=path)
 
@@ -119,6 +119,20 @@ class ManifestLoader:
             raise ManifestError(
                 "[manifest] requires a non-empty string 'name'", line=header_line, path=path
             )
+
+        if isinstance(header.get("report"), str) and find_unterminated(header["report"]):
+            raise ManifestError(
+                "[manifest] report has an unterminated '${'", line=header_line, path=path
+            )
+
+        vars_table = data.get("vars", {})
+        if not isinstance(vars_table, dict):
+            raise ManifestError("[vars] must be a table", path=path)
+        for key, value in vars_table.items():
+            if not IDENT_RE.fullmatch(key):
+                raise ManifestError(f"[vars] key {key!r} is not a valid identifier", path=path)
+            if not isinstance(value, str):
+                raise ManifestError(f"[vars] value for {key!r} must be a string", path=path)
 
         entries = data.get("target", [])
         if not isinstance(entries, list) or not all(isinstance(t, dict) for t in entries):
@@ -140,7 +154,7 @@ class ManifestLoader:
             targets.append(target)
 
         try:
-            return Manifest(**header, targets=targets, path=path)
+            return Manifest(**header, vars=vars_table, targets=targets, path=path)
         except ValidationError as e:
             raise ManifestError(
                 "[manifest] " + self._format_validation_error(e), line=header_line, path=path
@@ -155,6 +169,16 @@ class ManifestLoader:
             raise ManifestError(
                 f"Unknown key(s): {', '.join(unknown)}", line=line, path=path, target_index=index
             )
+        logs = entry.get("logs")
+        if isinstance(logs, list):
+            for pattern in logs:
+                if isinstance(pattern, str) and find_unterminated(pattern):
+                    raise ManifestError(
+                        f"logs entry {pattern!r} has an unterminated '${{'",
+                        line=line,
+                        path=path,
+                        target_index=index,
+                    )
         try:
             return Target(**entry, index=index, line=line)
         except ValidationError as e:

@@ -21,7 +21,7 @@ from sawmill.core.plugin import (
 from sawmill.core.rule_matcher import RuleMatcher
 from sawmill.core.rules import RuleLoader
 from sawmill.core.severity import get_severity_levels, resolve_fail_on_level
-from sawmill.models.manifest import Manifest, Target
+from sawmill.models.manifest import Manifest, Target, VariableError
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.models.rule import Rule, RuleFile
@@ -64,6 +64,8 @@ class TargetResult:
     logs: list[LogResult]
     matcher: RuleMatcher
     warnings: list[str] = field(default_factory=list)
+    overrides: dict[str, str] = field(default_factory=dict)
+    vars: dict[str, str] = field(default_factory=dict)
 
     @property
     def qualified_name(self) -> str:
@@ -285,7 +287,7 @@ def reapply_rules(
         RuleValidationError: If a rule file is invalid.
     """
     if ref is None:
-        ref = TargetRef(result.manifest, result.target)
+        ref = TargetRef(result.manifest, result.target, overrides=dict(result.overrides))
     root = ref.manifest.root.resolve()
     matcher = RuleMatcher(load_rule_files_for(ref), root, ref.target.name)
     level_map = {s.id.lower(): s.level for s in result.severity_levels}
@@ -303,6 +305,8 @@ def reapply_rules(
         logs=logs,
         matcher=matcher,
         warnings=list(result.warnings),
+        overrides=dict(ref.overrides),
+        vars=ref.vars,
     )
 
 
@@ -325,7 +329,7 @@ def rerun_target(
         RunnerError, RuleValidationError: As for :func:`run_target`.
     """
     if ref is None:
-        ref = TargetRef(result.manifest, result.target)
+        ref = TargetRef(result.manifest, result.target, overrides=dict(result.overrides))
     return _run_ref(ref, manager, result.fail_on)
 
 
@@ -374,7 +378,12 @@ def _run_ref(
     level_map = {s.id.lower(): s.level for s in severity_levels}
 
     logs: list[LogResult] = []
-    for log_path in target.resolve_logs(root):
+    resolved_vars = ref.vars
+    try:
+        log_paths = target.resolve_logs(root, resolved_vars)
+    except VariableError as e:
+        raise RunnerError(f"target '{qualified}': {e}") from e
+    for log_path in log_paths:
         path = log_path.resolve()
         rel = _rel_path(path, root)
         messages: list[Message] = []
@@ -393,4 +402,6 @@ def _run_ref(
         logs=logs,
         matcher=matcher,
         warnings=warnings,
+        overrides=dict(ref.overrides),
+        vars=resolved_vars,
     )

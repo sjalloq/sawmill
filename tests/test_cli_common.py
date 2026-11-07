@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from sawmill.cli import cli
-from sawmill.cli.common import select_targets
+from sawmill.cli.common import parse_vars, select_targets
 
 _MANIFEST = (
     '[manifest]\nname = "{name}"\n\n[[target]]\nname = "t"\nplugin = "fake"\nlogs = ["*.log"]\n'
@@ -100,3 +100,19 @@ def test_manifest_error_becomes_exit_2(tmp_path: Path, config_roots: list[str]) 
     result = CliRunner().invoke(cli, ["check", "--root", str(tmp_path)])
     assert result.exit_code == 2
     assert "manifest.toml" in _unwrap(result.output)
+
+
+def test_parse_vars_happy_path() -> None:
+    assert parse_vars(["build=sub", "_x1=a=b", "e="]) == {"build": "sub", "_x1": "a=b", "e": ""}
+
+
+def test_parse_vars_later_wins() -> None:
+    assert parse_vars(["build=a", "build=b"]) == {"build": "b"}
+
+
+@pytest.mark.parametrize("arg", ["build", "=x", "1bad=x"])
+def test_parse_vars_malformed_is_usage_error(arg: str) -> None:
+    import click
+
+    with pytest.raises(click.UsageError, match=re.escape(arg)):
+        parse_vars([arg])

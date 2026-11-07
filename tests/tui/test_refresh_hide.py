@@ -332,3 +332,41 @@ def test_footer_and_help_mention_h_and_refresh() -> None:
     assert keys.get("h") == "hide_id"
     assert keys.get("r") == "refresh_rules"
     assert keys.get("R") == "refresh_all"
+
+
+VARS_MANIFEST = """\
+[manifest]
+name = "proj"
+
+[vars]
+build = "top"
+
+[[target]]
+name = "t"
+plugin = "test"
+logs = ["run.${build}/*.log"]
+"""
+
+
+@pytest.mark.parametrize("key", ["r", "R"])
+async def test_refresh_keeps_command_line_overrides(
+    tmp_path: Path, plugin: FakePlugin, key: str
+) -> None:
+    (tmp_path / ".sawmill").mkdir()
+    (tmp_path / ".sawmill" / "manifest.toml").write_text(VARS_MANIFEST)
+    for d in ("run.top", "run.sub"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "a.log").write_text(LOG)
+    manifest = ManifestLoader().load(tmp_path / ".sawmill" / "manifest.toml")
+    target = manifest.get_target("t")
+    assert target is not None
+    result = run_target(TargetRef(manifest, target, {"build": "sub"}))
+    assert result.logs[0].rel_path.startswith("run.sub")
+    app = SawmillApp([result])
+    async with app.run_test() as pilot:
+        await _start(app, pilot)
+        await pilot.press(key)
+        await pilot.pause()
+        new = app._states[0].result
+        assert new.vars == {"build": "sub"}
+        assert [log.rel_path for log in new.logs] == ["run.sub/a.log"]

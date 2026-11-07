@@ -101,3 +101,56 @@ def test_unused_rules_default_warn() -> None:
 
 def test_plugin_options_default_empty() -> None:
     assert _target().plugin_options == {}
+
+
+# --- build variables -------------------------------------------------------
+
+from sawmill.models.manifest import VariableError, expand  # noqa: E402
+
+
+def test_expand_single_and_multiple() -> None:
+    assert expand("run.${build}/x", {"build": "a"}, "logs") == "run.a/x"
+    assert expand("${a}/${b}/${a}", {"a": "1", "b": "2"}, "logs") == "1/2/1"
+
+
+def test_expand_leaves_bare_dollar() -> None:
+    assert expand("$x/$/a$", {}, "logs") == "$x/$/a$"
+
+
+def test_expand_missing_raises() -> None:
+    with pytest.raises(VariableError) as exc:
+        expand("run.${build}", {}, "report")
+    assert exc.value.name == "build"
+    assert exc.value.field == "report"
+    assert "build" in str(exc.value)
+
+
+def test_resolve_logs_with_vars(tmp_path: Path) -> None:
+    for d in ("run.sub", "run.other"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "a.log").write_text("")
+    t = _target(logs=["run.${build}/*.log"])
+    assert t.resolve_logs(tmp_path, vars={"build": "sub"}) == [tmp_path / "run.sub" / "a.log"]
+
+
+def test_resolve_logs_missing_var_raises(tmp_path: Path) -> None:
+    t = _target(logs=["run.${build}/*.log"])
+    with pytest.raises(VariableError):
+        t.resolve_logs(tmp_path)
+
+
+def test_resolve_logs_plain_without_vars(tmp_path: Path) -> None:
+    (tmp_path / "x.log").write_text("")
+    assert _target().resolve_logs(tmp_path, vars=None) == [tmp_path / "x.log"]
+
+
+def test_report_path_expands() -> None:
+    m = Manifest(name="x", path=MPATH, report="run.${build}/r.json")
+    assert m.report_path({"build": "b"}) == Path("/p/run.b/r.json")
+    with pytest.raises(VariableError):
+        m.report_path()
+    assert Manifest(name="x", path=MPATH).report_path() is None
+
+
+def test_manifest_vars_default() -> None:
+    assert Manifest(name="x").vars == {}

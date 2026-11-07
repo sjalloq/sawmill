@@ -177,3 +177,11 @@ def test_view_rejects_old_options() -> None:
     result, run_tui = _view(str(VIVADO_LOG), "--severity", "error")
     assert result.exit_code == 2
     run_tui.assert_not_called()
+
+
+def test_view_var_passed_to_run_selected(tmp_path: Path, fake_manager: PluginManager) -> None:
+    _project(tmp_path, _TWO_TARGETS, _LOGS)
+    with patch("sawmill.cli.view.run_selected", return_value=[MagicMock()]) as rs:
+        result, _ = _view("a", "--root", str(tmp_path), "--var", "build=sub")
+    assert result.exit_code == 0, result.output
+    assert rs.call_args.kwargs["overrides"] == {"build": "sub"}

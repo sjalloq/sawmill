@@ -268,3 +268,37 @@ def test_report_junit_to_file(tmp_path: Path) -> None:
     assert text.endswith("\n")
     root = ET.fromstring(text.encode())
     assert root.find("testsuite/testcase").get("name") == "build/a.log"
+
+
+def _vars_project(tmp_path: Path, manifest_extra: str) -> None:
+    _project(
+        tmp_path,
+        _manifest(manifest_extra=manifest_extra, logs='["run.${build}/*.log"]'),
+        logs={"run.top/a.log": "INFO top\n", "run.sub/a.log": "INFO sub\n"},
+    )
+
+
+def test_report_var_recorded_in_json(tmp_path: Path) -> None:
+    _vars_project(tmp_path, '\n[vars]\nbuild = "top"')
+    result = _report(tmp_path, "--var", "build=sub")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["targets"][0]["vars"] == {"build": "sub"}
+
+
+def test_report_bare_output_expands_vars(tmp_path: Path) -> None:
+    _vars_project(tmp_path, 'report = "run.${build}/r.json"\n\n[vars]\nbuild = "top"')
+    result = _report(tmp_path, "--var", "build=sub", "--output")
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "run.sub" / "r.json").is_file()
+    assert not (tmp_path / "run.top" / "r.json").exists()
+
+
+def test_report_bare_output_undefined_var_exit_2(tmp_path: Path) -> None:
+    _project(
+        tmp_path,
+        _manifest(manifest_extra='report = "run.${nope}/r.json"'),
+        logs={"build/a.log": "INFO ok\n"},
+    )
+    result = _report(tmp_path, "--output")
+    assert result.exit_code == 2
+    assert "nope" in result.output

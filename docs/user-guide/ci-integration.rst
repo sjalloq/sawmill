@@ -47,7 +47,9 @@ check output
        vivado.toml#4  Old timing waiver, BER-99
    check: 0/2 targets passed, 1 unused rules
 
-- One ``== manifest:target (plugin, fail_on=id)`` header per target.
+- One ``== manifest:target (plugin, fail_on=id)`` header per target. When
+  the manifest has build variables, the resolved values follow, for example
+  ``== fpga:pnr (vivado, fail_on=warning) [build=sub]``.
 - One line per log: path relative to the project root, counts per
   severity most severe first (``other=`` only when non-zero), waived count,
   ``PASS`` or ``FAIL``.
@@ -89,6 +91,10 @@ are created.
 
 ``check --report PATH`` writes the same JSON document as
 ``report --format json``.
+
+Each target in the JSON report has a ``vars`` object holding its resolved
+build variables, for example ``"vars": {"build": "sub"}``; JUnit records
+them as ``vars.<name>`` properties.
 
 The JSON schema and JUnit mapping are in :doc:`/reference/file-formats`.
 
@@ -156,6 +162,15 @@ Makefile
    .PHONY: check-logs
    check-logs: build
    	sawmill check --report build/sawmill-report.json
+
+When the build directory depends on the make target (for example
+``run.$(TARGET)``), pass it through as a manifest variable; see
+:ref:`build-variables`:
+
+.. code-block:: make
+
+   check-logs: build
+   	sawmill check --var build=$(TARGET)
 
 Multiple projects
 ^^^^^^^^^^^^^^^^^

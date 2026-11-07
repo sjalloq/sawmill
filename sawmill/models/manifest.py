@@ -7,10 +7,56 @@ set of log globs (relative to the project root) and rule files (relative to
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+
+VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+class VariableError(ValueError):
+    """Raised when a ``${name}`` reference has no value.
+
+    Attributes:
+        name: The undefined variable
+        field: The field being expanded (``"logs"`` or ``"report"``)
+    """
+
+    def __init__(self, name: str, field: str):
+        self.name = name
+        self.field = field
+        super().__init__(f"undefined variable {name!r} in {field} (set [vars] or --var {name}=...)")
+
+
+def expand(template: str, vars: Mapping[str, str], field: str) -> str:
+    """Substitute every ``${name}`` in ``template`` from ``vars``.
+
+    Raises:
+        VariableError: If a referenced name has no value
+    """
+
+    def _sub(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in vars:
+            raise VariableError(name, field)
+        return vars[name]
+
+    return VAR_RE.sub(_sub, template)
+
+
+def find_unterminated(template: str) -> bool:
+    """Return True if ``template`` contains a ``${`` with no closing ``}``."""
+    start = template.find("${")
+    while start != -1:
+        end = template.find("}", start + 2)
+        if end == -1:
+            return True
+        start = template.find("${", end + 1)
+    return False
 
 
 class Target(BaseModel):
@@ -48,8 +94,11 @@ class Target(BaseModel):
                 raise ValueError(f"logs glob {pattern!r} must be relative to the project root")
         return v
 
-    def resolve_logs(self, root: Path) -> list[Path]:
+    def resolve_logs(self, root: Path, vars: Mapping[str, str] | None = None) -> list[Path]:
         """Expand the log globs under ``root``.
+
+        ``${name}`` references are expanded from ``vars`` first; a missing
+        name raises :class:`VariableError`.
 
         Returns files only, sorted within each glob and deduplicated across
         globs in order of first appearance.
@@ -57,7 +106,7 @@ class Target(BaseModel):
         seen: set[Path] = set()
         result: list[Path] = []
         for pattern in self.logs:
-            for match in sorted(root.glob(pattern)):
+            for match in sorted(root.glob(expand(pattern, vars or {}, "logs"))):
                 if match.is_file() and match not in seen:
                     seen.add(match)
                     result.append(match)
@@ -77,6 +126,7 @@ class Manifest(BaseModel):
     rules: list[StrictStr] = []
     report: StrictStr | None = None
     fail_on: StrictStr | None = None
+    vars: dict[str, str] = {}
     targets: list[Target] = []
     path: Path | None = None
 
@@ -117,6 +167,8 @@ class Manifest(BaseModel):
         """Return the target called ``name``, or None."""
         return next((t for t in self.targets if t.name == name), None)
 
-    def report_path(self) -> Path | None:
-        """Return the report path resolved against the project root."""
-        return self.root / self.report if self.report is not None else None
+    def report_path(self, vars: Mapping[str, str] | None = None) -> Path | None:
+        """Return the report path, with ``${name}`` expanded, under the project root."""
+        if self.report is None:
+            return None
+        return self.root / expand(self.report, vars or {}, "report")

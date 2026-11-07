@@ -33,6 +33,7 @@ def _target(name: str, logs: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
         "plugin": "vivado",
         "fail_on": "error",
         "fail_on_level": 2,
+        "vars": {},
         "passed": all(lg["passed"] for lg in logs),
         "no_logs": False,
         "counts": {"error": 0, "warning": 0, "other": 0},
@@ -169,3 +170,28 @@ def test_output_has_xml_declaration_and_trailing_newline() -> None:
 
 def test_timestamp_from_report_generated() -> None:
     assert all(s.get("timestamp") == _GEN for s in _root().findall("testsuite"))
+
+
+def _props(target: dict[str, Any]) -> dict[str, str]:
+    report = _report()
+    report["targets"] = [target]
+    root = ET.fromstring(report_to_junit(report).encode())
+    return {
+        p.get("name", ""): p.get("value", "") for p in root.findall("testsuite/properties/property")
+    }
+
+
+def test_vars_properties_emitted_sorted() -> None:
+    target = _target("v", [_log("a.log", [])], vars={"build": "sub", "arch": "x"})
+    report = _report()
+    report["targets"] = [target]
+    root = ET.fromstring(report_to_junit(report).encode())
+    names = [p.get("name") for p in root.findall("testsuite/properties/property")]
+    i = names.index("fail_on")
+    assert names[i + 1 : i + 3] == ["vars.arch", "vars.build"]
+    assert _props(target)["vars.build"] == "sub"
+
+
+def test_no_vars_properties_when_empty() -> None:
+    props = _props(_target("v", [_log("a.log", [])]))
+    assert not [n for n in props if n.startswith("vars.")]

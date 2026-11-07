@@ -216,3 +216,40 @@ def test_target_ref_qualified_name(tmp_path: Path) -> None:
     ms = _manifests(tmp_path, {"m": ["t"]})
     ref = TargetRef(manifest=ms[0], target=ms[0].targets[0])
     assert ref.qualified_name == "m:t"
+
+
+def _write_vars(directory: Path, name: str) -> None:
+    sawmill_dir = directory / ".sawmill"
+    sawmill_dir.mkdir(parents=True, exist_ok=True)
+    (sawmill_dir / "manifest.toml").write_text(
+        f'[manifest]\nname = "{name}"\n\n[vars]\nbuild = "top"\nmode = "fast"\n\n'
+        '[[target]]\nname = "a"\nplugin = "p"\nlogs = ["*.log"]\n\n'
+        '[[target]]\nname = "b"\nplugin = "p"\nlogs = ["*.log"]\n'
+    )
+
+
+def test_target_ref_vars_merges_overrides(tmp_path: Path) -> None:
+    _write_vars(tmp_path, "m")
+    m = discover_manifests([tmp_path])[0]
+    assert TargetRef(m, m.targets[0]).vars == {"build": "top", "mode": "fast"}
+    ref = TargetRef(m, m.targets[0], overrides={"build": "sub", "x": "1"})
+    assert ref.vars == {"build": "sub", "mode": "fast", "x": "1"}
+
+
+def test_resolve_targets_overrides_on_every_ref(tmp_path: Path) -> None:
+    _write_vars(tmp_path, "m")
+    ms = discover_manifests([tmp_path])
+    for refs in (
+        resolve_targets(ms, [], overrides={"build": "sub"}),
+        resolve_targets(ms, [], all_targets=True, overrides={"build": "sub"}),
+        resolve_targets(ms, ["m:a", "b"], overrides={"build": "sub"}),
+    ):
+        assert len(refs) == 2
+        assert all(r.overrides == {"build": "sub"} for r in refs)
+        assert all(r.vars["build"] == "sub" for r in refs)
+
+
+def test_resolve_targets_overrides_default_empty(tmp_path: Path) -> None:
+    _write_vars(tmp_path, "m")
+    refs = resolve_targets(discover_manifests([tmp_path]), [])
+    assert all(r.overrides == {} for r in refs)

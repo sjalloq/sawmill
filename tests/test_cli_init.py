@@ -88,6 +88,7 @@ def test_init_template_has_every_key_commented(tmp_path: Path) -> None:
         "# logs =",
         "# unused_rules =",
         "# [target.plugin_options]",
+        "# [vars]",
     ):
         assert key in text
     uncommented = [

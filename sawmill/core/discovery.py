@@ -8,8 +8,8 @@ walking down from one or more roots. Targets are addressed as
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sawmill.core.manifest import ManifestLoader
@@ -29,6 +29,12 @@ class TargetRef:
 
     manifest: Manifest
     target: Target
+    overrides: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def vars(self) -> dict[str, str]:
+        """Return the manifest ``[vars]`` overlaid by command-line overrides."""
+        return {**self.manifest.vars, **self.overrides}
 
     @property
     def qualified_name(self) -> str:
@@ -124,6 +130,7 @@ def resolve_targets(
     manifests: Sequence[Manifest],
     names: Sequence[str],
     all_targets: bool = False,
+    overrides: Mapping[str, str] | None = None,
 ) -> list[TargetRef]:
     """Resolve user-supplied target names to :class:`TargetRef` objects.
 
@@ -132,13 +139,17 @@ def resolve_targets(
     Otherwise each name is ``manifest:target`` or a unique bare target name.
     Order follows ``names``; duplicates are collapsed.
 
+    Every returned ref carries a copy of ``overrides`` (command-line
+    variable values).
+
     Raises:
         DiscoveryError: On missing, unknown or ambiguous names.
     """
+    ov = dict(overrides or {})
     if all_targets:
         if names:
             raise DiscoveryError("target names cannot be combined with --all")
-        return [TargetRef(m, t) for m in manifests for t in m.targets]
+        return [TargetRef(m, t, dict(ov)) for m in manifests for t in m.targets]
 
     if not names:
         if not manifests:
@@ -148,13 +159,14 @@ def resolve_targets(
             raise DiscoveryError(
                 f"multiple manifests found ({listed}); use --all or name targets as manifest:target"
             )
-        return [TargetRef(manifests[0], t) for t in manifests[0].targets]
+        return [TargetRef(manifests[0], t, dict(ov)) for t in manifests[0].targets]
 
     by_name = {m.name: m for m in manifests}
     result: list[TargetRef] = []
     seen: set[str] = set()
     for name in names:
         ref = _resolve_one(manifests, by_name, name)
+        ref = TargetRef(ref.manifest, ref.target, dict(ov))
         if ref.qualified_name not in seen:
             seen.add(ref.qualified_name)
             result.append(ref)

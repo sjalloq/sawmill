@@ -297,6 +297,71 @@ unwaived, rules used, rules unused, ``max_count`` overflows, and the pass or
 fail result. A JUnit XML format is a thin view over the same data, one test
 case per log, for CI systems that render it.
 
+Build variables
+---------------
+
+Added 2026-11-07. A flow that builds into ``run.<make-target>`` has one
+build directory per invocation, chosen by the Makefile. The manifest cannot
+name it statically, and one target per make target duplicates the target
+list. Instead a manifest declares variables and the command line supplies
+their values.
+
+- A top-level ``[vars]`` table holds default values. Keys are identifiers
+  (``[A-Za-z_][A-Za-z0-9_]*``); values are strings. The table is optional.
+- ``${name}`` is expanded in every ``logs`` entry and in ``report``. It is
+  not expanded in ``rules``, ``name`` or ``plugin``. A ``$`` not followed by
+  ``{`` is literal; an unterminated ``${`` is a manifest error.
+- ``--var NAME=VALUE`` (repeatable) on ``check``, ``report``, ``rules
+  unused``, ``rules generate`` and ``view`` overrides or supplies a value.
+  A malformed argument is a usage error (exit 2). ``--var`` need not name a
+  key in ``[vars]``; the table only provides defaults.
+- Resolution is ``[vars]`` overlaid by ``--var``, per manifest. A reference
+  to a name with no value is a configuration error (exit 2) naming the
+  target, the key and the variable. Validation happens when the target is
+  run or the report path is resolved, so ``rules list`` needs no values.
+- A ``--var`` that no selected manifest references is ignored.
+- The resolved variables are recorded: the ``check`` and ``report`` text
+  header gains ``[build=sub]`` after ``fail_on`` when any variable is set;
+  the JSON report gains a per-target ``"vars"`` object; JUnit gains one
+  ``vars.<name>`` property per variable.
+- The TUI keeps the command-line overrides across ``r`` and ``R`` so a
+  refresh re-reads the manifest's defaults but not the overrides.
+- No environment-variable expansion and no escaping syntax.
+
+Example::
+
+    [manifest]
+    name = "fpga"
+    report = "run.${build}/sawmill-report.json"
+
+    [vars]
+    build = "top"
+
+    [[target]]
+    name = "pnr"
+    plugin = "vivado"
+    logs = ["run.${build}/pnr/job_*/vivado.log"]
+
+    $ sawmill check --var build=$(TARGET)
+
+Stage E tasks
+
+E1
+  ``Manifest.vars``, ``[vars]`` parsing and validation, ``expand()`` with
+  ``VariableError``, and ``vars`` parameters on ``Target.resolve_logs`` and
+  ``Manifest.report_path``.
+E2
+  ``TargetRef.overrides`` and ``TargetRef.vars``; ``resolve_targets`` takes
+  overrides; the runner resolves logs through ``ref.vars`` and maps
+  ``VariableError`` to ``RunnerError``; report, JUnit and the text header
+  record the variables.
+E3
+  ``--var`` option on the CLI commands, ``run_selected`` plumbing, bare
+  ``report --output`` through the resolved report path, TUI refresh keeps
+  overrides, ``init`` template documents ``[vars]``.
+E4
+  User guide and reference pages.
+
 Open questions
 --------------
 

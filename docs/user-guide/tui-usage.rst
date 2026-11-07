@@ -143,6 +143,8 @@ Refreshing
 - ``r`` re-reads the manifest and rule files and re-applies them. Logs are
   not re-parsed.
 - ``R`` also re-reads the logs.
+- Both keep the ``--var`` values given on the command line; ``[vars]``
+  defaults are re-read from the manifest.
 
 The cursor position is kept.
 

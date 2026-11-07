@@ -1098,12 +1098,21 @@ class SawmillApp(App):
                 new_target = new_manifest.get_target(name)
                 if new_target is None:
                     raise ValueError(f"target '{name}' missing from {mpath}")
-                state.set_result(reapply_rules(result, ref=TargetRef(new_manifest, new_target)))
+                state.set_result(
+                    reapply_rules(
+                        result,
+                        ref=TargetRef(new_manifest, new_target, overrides=result.overrides),
+                    )
+                )
                 self.notify(f"Created {mpath} with target '{name}'")
             else:
                 ensure_rule_file(path, plugin_name)
                 target = result.target.model_copy(update={"rules": [path.name]})
-                state.set_result(reapply_rules(result, ref=TargetRef(manifest, target)))
+                state.set_result(
+                    reapply_rules(
+                        result, ref=TargetRef(manifest, target, overrides=result.overrides)
+                    )
+                )
         except (
             OSError,
             ManifestError,
@@ -1179,7 +1188,11 @@ class SawmillApp(App):
         if path is None or not path.exists():
             rules_name = f"{target.plugin}.toml"
             rules = [rules_name] if (manifest.rules_dir / rules_name).exists() else []
-            return TargetRef(manifest, target.model_copy(update={"rules": rules}))
+            return TargetRef(
+                manifest,
+                target.model_copy(update={"rules": rules}),
+                overrides=state.result.overrides,
+            )
         try:
             new_manifest = ManifestLoader().load(path)
         except ManifestError as e:
@@ -1189,7 +1202,7 @@ class SawmillApp(App):
         if new_target is None:
             self.notify(f"target '{target.name}' no longer in manifest", severity="error")
             return None
-        return TargetRef(new_manifest, new_target)
+        return TargetRef(new_manifest, new_target, overrides=state.result.overrides)
 
     def _refresh(self, reparse: bool) -> int:
         """Re-run every target from the re-read manifest; return the count refreshed."""

@@ -183,3 +183,38 @@ def test_exports() -> None:
 
     assert CE is ManifestError and CL is ManifestLoader
     assert Manifest.__name__ == "Manifest" and Target.__name__ == "Target"
+
+
+# --- build variables -------------------------------------------------------
+
+
+def test_loads_vars() -> None:
+    m = ManifestLoader().load_from_string(HEAD + '[vars]\nbuild = "a"\n')
+    assert m.vars == {"build": "a"}
+
+
+@pytest.mark.parametrize(
+    "body",
+    ['[vars]\n"bad-name" = "a"\n', "[vars]\nbuild = 1\n", 'vars = "x"\n'],
+)
+def test_bad_vars_rejected(body: str) -> None:
+    content = (body + HEAD) if body.startswith("vars =") else (HEAD + body)
+    assert "[vars]" in str(_err(content))
+
+
+def test_unterminated_in_logs() -> None:
+    e = _err(HEAD + '[[target]]\nname = "t"\nplugin = "p"\nlogs = ["run.${build/x.log"]\n')
+    assert e.target_index == 0
+    assert e.line is not None
+
+
+def test_unterminated_in_report() -> None:
+    _err('[manifest]\nname = "m"\nreport = "r.${b"\n')
+
+
+def test_valid_references_load() -> None:
+    m = ManifestLoader().load_from_string(
+        '[manifest]\nname = "m"\nreport = "r.${b}"\n\n'
+        '[[target]]\nname = "t"\nplugin = "p"\nlogs = ["run.${build}/x.log", "$x"]\n'
+    )
+    assert m.targets[0].logs[0] == "run.${build}/x.log"

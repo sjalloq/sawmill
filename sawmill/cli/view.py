@@ -6,7 +6,14 @@ from pathlib import Path
 
 import rich_click as click
 
-from sawmill.cli.common import SawmillCliError, emit_warnings, manifest_options, run_selected
+from sawmill.cli.common import (
+    SawmillCliError,
+    emit_warnings,
+    manifest_options,
+    parse_vars,
+    run_selected,
+    var_options,
+)
 from sawmill.core.plugin import PluginError, get_plugin_manager
 from sawmill.core.rules import RuleValidationError
 from sawmill.core.runner import RunnerError, run_single_log
@@ -15,6 +22,7 @@ from sawmill.core.runner import RunnerError, run_single_log
 @click.command()
 @click.argument("target", required=False)
 @manifest_options
+@var_options
 @click.option("--plugin", "plugin_name", metavar="NAME", help="Plugin to parse a log file with.")
 @click.option(
     "--fail-on",
@@ -26,12 +34,14 @@ def view(
     target: str | None,
     manifest_path: Path | None,
     roots: tuple[Path, ...],
+    var_args: tuple[str, ...],
     plugin_name: str | None,
     fail_on: str | None,
 ) -> None:
     """Open TARGET, every target of the manifest, or a LOGFILE in the TUI."""
     from sawmill import tui
 
+    overrides = parse_vars(var_args)
     manager = get_plugin_manager()
     if target is not None and Path(target).is_file():
         log_path = Path(target)
@@ -53,7 +63,9 @@ def view(
         return
 
     names = [target] if target else []
-    results = run_selected(manifest_path, roots, names, False, fail_on, manager=manager)
+    results = run_selected(
+        manifest_path, roots, names, False, fail_on, manager=manager, overrides=overrides
+    )
     emit_warnings(results)
     if not results:
         raise SawmillCliError("no targets to view")

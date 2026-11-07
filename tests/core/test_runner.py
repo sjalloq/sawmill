@@ -698,3 +698,51 @@ def test_rerun_target_with_ref(tmp_path: Path) -> None:
     assert plugin.parse_calls > calls
     assert new.target is new_target
     assert [m.message_id for m, _ in new.logs[0].waived] == ["Y-2"]
+
+
+# --- build variables ----------------------------------------------------------
+
+
+def _vars_project(tmp_path: Path, manifest_extra: str = '[vars]\nbuild = "top"') -> TargetRef:
+    return _project(
+        tmp_path,
+        _manifest(manifest_extra=manifest_extra, logs='["run.${build}/*.log"]'),
+        logs={"run.top/a.log": LOG_A, "run.sub/b.log": LOG_B},
+    )
+
+
+def test_vars_default_selects_logs(tmp_path: Path) -> None:
+    result = run_target(_vars_project(tmp_path), _manager())
+    assert [lg.rel_path for lg in result.logs] == ["run.top/a.log"]
+    assert result.vars == {"build": "top"}
+    assert result.overrides == {}
+
+
+def test_vars_override_selects_logs(tmp_path: Path) -> None:
+    base = _vars_project(tmp_path)
+    ref = TargetRef(base.manifest, base.target, overrides={"build": "sub"})
+    result = run_target(ref, _manager())
+    assert [lg.rel_path for lg in result.logs] == ["run.sub/b.log"]
+    assert result.vars == {"build": "sub"}
+    assert result.overrides == {"build": "sub"}
+
+
+def test_vars_missing_raises_runner_error(tmp_path: Path) -> None:
+    ref = _vars_project(tmp_path, manifest_extra="")
+    with pytest.raises(RunnerError) as exc:
+        run_target(ref, _manager())
+    assert "proj:t" in str(exc.value)
+    assert "build" in str(exc.value)
+
+
+def test_rerun_and_reapply_keep_overrides(tmp_path: Path) -> None:
+    base = _vars_project(tmp_path)
+    ref = TargetRef(base.manifest, base.target, overrides={"build": "sub"})
+    manager = _manager()
+    result = run_target(ref, manager)
+    again = rerun_target(result, manager)
+    assert [lg.rel_path for lg in again.logs] == ["run.sub/b.log"]
+    assert again.overrides == {"build": "sub"}
+    reapplied = reapply_rules(result, manager)
+    assert reapplied.overrides == {"build": "sub"}
+    assert reapplied.vars == {"build": "sub"}

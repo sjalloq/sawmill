@@ -13,12 +13,15 @@ from sawmill.cli.common import (
     SawmillCliError,
     emit_warnings,
     manifest_options,
+    parse_vars,
     run_selected,
+    var_options,
     write_report_file,
 )
 from sawmill.core.junit import report_to_junit
 from sawmill.core.plugin import get_plugin_manager
 from sawmill.core.report import build_report
+from sawmill.models.manifest import VariableError
 
 
 @click.command()
@@ -48,6 +51,7 @@ from sawmill.core.report import build_report
     help="Write to PATH. With no PATH, use the manifest's `report` setting.",
 )
 @manifest_options
+@var_options
 def report(
     names: tuple[str, ...],
     all_targets: bool,
@@ -56,15 +60,26 @@ def report(
     output: str | None,
     manifest_path: Path | None,
     roots: tuple[Path, ...],
+    var_args: tuple[str, ...],
 ) -> None:
     """Report on manifest targets; always exits 0 unless the configuration is invalid."""
+    overrides = parse_vars(var_args)
     results = run_selected(
-        manifest_path, roots, names, all_targets, fail_on, manager=get_plugin_manager()
+        manifest_path,
+        roots,
+        names,
+        all_targets,
+        fail_on,
+        manager=get_plugin_manager(),
+        overrides=overrides,
     )
     out_path: Path | None = None
     if output == "":
         manifest = results[0].manifest if results else None
-        out_path = manifest.report_path() if manifest is not None else None
+        try:
+            out_path = manifest.report_path(results[0].vars) if manifest is not None else None
+        except VariableError as e:
+            raise SawmillCliError(f"manifest '{results[0].manifest.name}': {e}") from e
         if out_path is None:
             name = manifest.name if manifest is not None else "?"
             raise SawmillCliError(

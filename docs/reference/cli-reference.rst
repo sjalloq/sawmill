@@ -56,6 +56,7 @@ Option                   Value       Description
 ``--root``               DIR         Directory to search for manifests (repeatable).
 ``--plugin``             NAME        Plugin to parse a log file with.
 ``--fail-on``            SEV         Severity id overriding every target's fail_on.
+``--var``                NAME=VALUE  Set a manifest variable (repeatable).
 ``--help``, ``-h``                   Show this message and exit.
 ======================== =========== ===================================================
 
@@ -77,6 +78,7 @@ Option                   Value       Description
 ``--report``             PATH        Also write the JSON report to PATH.
 ``--manifest``           PATH        Use exactly this manifest; no directory walk.
 ``--root``               DIR         Directory to search for manifests (repeatable).
+``--var``                NAME=VALUE  Set a manifest variable (repeatable).
 ``--help``, ``-h``                   Show this message and exit.
 ======================== =========== ===================================================
 
@@ -103,6 +105,7 @@ Option                   Value                 Description
                                                walk.
 ``--root``               DIR                   Directory to search for manifests
                                                (repeatable).
+``--var``                NAME=VALUE            Set a manifest variable (repeatable).
 ``--help``, ``-h``                             Show this message and exit.
 ======================== ===================== =========================================
 
@@ -154,6 +157,7 @@ Option                   Value       Description
 ``--all``                            Run every target of every manifest.
 ``--manifest``           PATH        Use exactly this manifest; no directory walk.
 ``--root``               DIR         Directory to search for manifests (repeatable).
+``--var``                NAME=VALUE  Set a manifest variable (repeatable).
 ``--help``, ``-h``                   Show this message and exit.
 ======================== =========== ===================================================
 
@@ -173,6 +177,7 @@ Option                   Value       Description
                                      severity level N. [default: 1]
 ``--manifest``           PATH        Use exactly this manifest; no directory walk.
 ``--root``               DIR         Directory to search for manifests (repeatable).
+``--var``                NAME=VALUE  Set a manifest variable (repeatable).
 ``--help``, ``-h``                   Show this message and exit.
 ======================== =========== ===================================================
 

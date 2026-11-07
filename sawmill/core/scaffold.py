@@ -17,6 +17,9 @@ name = "{name}"
 # report = "build/sawmill-report.json"     # default output path for `sawmill report`
 # fail_on = "warning"                      # default failure severity for all targets
 
+# [vars]                                    # defaults for ${{name}} in logs and report
+# build = "top"                             # override with: sawmill check --var build=sub
+
 # [[target]]
 # name = "pnr"                             # unique target name
 # plugin = "vivado"                        # plugin that parses these logs

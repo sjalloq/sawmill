@@ -371,3 +371,55 @@ def test_check_prints_configure_warning_to_stderr(tmp_path: Path) -> None:
         "plugin_options ignored" in result.stderr
     )
     assert "warning:" not in result.stdout
+
+
+def test_check_header_shows_build_vars(tmp_path: Path) -> None:
+    _project(
+        tmp_path,
+        _manifest(
+            target_extra='fail_on = "error"',
+            manifest_extra='\n[vars]\nbuild = "sub"',
+            logs='["run.${build}/*.log"]',
+        ),
+        logs={"run.sub/a.log": "WARNING [W-1] meh\n"},
+    )
+    result = _check(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert "== proj:t (fake, fail_on=error) [build=sub]" in result.output
+
+
+def _vars_project(tmp_path: Path, manifest_extra: str = '\n[vars]\nbuild = "top"') -> None:
+    _project(
+        tmp_path,
+        _manifest(
+            target_extra='fail_on = "error"',
+            manifest_extra=manifest_extra,
+            logs='["run.${build}/*.log"]',
+        ),
+        logs={"run.top/top.log": "INFO top\n", "run.sub/sub.log": "INFO sub\n"},
+    )
+
+
+def test_check_var_overrides_default(tmp_path: Path) -> None:
+    _vars_project(tmp_path)
+    result = _check(tmp_path, "--var", "build=sub")
+    assert result.exit_code == 0, result.output
+    assert "run.sub/sub.log" in result.output
+    assert "run.top" not in result.output
+    assert "[build=sub]" in result.output
+
+
+def test_check_var_without_equals_exit_2(tmp_path: Path) -> None:
+    _vars_project(tmp_path)
+    result = _check(tmp_path, "--var", "build")
+    assert result.exit_code == 2
+    assert "build" in result.output
+    assert "Usage" in result.output
+
+
+def test_check_undefined_var_exit_2_names_target_and_var(tmp_path: Path) -> None:
+    _vars_project(tmp_path, manifest_extra="")
+    result = _check(tmp_path)
+    assert result.exit_code == 2
+    assert "proj:t" in result.output
+    assert "build" in result.output

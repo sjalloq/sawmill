@@ -81,6 +81,7 @@ def _target_entry(result: TargetResult) -> dict[str, Any]:
         "plugin": result.plugin_name,
         "fail_on": result.fail_on,
         "fail_on_level": result.fail_on_level,
+        "vars": dict(result.vars),
         "passed": result.passed,
         "no_logs": result.no_logs,
         "counts": _ordered_counts(result, result.counts),

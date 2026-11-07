@@ -12,8 +12,10 @@ from sawmill.cli.common import (
     SawmillCliError,
     emit_warnings,
     manifest_options,
+    parse_vars,
     run_selected,
     select_targets,
+    var_options,
 )
 from sawmill.core.plugin import get_plugin_manager
 from sawmill.core.rules import RuleValidationError
@@ -125,15 +127,24 @@ def list_rules(
 @click.argument("names", metavar="[TARGET...]", nargs=-1)
 @click.option("--all", "all_targets", is_flag=True, help="Run every target of every manifest.")
 @manifest_options
+@var_options
 def unused(
     names: tuple[str, ...],
     all_targets: bool,
     manifest_path: Path | None,
     roots: tuple[Path, ...],
+    var_args: tuple[str, ...],
 ) -> None:
     """Run targets and list rules that matched nothing across the run."""
+    overrides = parse_vars(var_args)
     results = run_selected(
-        manifest_path, roots, names, all_targets, None, manager=get_plugin_manager()
+        manifest_path,
+        roots,
+        names,
+        all_targets,
+        None,
+        manager=get_plugin_manager(),
+        overrides=overrides,
     )
     emit_warnings(results)
     found = unused_rules(results)
@@ -156,16 +167,27 @@ def unused(
     help="Only generate rules for messages at or above severity level N.",
 )
 @manifest_options
+@var_options
 def generate(
     names: tuple[str, ...],
     min_level: int,
     manifest_path: Path | None,
     roots: tuple[Path, ...],
+    var_args: tuple[str, ...],
 ) -> None:
     """Run TARGET and print a rule file waiving its unwaived messages."""
     if len(names) != 1:
         raise SawmillCliError("rules generate takes exactly one TARGET")
-    results = run_selected(manifest_path, roots, names, False, None, manager=get_plugin_manager())
+    overrides = parse_vars(var_args)
+    results = run_selected(
+        manifest_path,
+        roots,
+        names,
+        False,
+        None,
+        manager=get_plugin_manager(),
+        overrides=overrides,
+    )
     if len(results) != 1:
         raise SawmillCliError(f"'{names[0]}' selected {len(results)} targets; expected one")
     emit_warnings(results)

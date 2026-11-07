@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import re
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -24,6 +25,8 @@ from sawmill.core.rules import RuleValidationError
 from sawmill.core.runner import RunnerError, TargetResult, run_target
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+_VAR_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class SawmillCliError(click.ClickException):
@@ -52,11 +55,38 @@ def manifest_options(func: F) -> F:
     return func
 
 
+def var_options(func: F) -> F:
+    """Add the repeatable ``--var NAME=VALUE`` option (dest ``var_args``)."""
+    return click.option(
+        "--var",
+        "var_args",
+        multiple=True,
+        metavar="NAME=VALUE",
+        help="Set a manifest variable (repeatable).",
+    )(func)
+
+
+def parse_vars(var_args: Sequence[str]) -> dict[str, str]:
+    """Parse ``NAME=VALUE`` arguments; later values override earlier ones.
+
+    Raises:
+        click.UsageError: If an argument has no ``=`` or an invalid name.
+    """
+    out: dict[str, str] = {}
+    for arg in var_args:
+        name, sep, value = arg.partition("=")
+        if not sep or not _VAR_NAME_RE.fullmatch(name):
+            raise click.UsageError(f"invalid --var '{arg}': expected NAME=VALUE")
+        out[name] = value
+    return out
+
+
 def select_targets(
     manifest_path: Path | None,
     roots: Sequence[Path],
     names: Sequence[str],
     all_targets: bool,
+    overrides: Mapping[str, str] | None = None,
 ) -> list[TargetRef]:
     """Discover manifests by root precedence and resolve target names.
 
@@ -74,7 +104,7 @@ def select_targets(
             if not roots:
                 config_roots = ConfigLoader().load_resolved().general.roots
             manifests = discover_manifests(resolve_roots(roots, config_roots))
-        return resolve_targets(manifests, names, all_targets)
+        return resolve_targets(manifests, names, all_targets, overrides)
     except (DiscoveryError, ManifestError, ConfigError) as e:
         raise SawmillCliError(str(e)) from e
 
@@ -86,6 +116,7 @@ def run_selected(
     all_targets: bool,
     fail_on: str | None,
     manager: PluginManager | None = None,
+    overrides: Mapping[str, str] | None = None,
 ) -> list[TargetResult]:
     """Select targets and run each one, returning results in selection order.
 
@@ -96,11 +127,12 @@ def run_selected(
         all_targets: Select every target of every manifest.
         fail_on: Severity id overriding every target's ``fail_on``.
         manager: Plugin manager; defaults to :func:`get_plugin_manager`.
+        overrides: Command-line variable values (``--var``).
 
     Raises:
         SawmillCliError: On selection, runner or rule errors.
     """
-    refs = select_targets(manifest_path, roots, names, all_targets)
+    refs = select_targets(manifest_path, roots, names, all_targets, overrides)
     if manager is None:
         manager = get_plugin_manager()
     try:
