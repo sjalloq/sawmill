@@ -159,7 +159,6 @@ class LogViewer(DataTable):
     FIXED_COLUMNS = [
         ("status", "St", 4),
         ("line", "Line", 8),
-        ("log", "Log", 18),
         ("severity", "Severity", 14),
         ("msg_id", "ID", 20),
     ]
@@ -296,13 +295,6 @@ class LogViewer(DataTable):
             return text
         return text[: self._flex_col_width - 1] + "\u2026"
 
-    @staticmethod
-    def truncate_left(text: str, width: int) -> str:
-        """Truncate ``text`` to ``width`` chars, keeping the end, with a leading ellipsis."""
-        if len(text) <= width:
-            return text
-        return "\u2026" + text[len(text) - width + 1 :]
-
     def action_scroll_top(self) -> None:
         if self.navigate is not None:
             self._go(0)
@@ -367,8 +359,6 @@ class SawmillApp(App):
     filter_pattern: reactive[str] = reactive("", init=False)
     severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True, init=False)
     sort_mode: reactive[str] = reactive(SORT_LINE, init=False)
-
-    LOG_COL_WIDTH = 17
 
     def __init__(
         self,
@@ -578,6 +568,7 @@ class SawmillApp(App):
                 self._log_viewer.total_rows = 0
             if self._detail_content:
                 self._detail_content.update(self.OVERVIEW_DETAIL)
+            self._set_detail_subtitle("")
             self._update_panel_titles()
             return
         filtered = self._active_state().base_messages()
@@ -795,14 +786,12 @@ class SawmillApp(App):
                 sev = msg.severity or ""
                 msg_id = msg.message_id or ""
                 content = viewer.truncate_text(msg.content)
-                log = viewer.truncate_left(msg.log_path or "", self.LOG_COL_WIDTH)
                 status = ("W" if id(msg) in waived else "") + (
                     "H" if msg.message_id and msg.message_id in hidden else ""
                 )
                 viewer.add_row(
                     status,
                     str(msg.start_line),
-                    escape(log),
                     sev.title(),
                     escape(msg_id),
                     escape(content),
@@ -897,9 +886,19 @@ class SawmillApp(App):
         if not self._detail_content:
             return
         if 0 <= row_index < len(self._filtered_messages):
-            self._detail_content.update(self._filtered_messages[row_index].raw_text)
+            msg = self._filtered_messages[row_index]
+            self._detail_content.update(msg.raw_text)
+            self._set_detail_subtitle(msg.log_path or "")
         else:
             self._detail_content.update("Select a message to view details")
+            self._set_detail_subtitle("")
+
+    def _set_detail_subtitle(self, text: str) -> None:
+        """Show ``text`` (the selected message's log path) on the detail border."""
+        try:
+            self.query_one("#detail-panel").border_subtitle = text
+        except Exception:
+            return
 
     # -- Watchers ------------------------------------------------------------
 

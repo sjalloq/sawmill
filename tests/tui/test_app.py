@@ -567,8 +567,8 @@ class TestTargetTabs:
             assert not app.query("#tab-overview")
             assert app.query_one("#tab-target-0")
 
-    async def test_log_column_present_and_truncated_left(self, severity_levels):
-        long_path = "very/long/directory/name/build.log"
+    async def test_detail_subtitle_shows_log_path(self, severity_levels):
+        long_path = "very/long/directory/name/with/many/levels/build.log"
         result = make_target_result(
             {long_path: [make_message("a", "error", line=1)]}, severity_levels
         )
@@ -576,13 +576,13 @@ class TestTargetTabs:
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             await pilot.pause()
-            table = app.query_one(LogViewer)
-            row_key = table.coordinate_to_cell_key((0, 0)).row_key
-            cell = str(table.get_cell(row_key, "log"))
-            assert cell.startswith("\u2026")
-            assert len(cell) == 17
-            assert long_path.endswith(cell[1:])
-            assert LogViewer.truncate_left("short.log", 17) == "short.log"
+            panel = app.query_one("#detail-panel")
+            assert panel.border_title == "Message Detail"
+            assert panel.border_subtitle == long_path
+            await pilot.press("right")
+            await _settle(pilot)
+            assert app._active == app.OVERVIEW
+            assert panel.border_subtitle == ""
 
     async def test_panel_title_is_qualified_name(self, severity_levels):
         app = SawmillApp(_two_targets(severity_levels))
@@ -836,7 +836,6 @@ class TestTabSwitching:
         assert [k for k, _, _ in LogViewer.FIXED_COLUMNS] == [
             "status",
             "line",
-            "log",
             "severity",
             "msg_id",
         ]

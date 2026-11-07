@@ -52,11 +52,13 @@ Column       Content
 ============ ================================================================
 St           Status: ``W`` waived, ``H`` hidden, blank otherwise
 Line         Line number in the log
-Log          Log path relative to the project root
 Severity     Severity id
 ID           Message ID
 Message      Message text; fills the remaining width
 ============ ================================================================
+
+The selected message's log path, relative to the project root, is shown on
+the lower border of the detail panel.
 
 By default only unwaived, unhidden messages are shown. Press ``v`` to show
 waived and hidden rows as well, marked in the ``St`` column.

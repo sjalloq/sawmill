@@ -224,3 +224,33 @@ async def test_footer_and_detail_text_on_overview(severity_levels):
 def test_help_mentions_enter():
     assert "Enter" in HELP_TEXT
     assert "Open target/log (overview)" in HELP_TEXT
+
+
+async def _name_width(levels, path):
+    states = [TargetState(make_target_result({path: [make_message("a", "error")]}, levels))]
+    host = _Host(states)
+    async with host.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        table = host.query_one(OverviewTable)
+        width = table.columns["name"].width  # type: ignore[index]
+        cell = _cell(table, "l:0:0", "name")
+        rendered = "".join(
+            seg.text for y in range(table.size.height) for seg in table.render_line(y)
+        )
+    return width, cell, rendered
+
+
+async def test_name_column_fits_long_log_path(severity_levels):
+    path = "run.pcie/pnr/synth_1/impl/" + "x" * 30 + "/vivado.log"
+    path = path[-60:]
+    assert len(path) == 60
+    width, cell, rendered = await _name_width(severity_levels, path)
+    assert width >= 62
+    assert cell == f"  {path}"
+    assert path in rendered
+    assert "…" not in rendered
+
+
+async def test_name_column_minimum_width(severity_levels):
+    width, _, _ = await _name_width(severity_levels, "a.log")
+    assert width == 40

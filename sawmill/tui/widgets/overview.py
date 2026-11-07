@@ -83,10 +83,15 @@ class OverviewTable(DataTable):
 
     def on_resize(self) -> None:
         """Give the counts column the remaining width (minimum 30)."""
+        self._fit_columns()
+
+    def _fit_columns(self) -> None:
+        """Size the counts column to fill the width left after the others."""
         col = self.columns.get("counts")  # type: ignore[call-overload]
-        if col is None:
+        name = self.columns.get("name")  # type: ignore[call-overload]
+        if col is None or name is None:
             return
-        fixed = 40 + 8 + 8 + 8 + 2 * self.cell_padding * 5
+        fixed = name.width + 8 + 8 + 8 + 2 * self.cell_padding * 5
         col.width = max(30, self.size.width - fixed - 2 * self.cell_padding)
         col.auto_width = False
         self.refresh()
@@ -125,6 +130,17 @@ class OverviewTable(DataTable):
                     _result(log.passed),
                     key=key,
                 )
+        self._fit_name_column()
+
+    def _fit_name_column(self) -> None:
+        """Widen the name column to the longest name plus 2 (minimum 40)."""
+        name = self.columns.get("name")  # type: ignore[call-overload]
+        if name is None:
+            return
+        longest = max((Text(str(c)).cell_len for c in self.get_column("name")), default=0)
+        name.width = max(40, longest + 2)
+        name.auto_width = False
+        self._fit_columns()
 
     def action_open(self) -> None:
         """Post :class:`OverviewTable.Open` for the highlighted row."""
