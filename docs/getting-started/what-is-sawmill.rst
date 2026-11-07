@@ -1,64 +1,57 @@
 What is Sawmill?
 ================
 
-Sawmill is a terminal-based log analysis tool for working with structured
-tool logs. It provides two modes of operation:
+Sawmill is a terminal log analyser for structured tool logs. Plugins parse
+each tool's format; sawmill applies the project's rules and reports what is
+left.
 
-**Interactive log browser** --- Launch ``sawmill build.log`` to open a TUI
-where you can scroll, filter, suppress, and waive messages from tools like
-Vivado, Quartus, or any tool with a sawmill plugin.
+**CI quality gate**: ``sawmill check`` runs every target in the project
+manifest and exits 1 when an unwaived message reaches the target's
+``fail_on`` severity.
 
-**CI quality gate** --- Add ``--check`` to run sawmill in batch mode. It
-exits non-zero when unwaived messages exceed a severity threshold, making it
-easy to embed in CI pipelines.
+**Interactive triage**: ``sawmill view`` opens a terminal UI over the same
+targets, where you browse, search, hide and waive messages.
 
-Key Concepts
+Key concepts
 ------------
 
-Plugin architecture
-^^^^^^^^^^^^^^^^^^^
+Plugins
+^^^^^^^
 
-Sawmill's core is tool-agnostic. It does not know how to parse any log
-format on its own. Instead, **plugins** teach sawmill how to read a
-specific tool's output. Each plugin is a separate Python package that
-you install alongside sawmill:
-
-.. code-block:: console
-
-   $ pip install sawmill sawmill-plugin-vivado
-
-Plugins define everything tool-specific: severity levels, message IDs,
-multi-line grouping rules, and pre-defined filter categories.
-
-Suppress vs. waive
-^^^^^^^^^^^^^^^^^^
-
-Sawmill draws a hard line between two concepts:
-
-**Suppressions** are display preferences. When you suppress a message ID
-in the TUI, it is hidden from view. Suppressions are stored in
-``.sawmill/suppress.toml`` and have **no effect on CI pass/fail**. Think
-of them as "hide this noise."
-
-**Waivers** are auditable team decisions. A waiver records *who* accepted
-a message, *when*, and *why*. Waivers are stored in
-``.sawmill/waivers.toml``, require ``reason``, ``author``, and ``date``
-fields, and **do affect CI** --- waived messages are excluded from the
-failure count in ``--check`` mode. Think of them as "reviewed and
-accepted."
-
-Dual mode
-^^^^^^^^^
-
-Running sawmill with just a filename opens the TUI:
+Sawmill's core never parses log content. Each plugin is a separate Python
+package that defines a tool's severity levels, message IDs, multi-line
+grouping and pre-defined filters:
 
 .. code-block:: console
 
-   $ sawmill build.log
+   $ uv tool install sawmill-parser sawmill-plugin-vivado
 
-Adding any flag (``--severity``, ``--check``, ``--format``, etc.) switches
-to batch mode automatically. You can also force batch mode with ``--batch``:
+Rules and the manifest
+^^^^^^^^^^^^^^^^^^^^^^
+
+A project keeps its configuration in ``.sawmill/``:
+
+- ``manifest.toml`` names the project and its *targets*. A target is a
+  plugin plus a set of log globs, for example the eight Vivado jobs of a
+  place-and-route stage.
+- ``rules/*.toml`` hold *rules*. A rule waives matching messages and
+  records why. Which manifest key lists a rule file decides whether its
+  rules apply to one target or to every target using the plugin.
+
+Rules are checked in. There is no personal rule file, so everyone, and CI,
+sees the same result.
+
+Hiding a message ID in the TUI (``h``) lasts for the session only. It is
+the one filter that is not checked in and it never affects ``check``.
+
+See :doc:`/user-guide/sawmill-directory` and :doc:`/user-guide/rules`.
+
+Commands
+^^^^^^^^
 
 .. code-block:: console
 
-   $ sawmill build.log --batch --severity warning
+   $ sawmill init                 # create .sawmill/manifest.toml
+   $ sawmill check                # CI gate
+   $ sawmill view                 # TUI over all targets
+   $ sawmill build.log            # TUI over one log, no manifest needed

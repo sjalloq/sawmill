@@ -1,8 +1,8 @@
 """TOML string escaping utilities.
 
 Provides a single, spec-complete escape function for TOML basic strings.
-All code that writes TOML values by hand (TUI persistence, WaiverGenerator)
-should use this module instead of rolling its own escaping.
+All code that writes TOML values by hand (e.g. the rules CLI) should use this
+module instead of rolling its own escaping.
 """
 
 from __future__ import annotations

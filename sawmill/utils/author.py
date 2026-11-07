@@ -1,7 +1,7 @@
 """Author discovery utility for sawmill.
 
 Discovers the author identity from environment or git config,
-used to pre-fill the author field in waiver creation.
+used to pre-fill the author field in rule creation.
 """
 
 import os

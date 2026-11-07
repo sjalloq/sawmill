@@ -9,7 +9,7 @@
 </p>
 
 Sawmill filters, groups and waives messages from structured tool logs such as
-Vivado, Slang and Synplify output. A batch CLI gates CI pipelines on log
+Vivado and Slang output. A batch CLI gates CI pipelines on log
 content; a terminal UI handles interactive triage. Plugins own the parsing,
 so any log format can be supported.
 
@@ -28,17 +28,23 @@ source sourceme     # creates .venv with uv and installs dev extras
 ## Usage
 
 ```bash
-sawmill vivado.log            # open the TUI
-sawmill vivado.log --summary  # batch summary by severity and message ID
-sawmill vivado.log --check    # exit 1 on unwaived messages
-sawmill --help
+sawmill vivado.log                              # open one log in the TUI
+sawmill init                                    # create .sawmill/manifest.toml
+sawmill init --target pnr 'build/pnr/*.log'     # add a target
+sawmill view                                    # TUI over every target
+sawmill check --report build/report.json        # CI gate: exit 1 on unwaived failures
+sawmill report --format junit -o build/sawmill.xml
+sawmill rules unused                            # rules that matched nothing
+sawmill plugins list
 ```
 
-Full documentation, including the CLI reference, TUI guide, CI integration
-and plugin authoring, is at https://sjalloq.github.io/sawmill.
+Targets and rules live in a checked-in `.sawmill/` directory: a
+`manifest.toml` naming the targets (plugin plus log globs) and rule files
+under `.sawmill/rules/` that waive expected messages.
 
-The CLI and waiver format are being reworked around a project manifest.
-See `docs/development/manifest-design.rst`.
+Full documentation, including the manifest and rule formats, CLI reference,
+TUI guide, CI integration and plugin authoring, is at
+https://sjalloq.github.io/sawmill.
 
 ## Plugins
 

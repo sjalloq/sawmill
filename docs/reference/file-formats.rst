@@ -1,148 +1,291 @@
 File Formats
 ============
 
-.. _config-toml:
+All configuration is TOML. Unknown keys are errors, reported with file and
+line.
 
-``config.toml``
----------------
+manifest.toml
+-------------
 
-General and output configuration. Located at ``.sawmill/config.toml``
-(project-level) or ``~/.config/sawmill/config.toml`` (user-level).
-
-.. code-block:: toml
-
-   [general]
-   default_plugin = "vivado"    # Plugin name to use by default
-
-   [output]
-   color = true                 # Enable coloured output (bool)
-   format = "text"              # Default output format (string: text/json/count)
-
-Local config overrides user config with a shallow per-section merge.
-
-.. _suppress-toml:
-
-``suppress.toml``
------------------
-
-Display suppression rules. Located at ``.sawmill/suppress.toml``.
+Location: ``<project root>/.sawmill/manifest.toml``. Full description in
+:doc:`/user-guide/sawmill-directory`.
 
 .. code-block:: toml
 
-   [suppress]
-   patterns = [
-       "INFO:.*Synthesizing",
-       "Phase \\d+ .*Complete",
-   ]
-   message_ids = [
-       "Common 17-55",
-       "Vivado 12-1023",
-   ]
+   [manifest]
+   name = "soc"                              # required
+   rules = ["vivado.toml"]                    # plugin-wide rule files
+   report = "build/sawmill-report.json"
+   fail_on = "warning"
 
-``patterns``
-   List of regex patterns. Messages with ``raw_text`` matching any
-   pattern are hidden from display.
+   [[target]]
+   name = "pnr"                               # required
+   plugin = "vivado"                          # required
+   logs = ["build/pnr/job_*/vivado.log"]      # required, non-empty
+   rules = ["vivado-pnr.toml"]
+   fail_on = "critical_warning"
+   unused_rules = "warn"                      # warn | ignore
 
-``message_ids``
-   List of exact message IDs to hide.
+   [target.plugin_options]
+   mode = "implementation"
 
-Suppressions are display-only --- they do not affect CI pass/fail.
+========================= ====== ==================== ====================================
+Key                       Type   Default              Notes
+========================= ====== ==================== ====================================
+``manifest.name``         string (required)           Unique across discovered manifests
+``manifest.rules``        list   ``[]``               Files in ``.sawmill/rules/``
+``manifest.report``       string none                 Relative to the project root
+``manifest.fail_on``      string plugin default       Severity id
+``target.name``           string (required)           Unique within the manifest
+``target.plugin``         string (required)           Installed plugin name
+``target.logs``           list   (required)           Globs relative to the project root
+``target.rules``          list   ``[]``               Files in ``.sawmill/rules/``
+``target.fail_on``        string ``manifest.fail_on`` Severity id
+``target.unused_rules``   string ``"warn"``           ``"warn"`` or ``"ignore"``
+``target.plugin_options`` table  ``{}``               Passed to the plugin's ``configure``
+========================= ====== ==================== ====================================
 
-.. _waivers-toml:
+The plugin default ``fail_on`` is the plugin's second-lowest severity level.
 
-``waivers.toml``
-----------------
+Rule files
+----------
 
-Waiver entries for CI acceptance. Located at ``.sawmill/waivers.toml``.
+Location: ``<project root>/.sawmill/rules/*.toml``. Full description in
+:doc:`/user-guide/rules`.
 
 .. code-block:: toml
 
-   [metadata]
-   tool = "vivado"
+   [rules]
+   plugin = "vivado"          # required
 
-   [[waiver]]
-   message_id = "Vivado 12-3523"
-   reason = "Expected warning, reviewed by team"
-   author = "engineer@company.com"
-   date = "2026-01-15"
+   [[rule]]
+   name = "dbg-core"          # optional label
+   id = "Synth 8-7080"
+   regex = "u_dbg_.*"
+   file = "**/rtl/dbg/*.sv"
+   logs = ["build/pnr/job_3/vivado.log"]
+   severity = "warning"
+   max_count = 2
+   per = "log"                # log | target; needs max_count
+   comment = "Debug core only in job 3; remove after 2027-01"
+   author = "jane@example.com"
+   date = "2026-11-07"
 
-   [[waiver]]
-   message_id = "Synth 8-6157"
-   content_match = "raw"
-   content_pattern = "synthesizing module 'top'"
-   reason = "Top-level synthesis message"
-   author = "engineer@company.com"
-   date = "2026-01-15"
+================ ================== ==========================================
+Key              Type               Notes
+================ ================== ==========================================
+``rules.plugin`` string             Required
+``id``           string             Exact message ID
+``regex``        string             Python regex, ``re.search`` with DOTALL on
+                                    raw text
+``file``         glob               Message file reference
+``logs``         list of globs      Relative to the project root
+``severity``     string             Severity id, case-insensitive
+``max_count``    integer >= 1       Default unlimited
+``per``          string             ``"log"`` (default) or ``"target"``
+``comment``      string             Required, non-empty
+``author``       string             Optional
+``date``         string             Optional
+``name``         string             Optional
+================ ================== ==========================================
 
-   [[waiver]]
-   message_id = "DRC RTSTAT-10"
-   content_match = "regex"
-   content_pattern = "Net .* has no driver"
-   reason = "Test stub nets"
-   author = "engineer@company.com"
-   date = "2026-01-15"
-
-Fields per ``[[waiver]]`` entry:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 10 70
-
-   * - Field
-     - Required
-     - Description
-   * - ``message_id``
-     - yes
-     - Exact message ID to match.
-   * - ``reason``
-     - yes
-     - Why this message is acceptable.
-   * - ``author``
-     - yes
-     - Who created this waiver.
-   * - ``date``
-     - yes
-     - Creation date (ISO format, e.g. ``2026-01-15``).
-   * - ``content_match``
-     - no
-     - How to interpret ``content_pattern``: ``"raw"`` (substring) or ``"regex"``.
-   * - ``content_pattern``
-     - no
-     - Narrows match beyond ``message_id``. If omitted, matches all instances.
-
-See :doc:`/user-guide/waivers` for matching semantics.
-
-.. _json-report:
+Each rule needs at least one of ``id``, ``regex`` or ``file``.
 
 JSON report
 -----------
 
-Generated by ``--report report.json``. Top-level structure:
+Written by ``sawmill report`` (default format) and ``sawmill check
+--report PATH``.
 
-``metadata``
-   ``log_file`` (string), ``plugin`` (string), ``timestamp`` (ISO-8601),
-   ``fail_on_level`` (int).
+.. code-block:: json
 
-``exit_code``
-   ``0`` = pass, ``1`` = failure.
+   {
+     "generated": "2026-11-07T10:15:00.000000+00:00",
+     "sawmill_version": "0.5.0",
+     "passed": false,
+     "targets": [
+       {
+         "manifest": "soc",
+         "name": "pnr",
+         "plugin": "vivado",
+         "fail_on": "critical_warning",
+         "fail_on_level": 2,
+         "passed": false,
+         "no_logs": false,
+         "counts": {"error": 0, "critical_warning": 1, "warning": 7, "info": 120, "other": 0},
+         "waived": 5,
+         "unwaived": 123,
+         "logs": [
+           {
+             "path": "build/pnr/job_3/vivado.log",
+             "passed": false,
+             "counts": {"error": 0, "critical_warning": 1, "warning": 7, "info": 120, "other": 0},
+             "waived": 5,
+             "unwaived": 123,
+             "failures": [
+               {
+                 "message_id": "Timing 38-282",
+                 "severity": "critical_warning",
+                 "line": 4120,
+                 "content": "The design failed to meet the timing requirements."
+               }
+             ],
+             "waived_messages": [
+               {
+                 "message_id": "Synth 8-7080",
+                 "severity": "warning",
+                 "line": 912,
+                 "rule": "vivado-pnr.toml#1"
+               }
+             ]
+           }
+         ],
+         "rules_used": [
+           {
+             "file": "/work/soc/.sawmill/rules/vivado-pnr.toml",
+             "index": 0,
+             "name": null,
+             "display": "vivado-pnr.toml#1",
+             "id": "Synth 8-7080",
+             "regex": "u_dbg_.*",
+             "file_glob": null,
+             "logs": ["build/pnr/job_3/vivado.log"],
+             "severity": null,
+             "max_count": 2,
+             "per": "log",
+             "comment": "Debug core only present in job 3",
+             "matches": 2
+           }
+         ],
+         "rules_unused": [],
+         "overflows": [
+           {
+             "rule": {"display": "vivado-pnr.toml#1", "...": "rule_ref fields"},
+             "scope": "build/pnr/job_3/vivado.log",
+             "count": 3,
+             "max_count": 2
+           }
+         ]
+       }
+     ],
+     "rules_unused": []
+   }
 
-``summary``
-   ``total`` (int), ``suppressed`` (int), ``waived`` (int),
-   ``by_severity`` (object mapping severity ID to count),
-   ``waived_by_severity`` (same shape).
+Top level:
 
-``issues``
-   Array of unwaived messages. Each has ``message_id``, ``severity``,
-   ``content``, ``line``, ``raw_text``.
+=================== ================================================================
+Field               Meaning
+=================== ================================================================
+``generated``       ISO 8601 UTC timestamp
+``sawmill_version`` Version that wrote the report
+``passed``          True when every target passed
+``targets``         One entry per selected target, in run order
+``rules_unused``    Rules (``rule_ref``) unused across the whole run, after
+                    honouring each target's ``unused_rules``; each rule once
+=================== ================================================================
 
-``waived``
-   Array of waived messages. Each has ``message_id``, ``severity``,
-   ``content``, ``line``, ``waiver_message_id``, ``waiver_reason``.
+Target:
 
-``suppressed``
-   Array of display-suppressed messages. Each has ``message_id``,
-   ``severity``, ``content``, ``line``, ``raw_text``.
+=================== ================================================================
+Field               Meaning
+=================== ================================================================
+``manifest``        Manifest name
+``name``            Target name
+``plugin``          Plugin name
+``fail_on``         Effective severity id
+``fail_on_level``   Its numeric level
+``passed``          No failing log and at least one log
+``no_logs``         True when the globs matched nothing
+``counts``          Severity id to count, most severe first, then ``other``
+``waived``          Waived messages
+``unwaived``        Unwaived messages
+``logs``            One entry per log
+``rules_used``      ``rule_ref`` for each rule that matched in this target
+``rules_unused``    ``rule_ref`` for each rule that matched nothing in this
+                    target; empty with ``unused_rules = "ignore"``
+``overflows``       ``rule`` (``rule_ref``), ``scope`` (log path or target),
+                    ``count``, ``max_count``
+=================== ================================================================
 
-``unused_waivers``
-   Array of waivers that matched no messages. Each has ``message_id``,
-   ``reason``.
+Log: ``path`` (relative to the project root), ``passed``, ``counts``,
+``waived``, ``unwaived``, ``failures`` (``message_id``, ``severity``,
+``line``, ``content``) and ``waived_messages`` (``message_id``,
+``severity``, ``line``, ``rule`` display name).
+
+``rule_ref``:
+
+============== =================================================================
+Field          Meaning
+============== =================================================================
+``file``       Rule file path
+``index``      0-based position in the file
+``name``       Rule ``name`` or null
+``display``    ``<file>#<n>`` (1-based) or ``<file>:<name>``
+``id``         Match keys as written, null when absent
+``regex``
+``file_glob``  The rule's ``file`` key
+``logs``
+``severity``
+``max_count``  Limit, or null
+``per``        ``"log"`` or ``"target"``
+``comment``    Rule comment
+``matches``    Messages matched in this target
+============== =================================================================
+
+JUnit XML
+---------
+
+``sawmill report --format junit`` renders the same data:
+
+.. code-block:: xml
+
+   <?xml version='1.0' encoding='UTF-8'?>
+   <testsuites name="sawmill" tests="8" failures="1" errors="0" time="0">
+     <testsuite name="soc:pnr" timestamp="2026-11-07T10:15:00+00:00" tests="8" failures="1" errors="0">
+       <properties>
+         <property name="counts.error" value="0" />
+         <property name="counts.critical_warning" value="1" />
+         <property name="waived" value="5" />
+         <property name="unwaived" value="123" />
+         <property name="fail_on" value="critical_warning" />
+         <property name="plugin" value="vivado" />
+       </properties>
+       <testcase classname="soc:pnr" name="build/pnr/job_0/vivado.log" />
+       <testcase classname="soc:pnr" name="build/pnr/job_3/vivado.log">
+         <failure message="1 unwaived messages at or above critical_warning" type="failure">critical_warning [Timing 38-282] The design failed to meet the timing requirements.</failure>
+       </testcase>
+     </testsuite>
+   </testsuites>
+
+- One ``<testsuite>`` per target, named ``manifest:target``.
+- One ``<testcase>`` per log, named by its path. A failing log has a
+  ``<failure>`` with one line per failing message.
+- A target with no logs has one failing ``(no logs)`` test case.
+- Properties: ``counts.<severity>`` for each severity and ``other``,
+  ``waived``, ``unwaived``, ``fail_on``, ``plugin``, and ``rules_unused``
+  (comma-separated display names) when non-empty.
+
+User config.toml
+----------------
+
+Location: ``~/.config/sawmill/config.toml``. Optional. Relative ``roots`` resolve
+against the current directory; ``~`` is not expanded. There is no
+project-level config file; project settings live in the manifest.
+
+.. code-block:: toml
+
+   [general]
+   roots = ["/home/jane/work/fpga", "/proj/asic"]   # manifest search roots
+
+   [output]
+   color = true
+   format = "text"
+
+========================== ========== ===============================================================================
+Key                        Default    Notes
+========================== ========== ===============================================================================
+``general.roots``          ``[]``     Manifest search roots, used when neither ``--manifest`` nor ``--root`` is given
+``general.default_plugin`` none       Parsed but unused; reserved
+``output.color``           ``true``   Parsed but unused; reserved
+``output.format``          ``"text"`` Parsed but unused; reserved
+========================== ========== ===============================================================================

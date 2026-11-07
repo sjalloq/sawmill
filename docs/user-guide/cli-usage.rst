@@ -1,166 +1,131 @@
 CLI Usage
 =========
 
-Basic usage
------------
+Sawmill is a set of subcommands. Every option is listed in
+:doc:`/reference/cli-reference`.
 
-Run sawmill with a log file:
+.. code-block:: text
 
-.. code-block:: console
+   sawmill init      create a manifest or add a target
+   sawmill view      open targets or a log file in the TUI
+   sawmill check     run targets, exit 1 on unwaived failures
+   sawmill report    write a JSON, JUnit or text report
+   sawmill rules     list, audit and generate rules
+   sawmill plugins   list and inspect installed plugins
+   sawmill LOGFILE   shorthand for `sawmill view LOGFILE`
 
-   $ sawmill build.log
+Commands that take targets share ``--manifest PATH`` and ``--root DIR``;
+see :ref:`discovery <discovery-section>` below. Configuration errors exit
+with status 2.
 
-With no extra flags, sawmill opens the TUI. Add ``--batch`` (or any
-output/filter/check flag) to run in batch mode:
-
-.. code-block:: console
-
-   $ sawmill build.log --batch
-
-Sawmill auto-detects the appropriate plugin by asking each installed
-plugin how confident it is about the file. To override auto-detection:
-
-.. code-block:: console
-
-   $ sawmill build.log --plugin vivado
-
-List installed plugins:
+init
+----
 
 .. code-block:: console
 
-   $ sawmill --list-plugins
+   $ sawmill init                              # .sawmill/manifest.toml + rules/
+   $ sawmill init --name soc                  # set the manifest name
+   $ sawmill init --target synth 'build/lint/*.log'
+   $ sawmill init --target pnr 'build/pnr/job_*/vivado.log' --plugin vivado
 
-Show detailed information about a plugin, including its filters and
-severity levels:
+Run from the project root. ``--target`` appends a ``[[target]]``, creating
+the manifest if needed, auto-detects the plugin unless ``--plugin`` is
+given, and creates ``.sawmill/rules/<name>.toml``. See
+:doc:`sawmill-directory`.
 
-.. code-block:: console
-
-   $ sawmill --show-info --plugin vivado
-
-Output formats
---------------
-
-Sawmill supports three output formats:
-
-``--format text`` (default)
-   Coloured, human-readable output. Each message is printed with its
-   severity style applied.
-
-``--format json``
-   JSONL (one JSON object per line). Each object contains ``start_line``,
-   ``end_line``, ``raw_text``, ``content``, ``severity``, ``message_id``,
-   ``category``, and optionally ``file_ref``.
-
-``--format count``
-   A single-line summary: ``total=N error=N warning=N ...``
-
-Example:
+view
+----
 
 .. code-block:: console
 
-   $ sawmill build.log --format json | jq '.severity'
+   $ sawmill view                    # every target of the manifest
+   $ sawmill view pnr                # one target
+   $ sawmill view build/top.log      # one log file, no manifest needed
+   $ sawmill build/top.log           # same
+   $ sawmill view build/top.log --plugin vivado --fail-on error
 
-Filtering
----------
+- If the argument is an existing file it is opened as a single log, with the
+  plugin auto-detected unless ``--plugin`` is given. Rules from
+  ``.sawmill/rules/<plugin>.toml`` beside the log apply if that file exists.
+- Otherwise the argument is a target name.
+- ``--fail-on`` overrides every target's ``fail_on`` for the PASS/FAIL
+  display.
 
-**By severity** --- show messages at or above a severity level:
+See :doc:`tui-usage`.
 
-.. code-block:: console
-
-   $ sawmill build.log --severity warning
-
-The valid severity names come from the plugin. Use
-``--list-severity --plugin <name>`` to see them.
-
-**By regex** --- include only messages matching a pattern:
-
-.. code-block:: console
-
-   $ sawmill build.log --filter "timing.*slack"
-
-**By message ID** --- include messages with matching IDs. Supports
-glob-style wildcards:
+check
+-----
 
 .. code-block:: console
 
-   $ sawmill build.log --id "Synth 8-*"
-   $ sawmill build.log --id "Vivado 12-3523" --id "DRC *"
+   $ sawmill check                          # all targets of the manifest
+   $ sawmill check synth pnr                # selected targets
+   $ sawmill check --all                    # every target of every manifest
+   $ sawmill check --fail-on error          # override fail_on everywhere
+   $ sawmill check --report build/r.json    # also write the JSON report
 
-**By category** --- include messages in a given category (defined by the
-plugin's pre-defined filters):
+Exits 0 when every selected target passes, 1 otherwise. Output format and
+CI examples are in :doc:`ci-integration`.
 
-.. code-block:: console
-
-   $ sawmill build.log --category timing --category drc
-
-Suppressing display noise
---------------------------
-
-Suppressions hide messages from output. They have **no effect on CI
-pass/fail** (see :doc:`/user-guide/ci-integration`).
-
-**By regex pattern:**
+report
+------
 
 .. code-block:: console
 
-   $ sawmill build.log --suppress "INFO:.*Synthesizing"
+   $ sawmill report                          # JSON on stdout
+   $ sawmill report --format junit -o build/sawmill.xml
+   $ sawmill report --format text
+   $ sawmill report -o                       # write to [manifest] report
 
-**By message ID:**
+Same selection options as ``check``. Always exits 0 unless the
+configuration is invalid. Formats are described in
+:doc:`/reference/file-formats`.
 
-.. code-block:: console
-
-   $ sawmill build.log --suppress-id "Vivado 12-1023"
-
-Both options can be repeated. If ``--suppress`` or ``--suppress-id`` is
-combined with ``--check``, sawmill emits a stderr warning reminding you
-that suppressions are display-only.
-
-Grouping and summary
---------------------
-
-**Summary mode** shows counts by severity and message ID, similar to
-``hal_log_parser.py``:
+rules
+-----
 
 .. code-block:: console
 
-   $ sawmill build.log --summary
+   $ sawmill rules list                  # rules in scope per target, in matching order
+   $ sawmill rules unused --all          # rules that matched nothing in the run
+   $ sawmill rules generate pnr > .sawmill/rules/pnr-baseline.toml
+   $ sawmill rules generate pnr --min-level 2
 
-**Group-by mode** groups messages by a field and shows sample messages
-per group:
+- ``list`` reads rule files only; it does not parse logs.
+- ``unused`` runs the targets and lists rules that matched nothing.
+- ``generate`` runs exactly one target and prints a rule file waiving its
+  unwaived messages at or above severity level ``--min-level``.
 
-.. code-block:: console
+All exit 0 unless the configuration is invalid. See :doc:`rules`.
 
-   $ sawmill build.log --group-by severity
-   $ sawmill build.log --group-by id --top 3
-   $ sawmill build.log --group-by file
-   $ sawmill build.log --group-by category
-
-``--top N`` limits the number of sample messages shown per group
-(default: 5, ``--top 0`` for no limit).
-
-List available grouping fields (including plugin-specific ones):
+plugins
+-------
 
 .. code-block:: console
 
-   $ sawmill --list-groupings --plugin vivado
+   $ sawmill plugins list
+   $ sawmill plugins info vivado
 
-Waiver generation
------------------
+``list`` shows name, version and description of each installed plugin.
+``info`` shows the hooks a plugin implements, its filters, severity levels
+and grouping fields.
 
-Generate a waiver TOML file from errors and warnings in a log:
-
-.. code-block:: console
-
-   $ sawmill build.log --generate-waivers > waivers.toml
-
-By default, messages at severity level 1 and above are included. Adjust
-the threshold with ``--waiver-level``:
+Version
+-------
 
 .. code-block:: console
 
-   $ sawmill build.log --generate-waivers --waiver-level 0
+   $ sawmill --version
 
-The generated file contains placeholder values for ``reason`` and
-``author`` that you should review and update before committing.
+.. _discovery-section:
 
-See :doc:`/user-guide/waivers` for the waiver file format.
+Selecting manifests and targets
+-------------------------------
+
+- ``--manifest PATH`` uses one ``.sawmill/manifest.toml`` with no search.
+- ``--root DIR`` (repeatable) searches below each directory.
+- Without either, the roots come from ``[general] roots`` in
+  ``~/.config/sawmill/config.toml``, else the current directory.
+- Name targets as ``manifest:target``, or ``target`` when unique.
+
+Details: :doc:`sawmill-directory`.

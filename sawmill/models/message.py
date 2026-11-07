@@ -46,6 +46,9 @@ class Message:
         metadata: Plugin-specific metadata for custom grouping/filtering.
             Plugins can populate this with tool-specific fields like
             "hierarchy", "phase", "clock_domain", etc.
+        log_path: Project-relative POSIX path of the log this message came
+            from (absolute POSIX path if outside the project root). Set by
+            the target runner; None when unknown.
     """
 
     start_line: int
@@ -57,6 +60,7 @@ class Message:
     category: str | None = None
     file_ref: FileRef | None = None
     metadata: dict[str, str] = field(default_factory=dict)
+    log_path: str | None = None
 
     def __post_init__(self) -> None:
         # Cheap coercion of line numbers, standing in for Pydantic's.

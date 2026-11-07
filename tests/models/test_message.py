@@ -132,3 +132,25 @@ def test_fileref_coerces_line():
     assert ref.line == 12 and isinstance(ref.line, int)
     assert FileRef(path="a.v", line=5).line == 5
     assert FileRef(path="a.v").line is None
+
+
+def test_log_path_defaults_none():
+    msg = Message(start_line=1, end_line=1, raw_text="x", content="x")
+    assert msg.log_path is None
+
+
+def test_log_path_settable():
+    msg = Message(start_line=1, end_line=1, raw_text="x", content="x")
+    msg.log_path = "build/a.log"
+    assert msg.log_path == "build/a.log"
+
+
+def test_log_path_is_last_field_positional_construction_unchanged():
+    ref = FileRef("a.v", 3)
+    msg = Message(1, 2, "raw", "content", "error", "X-1", "cat", ref, {"k": "v"})
+    assert msg.severity == "error"
+    assert msg.message_id == "X-1"
+    assert msg.category == "cat"
+    assert msg.file_ref is ref
+    assert msg.metadata == {"k": "v"}
+    assert msg.log_path is None

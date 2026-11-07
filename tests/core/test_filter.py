@@ -270,160 +270,6 @@ class TestApplyFiltersOrMode:
         assert len(results) == 0
 
 
-class TestApplySuppressions:
-    """Tests for suppression patterns."""
-
-    def test_suppressions_remove_matches(self):
-        """Suppression patterns should remove matching messages."""
-        messages = [
-            Message(
-                start_line=1,
-                end_line=1,
-                raw_text="Error: important",
-                content="important",
-                severity="error",
-            ),
-            Message(
-                start_line=2,
-                end_line=2,
-                raw_text="Info: noisy startup",
-                content="noisy startup",
-                severity="info",
-            ),
-            Message(
-                start_line=3,
-                end_line=3,
-                raw_text="Warning: also important",
-                content="also important",
-                severity="warning",
-            ),
-        ]
-
-        engine = FilterEngine()
-        results = engine.apply_suppressions([r"noisy"], messages)
-
-        assert len(results) == 2
-        assert all("noisy" not in m.raw_text for m in results)
-
-    def test_multiple_suppressions(self):
-        """Multiple suppression patterns should all be applied."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: important", content="important"),
-            Message(start_line=2, end_line=2, raw_text="Info: noise1", content="noise1"),
-            Message(start_line=3, end_line=3, raw_text="Info: noise2", content="noise2"),
-            Message(start_line=4, end_line=4, raw_text="Warning: keep this", content="keep this"),
-        ]
-
-        engine = FilterEngine()
-        results = engine.apply_suppressions([r"noise1", r"noise2"], messages)
-
-        assert len(results) == 2
-        assert "important" in results[0].raw_text
-        assert "keep this" in results[1].raw_text
-
-    def test_empty_suppressions_returns_all(self):
-        """Empty suppression list should return all messages."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: test", content="test"),
-            Message(start_line=2, end_line=2, raw_text="Info: test", content="test"),
-        ]
-
-        engine = FilterEngine()
-        results = engine.apply_suppressions([], messages)
-
-        assert len(results) == 2
-
-    def test_invalid_suppression_pattern_ignored(self):
-        """Invalid suppression patterns should be skipped."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="Error: test", content="test"),
-        ]
-
-        engine = FilterEngine()
-        # All invalid patterns - should return all messages
-        results = engine.apply_suppressions([r"[invalid"], messages)
-
-        assert len(results) == 1
-
-    def test_suppressions_with_regex(self):
-        """Suppression patterns should support full regex."""
-        messages = [
-            Message(
-                start_line=1,
-                end_line=1,
-                raw_text="INFO: [Common 17-55] startup noise",
-                content="startup noise",
-            ),
-            Message(
-                start_line=2,
-                end_line=2,
-                raw_text="ERROR: [DRC 1-1] real error",
-                content="real error",
-            ),
-        ]
-
-        engine = FilterEngine()
-        results = engine.apply_suppressions([r"Common 17-\d+"], messages)
-
-        assert len(results) == 1
-        assert "DRC" in results[0].raw_text
-
-
-class TestApplySuppressIds:
-    """Tests for suppress-by-ID partitioning."""
-
-    def test_partitions_by_message_id(self):
-        """Messages with matching IDs go to suppressed list."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id="ID-1"),
-            Message(start_line=2, end_line=2, raw_text="E: b", content="b", message_id="ID-2"),
-            Message(start_line=3, end_line=3, raw_text="E: c", content="c", message_id="ID-3"),
-        ]
-        engine = FilterEngine()
-        kept, suppressed = engine.apply_suppress_ids({"ID-2"}, messages)
-
-        assert len(kept) == 2
-        assert len(suppressed) == 1
-        assert suppressed[0].message_id == "ID-2"
-
-    def test_empty_suppress_ids_keeps_all(self):
-        """Empty suppress set returns all messages as kept."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id="ID-1"),
-        ]
-        engine = FilterEngine()
-        kept, suppressed = engine.apply_suppress_ids(set(), messages)
-
-        assert len(kept) == 1
-        assert len(suppressed) == 0
-
-    def test_none_message_id_always_kept(self):
-        """Messages with no message_id are always kept."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="E: a", content="a", message_id=None),
-            Message(start_line=2, end_line=2, raw_text="E: b", content="b", message_id="ID-1"),
-        ]
-        engine = FilterEngine()
-        kept, suppressed = engine.apply_suppress_ids({"ID-1"}, messages)
-
-        assert len(kept) == 1
-        assert kept[0].message_id is None
-        assert len(suppressed) == 1
-
-    def test_preserves_order(self):
-        """Kept and suppressed lists preserve original order."""
-        messages = [
-            Message(start_line=1, end_line=1, raw_text="1", content="1", message_id="A"),
-            Message(start_line=2, end_line=2, raw_text="2", content="2", message_id="B"),
-            Message(start_line=3, end_line=3, raw_text="3", content="3", message_id="A"),
-        ]
-        engine = FilterEngine()
-        kept, suppressed = engine.apply_suppress_ids({"A"}, messages)
-
-        assert [m.start_line for m in kept] == [2]
-        assert [m.start_line for m in suppressed] == [1, 3]
-
-
 class TestFilterBySeverityToggles:
     """Tests for severity toggle filtering."""
 
@@ -490,7 +336,6 @@ class TestEdgeCases:
 
         assert engine.apply_filter(r"test", []) == []
         assert engine.apply_filters([], [], mode="AND") == []
-        assert engine.apply_suppressions([r"test"], []) == []
 
     def test_empty_filters_list(self):
         """Empty filter list should return all messages."""
@@ -516,3 +361,9 @@ class TestEdgeCases:
         assert len(results) == 2
         assert results[0].start_line == 1
         assert results[1].start_line == 3
+
+
+def test_filter_engine_has_no_suppress_helpers():
+    """The old suppression helpers have been removed."""
+    assert not hasattr(FilterEngine, "apply_suppress_ids")
+    assert not hasattr(FilterEngine, "apply_suppressions")

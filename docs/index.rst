@@ -1,12 +1,12 @@
 Sawmill
 =======
 
-A plugin-driven terminal log analyzer.
+A plugin-driven terminal log analyser.
 
-Sawmill provides an interactive TUI for browsing, filtering, and triaging
-structured tool logs, plus a CLI mode for CI pipeline integration. A plugin
-architecture keeps the core tool-agnostic --- plugins teach sawmill how to
-parse each tool's output.
+Sawmill parses structured tool logs through plugins, applies checked-in
+rules from a project manifest, and reports what is left. ``sawmill check``
+gates CI on the result; ``sawmill view`` opens a terminal UI for triage and
+for writing new rules.
 
 .. toctree::
    :maxdepth: 2
@@ -22,7 +22,7 @@ parse each tool's output.
    user-guide/cli-usage
    user-guide/tui-usage
    user-guide/ci-integration
-   user-guide/waivers
+   user-guide/rules
    user-guide/sawmill-directory
 
 .. toctree::

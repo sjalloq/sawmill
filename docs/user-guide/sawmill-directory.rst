@@ -1,98 +1,175 @@
-The ``.sawmill/`` Directory
-===========================
+The manifest
+============
 
-Overview
---------
+All project configuration lives in a ``.sawmill/`` directory: a manifest
+that names the project and its targets, and the rule files the targets use.
+The directory containing ``.sawmill/`` is the *project root*.
 
-Sawmill stores project-level configuration in a ``.sawmill/`` directory
-in your project root:
-
-.. code-block:: text
-
-   .sawmill/
-   ├── config.toml      # General and output settings
-   ├── suppress.toml    # Suppressed message IDs and patterns
-   └── waivers.toml     # Waiver entries for CI acceptance
-
-This directory is created automatically the first time you save from the
-TUI (``Ctrl+S``).
-
-Directory naming
-----------------
-
-Sawmill accepts either ``.sawmill/`` or ``sawmill/`` as the
-configuration directory. The ``.sawmill/`` form is recommended (hidden
-directory, consistent with ``.git/``, ``.github/``, etc.).
-
-If **both** ``.sawmill/`` and ``sawmill/`` exist in the same directory,
-sawmill raises an error:
+Layout
+------
 
 .. code-block:: text
 
-   Ambiguous config: both .sawmill/ and sawmill/ exist in /path/to/project.
-   Remove one to resolve.
+   soc/                         project root
+   ├── .sawmill/
+   │   ├── manifest.toml
+   │   └── rules/
+   │       ├── vivado.toml
+   │       ├── vivado-pnr.toml
+   │       └── slang.toml
+   └── build/
+       ├── lint/top.log  sub_a.log  sub_b.log
+       └── pnr/job_0/vivado.log ... job_7/vivado.log
 
-Configuration --- ``config.toml``
----------------------------------
+Commit the whole ``.sawmill/`` directory.
 
-The configuration file has two sections:
+- Log globs are relative to the project root.
+- Rule file names are relative to ``.sawmill/rules/``.
+
+manifest.toml
+-------------
 
 .. code-block:: toml
 
-   [general]
-   default_plugin = "vivado"    # Plugin to use when auto-detection is skipped
+   [manifest]
+   name = "soc"
+   rules = ["vivado.toml", "slang.toml"]   # plugin-wide rule files
+   report = "build/sawmill-report.json"       # default for `report --output`
+   fail_on = "warning"                        # default for all targets
 
-   [output]
-   color = true                 # Enable/disable colour output
-   format = "text"              # Default output format: text, json, or count
+   [[target]]
+   name = "lint"
+   plugin = "slang"
+   logs = ["build/lint/*.log"]
 
-**User-level configuration** can be placed at
-``~/.config/sawmill/config.toml``. Local (project-level) configuration
-overrides user-level settings with a **shallow per-section merge** ---
-if a local file defines ``[output]``, the entire ``[output]`` section
-comes from the local file, not a field-by-field merge.
+   [[target]]
+   name = "pnr"
+   plugin = "vivado"
+   logs = ["build/pnr/job_*/vivado.log"]
+   rules = ["vivado-pnr.toml"]
+   fail_on = "critical_warning"
+   unused_rules = "warn"                      # warn (default) | ignore
 
-Suppressions --- ``suppress.toml``
-----------------------------------
+   [target.plugin_options]
+   mode = "implementation"
 
-Suppressions hide messages from the display. They have **no effect on
-CI pass/fail**.
+``[manifest]``
+^^^^^^^^^^^^^^
 
-.. code-block:: toml
+=========== ======== ======== ===========================================================
+Key         Type     Required Meaning
+=========== ======== ======== ===========================================================
+``name``    string   yes      Unique across all discovered manifests.
+``rules``   list     no       Plugin-wide rule files. Each applies to every target whose
+                              plugin matches the file's ``[rules] plugin``.
+``report``  string   no       Report path relative to the project root. Used by
+                              ``sawmill report --output`` with no path.
+``fail_on`` string   no       Default failure severity id for every target.
+=========== ======== ======== ===========================================================
 
-   [suppress]
-   message_ids = [
-       "Common 17-55",
-       "Vivado 12-1023",
-   ]
-   patterns = [
-       "INFO:.*Synthesizing",
-   ]
+``[[target]]``
+^^^^^^^^^^^^^^
 
-``message_ids`` is a list of exact message IDs to hide. ``patterns`` is
-a list of regex patterns --- messages with ``raw_text`` matching any
-pattern are hidden.
+================== ======== ======== ====================================================
+Key                Type     Required Meaning
+================== ======== ======== ====================================================
+``name``           string   yes      Unique within the manifest.
+``plugin``         string   yes      Plugin that parses the logs.
+``logs``           list     yes      Non-empty list of globs relative to the project
+                                     root. Absolute paths are rejected.
+``rules``          list     no       Rule files for this target only. Each must have
+                                     the target's plugin.
+``fail_on``        string   no       Overrides ``[manifest] fail_on``.
+``unused_rules``   string   no       ``"warn"`` (default) or ``"ignore"``.
+``plugin_options`` table    no       Passed to the plugin's ``configure`` hook before
+                                     parsing.
+================== ======== ======== ====================================================
 
-In the TUI, press ``s`` to suppress a message ID. The ``message_ids``
-list is updated when you save (``Ctrl+S``).
+Unknown keys are an error, reported with the file and line.
 
-Waivers --- ``waivers.toml``
------------------------------
+``fail_on`` resolution, first match wins: the ``--fail-on`` option, the
+target's ``fail_on``, the manifest's ``fail_on``, then the plugin's
+second-lowest severity level. An id the plugin does not define is a
+configuration error.
 
-See :doc:`/user-guide/waivers` for the full waiver format and semantics.
+A target whose globs match no file fails ``check`` and shows as empty in
+``view``.
 
-Version control
----------------
+Plugin options
+^^^^^^^^^^^^^^
 
-Recommended ``.gitignore`` policy:
+``[target.plugin_options]`` is passed unchanged to the plugin's
+``configure`` hook, once per target, before any log is parsed. What the
+keys mean is up to the plugin; see its documentation. If the plugin rejects
+them, sawmill exits with status 2. If the plugin has no ``configure`` hook,
+sawmill prints a warning on stderr and ignores them.
 
-- **Commit** ``waivers.toml`` --- waivers are team decisions with audit
-  trails. They should be reviewed in code review.
-- **Commit** ``config.toml`` --- shared project defaults.
-- **Consider ignoring** ``suppress.toml`` --- suppressions are personal
-  display preferences. Team members may want different suppression lists.
+Creating a manifest
+-------------------
 
-.. code-block:: text
+.. code-block:: console
 
-   # .gitignore
-   .sawmill/suppress.toml
+   $ cd soc
+   $ sawmill init --name soc
+   created /work/soc/.sawmill/manifest.toml
+
+``sawmill init`` writes ``.sawmill/manifest.toml`` with every key present
+and commented out, and creates ``.sawmill/rules/``. ``--name`` defaults to
+the current directory name. It refuses to overwrite an existing manifest.
+
+Add targets with ``--target NAME GLOB``:
+
+.. code-block:: console
+
+   $ sawmill init --target pnr 'build/pnr/job_*/vivado.log'
+   appended target 'pnr' (plugin vivado) to /work/soc/.sawmill/manifest.toml
+   created /work/soc/.sawmill/rules/pnr.toml
+
+- Creates the manifest first if it does not exist.
+- Detects the plugin from the first file matching the glob, unless
+  ``--plugin`` is given. With no matching file, ``--plugin`` is required.
+- Lists ``pnr.toml`` as the target's rule file and creates it with the
+  ``[rules]`` header if missing. An existing rule file is left alone.
+- Preserves existing comments and formatting in the manifest.
+- Quote the glob so the shell does not expand it.
+
+Discovery
+---------
+
+Commands that take targets find manifests by walking *down* from one or
+more roots. Roots, highest precedence first:
+
+1. ``--manifest PATH``: exactly this manifest, no walk. ``PATH`` must be a
+   ``.sawmill/manifest.toml``. Cannot be combined with ``--root``.
+2. ``--root DIR``, repeatable.
+3. ``[general] roots`` in ``~/.config/sawmill/config.toml``.
+4. The current directory.
+
+The walk:
+
+- skips hidden directories other than ``.sawmill``, and ``.git``;
+- does not follow symbolic links;
+- loads a manifest reached from overlapping roots once;
+- fails if two manifests have the same ``name``.
+
+Addressing targets
+^^^^^^^^^^^^^^^^^^
+
+- ``manifest:target`` always works.
+- ``target`` alone works when exactly one discovered manifest has that
+  target; otherwise it is ambiguous and an error.
+- With no target and no ``--all``, ``check``, ``report``, ``view`` and
+  ``rules`` use every target of the single discovered manifest. If more
+  than one manifest was found this is an error; pass ``--all`` or name the
+  targets.
+- ``--all`` selects every target of every manifest and cannot be combined
+  with target names. ``view`` has no ``--all``.
+
+.. code-block:: console
+
+   $ sawmill check                       # all targets of the one manifest
+   $ sawmill check pnr                   # unique bare name
+   $ sawmill check soc:pnr fpga:synth   # qualified names
+   $ sawmill check --all --root ~/work   # every manifest under ~/work
+
+Discovery, manifest and rule-file errors exit with status 2.

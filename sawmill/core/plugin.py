@@ -30,6 +30,13 @@ def load_messages(plugin: Any, path: Path) -> Iterator[Message]:
     return iter(plugin.load_and_parse(path))
 
 
+def plugin_implements_configure(plugin: Any) -> bool:
+    """Return True when ``plugin`` overrides :meth:`SawmillPlugin.configure`."""
+    return (
+        getattr(type(plugin), "configure", SawmillPlugin.configure) is not SawmillPlugin.configure
+    )
+
+
 class PluginError(Exception):
     """Base exception for plugin-related errors."""
 
@@ -46,12 +53,14 @@ class PluginManager:
     """Manages plugin discovery and registration.
 
     This class handles:
+
     - Discovering plugins via Python entry points
     - Registering plugins with pluggy
     - Listing available plugins
     - Calling plugin hooks
 
-    Example:
+    Example::
+
         manager = PluginManager()
         manager.discover()  # Find and register entry point plugins
         manager.register(MyPlugin())  # Manually register a plugin

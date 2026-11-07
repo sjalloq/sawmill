@@ -1,126 +1,83 @@
-"""Tests for CLI plugin discovery commands."""
+"""Tests for the ``sawmill plugins`` command group."""
+
+from __future__ import annotations
 
 import re
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
 from sawmill.cli import cli
+from sawmill.core.plugin import PluginManager
 
 
-class TestListPlugins:
-    """Tests for --list-plugins option."""
+class TestPluginsList:
+    """Tests for ``plugins list``."""
 
-    def test_list_plugins(self):
-        """--list-plugins should enumerate all plugins."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--list-plugins"])
-
-        assert result.exit_code == 0
+    def test_list_plugins(self) -> None:
+        result = CliRunner().invoke(cli, ["plugins", "list"], terminal_width=200)
+        assert result.exit_code == 0, result.output
         assert "vivado" in result.output.lower()
+        assert re.search(r"\d+\.\d+", result.output)
+        assert "Vivado" in result.output
 
-    def test_list_plugins_shows_version(self):
-        """--list-plugins should show a valid plugin version."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--list-plugins"])
-
+    def test_list_plugins_none_found(self) -> None:
+        with patch("sawmill.cli.plugins.get_plugin_manager", return_value=PluginManager()):
+            result = CliRunner().invoke(cli, ["plugins", "list"])
         assert result.exit_code == 0
-        assert re.search(r"\d+\.\d+\.\d+", result.output)
-
-    def test_list_plugins_shows_description(self):
-        """--list-plugins should show plugin descriptions."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--list-plugins"])
-
-        assert result.exit_code == 0
-        # Vivado plugin description contains "Vivado"
-        assert "vivado" in result.output.lower()
+        assert "No plugins found" in result.output
 
 
-class TestShowPluginInfo:
-    """Tests for --show-info option."""
+class TestPluginsInfo:
+    """Tests for ``plugins info NAME``."""
 
-    def test_show_plugin_info(self):
-        """--show-info should display plugin capabilities."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
+    def test_info_vivado(self) -> None:
+        result = CliRunner().invoke(cli, ["plugins", "info", "vivado"], terminal_width=200)
+        assert result.exit_code == 0, result.output
+        out = result.output
+        assert re.search(r"Version: \S*\d", out)
+        assert "Implemented Hooks" in out
+        assert "load_and_parse" in out
+        assert "Filters" in out
+        assert "Severity Levels" in out
+        assert "Grouping Fields" in out
+        assert "critical_warning" in out
 
-        assert result.exit_code == 0
-        assert "vivado" in result.output.lower()
+    def test_info_unknown_plugin(self) -> None:
+        result = CliRunner().invoke(cli, ["plugins", "info", "nope"])
+        assert result.exit_code == 2
+        assert "vivado" in result.output
 
-    def test_show_info_displays_version(self):
-        """--show-info should display a valid plugin version."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
-
-        assert result.exit_code == 0
-        assert re.search(r"\d+\.\d+\.\d+", result.output)
-
-    def test_show_info_displays_hooks(self):
-        """--show-info should display implemented hooks."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
-
-        assert result.exit_code == 0
-        # Vivado plugin implements these hooks
-        assert "can_handle" in result.output or "Hooks" in result.output
-
-    def test_show_info_displays_filter_count(self):
-        """--show-info should display filter information."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
-
-        assert result.exit_code == 0
-        # Vivado plugin provides filters
-        assert "filter" in result.output.lower()
-
-    def test_show_info_requires_plugin(self):
-        """--show-info without --plugin should error."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--show-info"])
-
-        # Should fail or provide helpful message
-        assert result.exit_code != 0 or "plugin" in result.output.lower()
-
-    def test_show_info_unknown_plugin(self):
-        """--show-info with unknown plugin should error."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "nonexistent", "--show-info"])
-
-        assert result.exit_code != 0
-        assert "not found" in result.output.lower() or "error" in result.output.lower()
-
-    def test_show_info_lists_available_on_error(self):
-        """--show-info with unknown plugin should list available plugins."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "nonexistent", "--show-info"])
-
-        # Should list vivado as an available option
-        assert "vivado" in result.output.lower()
+    def test_info_requires_name(self) -> None:
+        result = CliRunner().invoke(cli, ["plugins", "info"])
+        assert result.exit_code == 2
 
 
-class TestPluginInfoContent:
-    """Tests for the content of plugin info output."""
+def test_plugins_info_lists_configure_only_when_overridden() -> None:
+    from sawmill.plugin import SawmillPlugin, hookimpl
 
-    def test_vivado_info_shows_description(self):
-        """Vivado plugin info should include description."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
+    class Plain(SawmillPlugin):
+        name = "plain"
+        version = "1.0"
 
-        assert result.exit_code == 0
-        # The description mentions synthesis or implementation
-        output_lower = result.output.lower()
-        assert (
-            "synthesis" in output_lower
-            or "implementation" in output_lower
-            or "vivado" in output_lower
-        )
+        @hookimpl
+        def get_severity_levels(self) -> list[dict]:
+            return [{"id": "error", "name": "Error", "level": 1}]
 
-    def test_vivado_info_shows_filters(self):
-        """Vivado plugin info should show filter definitions."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ["--plugin", "vivado", "--show-info"])
+    class Conf(Plain):
+        name = "conf"
 
-        assert result.exit_code == 0
-        output_lower = result.output.lower()
-        # Should show some of the domain-specific filter IDs
-        assert "timing" in output_lower or "synthesis" in output_lower
+        @hookimpl
+        def configure(self, options: dict) -> None:
+            pass
+
+    manager = PluginManager()
+    manager.register(Plain())
+    manager.register(Conf())
+    with patch("sawmill.cli.plugins.get_plugin_manager", return_value=manager):
+        plain = CliRunner().invoke(cli, ["plugins", "info", "plain"], terminal_width=200)
+        conf = CliRunner().invoke(cli, ["plugins", "info", "conf"], terminal_width=200)
+    assert plain.exit_code == 0, plain.output
+    assert conf.exit_code == 0, conf.output
+    assert "- configure" not in plain.output
+    assert "- configure" in conf.output

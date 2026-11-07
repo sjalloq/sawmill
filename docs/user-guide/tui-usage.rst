@@ -1,180 +1,186 @@
 TUI Usage
 =========
 
-Launch the TUI by running sawmill with just a filename:
-
 .. code-block:: console
 
-   $ sawmill build.log
+   $ sawmill view              # every target of the discovered manifest
+   $ sawmill view pnr          # one target
+   $ sawmill build/top.log     # one log, no manifest needed
 
 Layout
 ------
 
-The TUI has six panels, top to bottom:
+Top to bottom:
 
-1. **Header** --- App name (``sawmill``) on the left, log filename on the
-   right.
-2. **Severity bar** --- Total message count and per-severity counts with
-   colour coding. Shows number-key hints (``[1]``, ``[2]``, etc.) next to
-   each level. Also shows waived/suppressed counts when applicable.
-3. **Search bar** --- Text input for filter expressions. Placeholder text
-   shows supported prefixes.
-4. **Message table** --- Columns: Line, Severity, ID, Message. The Message
-   column auto-sizes to fill available width.
-5. **Detail panel** --- Full ``raw_text`` of the highlighted message.
-6. **Footer** --- Keybinding hints.
+1. **Header**: ``sawmill``, then one tab per view: ``Overview`` (manifest
+   mode only) and one tab per target.
+2. **Severity bar**: total and per-severity counts for the active target,
+   with the ``1``--``4`` key hints, plus waived and hidden counts.
+3. **Search bar**: filter expression for the active target.
+4. **Messages**: the overview table or the active target's message table.
+5. **Detail panel**: full raw text of the highlighted message.
+6. **Footer**: key hints. Press ``?`` for the full list.
 
-Navigating
-----------
+Switch tabs with ``←`` and ``→``.
 
-- **Arrow keys** or **j/k** --- Move cursor up/down in the message table.
-- **g** --- Jump to the first message.
-- **G** --- Jump to the last message.
-- **Tab** --- Toggle focus between the search bar and the message table.
+Overview tab
+------------
 
-Severity filtering
-------------------
+Shown when the TUI is opened from a manifest. One row per target, and one
+row per log beneath it:
 
-Press number keys **1** through **4** to toggle individual severity
-levels on and off. The severity bar dims levels that are hidden.
+====================== ================================================
+Column                 Content
+====================== ================================================
+Target / Log           Target name, then each log path
+Counts                 Counts per severity
+Waived                 Messages waived by rules
+Hidden                 Messages hidden this session
+Result                 ``PASS`` or ``FAIL`` against ``fail_on``
+====================== ================================================
 
-Levels are numbered from lowest to highest severity (``1`` = lowest,
-e.g. Note). The mapping depends on the plugin --- use ``--list-severity``
-to see the order.
+Press ``Enter`` on a target row to open its tab; on a log row to open the
+target's tab filtered to that log (``log:<path>`` in the search bar).
+
+Target tabs
+-----------
+
+One tab per target. The table merges messages from every log of the target:
+
+============ ================================================================
+Column       Content
+============ ================================================================
+St           Status: ``W`` waived, ``H`` hidden, blank otherwise
+Line         Line number in the log
+Log          Log path relative to the project root
+Severity     Severity id
+ID           Message ID
+Message      Message text; fills the remaining width
+============ ================================================================
+
+By default only unwaived, unhidden messages are shown. Press ``v`` to show
+waived and hidden rows as well, marked in the ``St`` column.
+
+Press ``o`` to cycle the sort order: line, severity, ID, count.
+
+Navigation: arrow keys or ``j``/``k``; ``g``/``Home`` top, ``G``/``End``
+bottom; ``Tab`` toggles focus between the search bar and the table.
+
+Severity levels
+^^^^^^^^^^^^^^^
+
+``1`` to ``4`` toggle severity levels on and off, ``1`` being the lowest.
+The severity bar dims hidden levels. ``sawmill plugins info NAME`` lists a
+plugin's levels.
 
 Searching
 ---------
 
-Press **/** to focus the search bar. The search bar supports three kinds
-of filter:
+Press ``/`` to focus the search bar. Terms combine with AND.
 
-**Plain text** --- treated as a case-insensitive regex matched against
-``raw_text``:
+======================= ======================================================
+Term                    Meaning
+======================= ======================================================
+``sev:<id>``            Severity id (also ``severity:<id>``)
+``id:<pattern>``        Message ID, fnmatch wildcards: ``id:Synth 8-*``
+``cat:<name>``          Category (also ``category:<name>``)
+``log:<pattern>``       Log path, fnmatch, case-sensitive:
+                        ``log:build/pnr/job_3/*``
+anything else           Case-insensitive regex over the raw text
+======================= ======================================================
 
-.. code-block:: text
-
-   timing.*slack
-
-**Severity prefix** --- ``sev:<id>`` or ``severity:<id>`` shows only
-messages with that severity:
-
-.. code-block:: text
-
-   sev:error
-
-**ID prefix** --- ``id:<pattern>`` filters by message ID using fnmatch
-wildcards:
+Quote terms containing spaces. ``Esc`` clears the filter and returns to
+the table.
 
 .. code-block:: text
 
-   id:Synth 8-*
-
-Multiple prefixes compose with AND logic. Press **Esc** to clear the
-filter and return focus to the table.
-
-Sorting
--------
-
-Press **o** to cycle through sort modes:
-
-1. **line** (default) --- by line number in the log file.
-2. **severity** --- most severe first.
-3. **id** --- alphabetical by message ID.
-4. **count** --- most frequent message ID first.
-
-The current sort mode is shown in the Messages panel subtitle.
-
-Suppressing
------------
-
-Press **s** on a highlighted message to suppress its message ID. All
-messages with that ID are hidden from the table.
-
-Press **v** to toggle visibility of suppressed messages. When visible,
-suppressed messages appear dimmed.
-
-The severity bar shows "N suppressed" when suppressions are active.
-
-Suppressions are display-only and do not affect CI pass/fail.
+   sev:warning log:build/pnr/job_3/* timing.*slack
 
 Waiving
 -------
 
-Press **w** on a highlighted message to open the waive modal. The modal
-presents:
+Press ``w`` on a message to open the waive modal. It builds one rule:
 
-- **Message ID** (read-only) --- the ID of the message being waived.
-- **Severity** (read-only) --- the message's severity level.
-- **Reason** (required) --- free text explaining why this is acceptable.
-- **Pattern** --- defaults to the message content. Leave empty to waive
-  all instances of this message ID.
-- **Content match type** --- radio buttons: ``raw string`` (substring
-  match) or ``regex``.
-- **Author** --- pre-filled from:
+============== ==============================================================
+Field          Meaning
+============== ==============================================================
+Message        The selected message (read-only)
+Scope          ``this log`` (adds ``logs = [<log>]``), ``this target`` or
+               ``all targets using this plugin``
+Match          ``id only``, ``id + substring`` (stored as an escaped
+               ``regex``) or ``id + regex``; the pattern is prefilled and
+               editable
+Max count      Optional ``max_count``, with ``per`` log or target
+Comment        Required
+Destination    Rule file to append to. Plugin scope offers the manifest's
+               plugin-wide files for the plugin; log and target scope offer
+               the target's files. The last file is preselected.
+Author         Prefilled from ``SAWMILL_AUTHOR`` or git config; editable
+Date           Today (read-only)
+============== ==============================================================
 
-  1. ``SAWMILL_AUTHOR`` environment variable
-  2. ``git config user.email``
-  3. ``git config user.name``
-  4. Empty (you must fill it in)
+``Enter`` confirms, ``Esc`` cancels.
 
-- **File** (read-only) --- shows the waiver file path for reference.
+On confirm the rule is appended to the destination file as a ``[[rule]]``
+block using ``tomlkit``, so existing content and comments are untouched.
+Rules are then re-applied to the loaded messages without re-parsing the
+logs, and the counts update.
 
-Press **Enter** to confirm or **Escape** to cancel.
+If the target lists no rule file, the TUI asks you to add one to the
+manifest. The TUI only adds rules; edit or delete them in a text editor and
+press ``r``.
 
-See :doc:`/user-guide/waivers` for the waiver file format and matching
-semantics.
-
-Saving
+Hiding
 ------
 
-Press **Ctrl+S** to save suppressions and waivers to disk.
+Press ``h`` to hide every message with the selected ID for this session;
+press it again on a hidden row (with ``v``) to unhide. Hiding is never
+saved and does not affect ``check``. Hidden counts appear in the overview.
 
-- Suppressions are written to ``.sawmill/suppress.toml``.
-- Waivers are appended to ``.sawmill/waivers.toml`` (or the file
-  specified with ``--waivers``).
+Refreshing
+----------
 
-Press **q** to quit. If there are unsaved changes, a confirmation dialog
-appears:
+- ``r`` re-reads the manifest and rule files and re-applies them. Logs are
+  not re-parsed.
+- ``R`` also re-reads the logs.
 
-- **Enter** --- save and quit.
-- **q** --- quit without saving.
-- **Escape** --- cancel (stay in the TUI).
+The cursor position is kept.
 
-Keybinding reference
---------------------
+No manifest
+-----------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 15 85
+``sawmill view LOGFILE`` (or ``sawmill LOGFILE``) opens the log as a single
+target tab with no overview. Rules in ``.sawmill/rules/<plugin>.toml`` beside
+the log apply if that file exists.
 
-   * - Key
-     - Action
-   * - ``q``
-     - Quit (with dirty-state check)
-   * - ``/``
-     - Focus search bar
-   * - ``Esc``
-     - Clear filter, return to table
-   * - ``Tab``
-     - Toggle focus between search and table
-   * - ``1``--``4``
-     - Toggle severity level visibility
-   * - ``o``
-     - Cycle sort mode
-   * - ``s``
-     - Suppress/un-suppress by message ID
-   * - ``v``
-     - Toggle suppressed message visibility
-   * - ``w``
-     - Waive highlighted message
-   * - ``Ctrl+S``
-     - Save
-   * - ``j`` / ``k``
-     - Move cursor down / up
-   * - ``g`` / ``G``
-     - Jump to top / bottom
+The first ``w`` of a session, when no rules file exists yet, asks for:
 
-.. note::
+- a rules file name under ``.sawmill/rules/`` beside the log, defaulting to
+  ``<plugin>.toml``;
+- whether to also create ``.sawmill/manifest.toml`` with this log as a
+  target, or create the rules file only.
 
-   The footer shows ``?`` for Help, but this binding is **not yet
-   implemented**.
+Later rules in the session go to the same file.
+
+Keys
+----
+
+=========== ==============================================
+Key         Action
+=========== ==============================================
+``q``       Quit
+``/``       Search / filter messages
+``Esc``     Clear filter
+``Tab``     Toggle focus
+``1``-``4`` Toggle severity levels
+``o``       Cycle sort mode
+``←`` ``→`` Switch tab
+``Enter``   Open target or log (overview)
+``v``       Show or hide waived and hidden rows
+``w``       Waive: append a rule
+``h``       Hide or unhide message ID for the session
+``r``       Re-read manifest and rules
+``R``       Re-read logs too
+``F12``     Screenshot (SVG)
+``?``       Help
+=========== ==============================================

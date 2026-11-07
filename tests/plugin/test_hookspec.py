@@ -147,3 +147,39 @@ def test_base_plugin_default_attributes():
     assert plugin.name == "base"
     assert plugin.version == "0.0.0"
     assert plugin.description == ""
+
+
+def test_hookspec_defines_configure():
+    """SawmillHookSpec should define the configure hook as a hookspec."""
+    assert hasattr(SawmillHookSpec, "configure")
+    assert hasattr(SawmillHookSpec.configure, "sawmill_spec")
+
+
+def test_base_plugin_configure_is_noop():
+    """The default configure hook does nothing."""
+
+    class TestPlugin(SawmillPlugin):
+        name = "test"
+
+    assert TestPlugin().configure({"a": 1}) is None
+
+
+def test_plugin_can_override_configure():
+    """Plugins can override configure; plugin_implements_configure detects it."""
+    from sawmill.core.plugin import plugin_implements_configure
+
+    class Configurable(SawmillPlugin):
+        name = "conf"
+
+        @hookimpl
+        def configure(self, options: dict) -> None:
+            self.options = options
+
+    class Plain(SawmillPlugin):
+        name = "plain"
+
+    plugin = Configurable()
+    plugin.configure({"x": 1})
+    assert plugin.options == {"x": 1}
+    assert plugin_implements_configure(plugin) is True
+    assert plugin_implements_configure(Plain()) is False

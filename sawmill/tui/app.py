@@ -7,9 +7,9 @@ header / severity bar / search / messages / detail / footer.
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from collections.abc import Callable
-from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,25 +23,45 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 from textual.widgets._data_table import ColumnKey
 
+from sawmill.core.discovery import TargetRef
 from sawmill.core.filter import FilterEngine, filter_by_severity_toggles, match_message_id
-from sawmill.core.waiver import WaiverMatcher
+from sawmill.core.manifest import ManifestError, ManifestLoader
+from sawmill.core.rules import RuleLoader, RuleValidationError, append_rule, ensure_rule_file
+from sawmill.core.runner import RunnerError, reapply_rules, rerun_target
+from sawmill.core.scaffold import add_target, write_manifest_template
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.tui.filter_parser import parse_filter
+from sawmill.tui.state import (
+    SORT_COUNT,
+    SORT_ID,
+    SORT_LINE,
+    SORT_MODES,
+    SORT_SEVERITY,
+    TargetState,
+)
 from sawmill.tui.theme import register_nord_theme
 from sawmill.tui.widgets.footer import SawmillFooter
+from sawmill.tui.widgets.overview import OverviewTable
+from sawmill.tui.widgets.rules_prompt import RulesFilePrompt
+from sawmill.tui.widgets.waive_modal import WaiveModal
+from sawmill.utils.author import discover_author
 
 if TYPE_CHECKING:
+    from sawmill.core.runner import TargetResult
     from sawmill.models.message import Message
 
-
-# ---------------------------------------------------------------------------
-# Sort mode constants
-# ---------------------------------------------------------------------------
-SORT_LINE = "line"
-SORT_SEVERITY = "severity"
-SORT_ID = "id"
-SORT_COUNT = "count"
-SORT_MODES = [SORT_LINE, SORT_SEVERITY, SORT_ID, SORT_COUNT]
+__all__ = [
+    "SORT_COUNT",
+    "SORT_ID",
+    "SORT_LINE",
+    "SORT_MODES",
+    "SORT_SEVERITY",
+    "FilterInput",
+    "LogViewer",
+    "MessageStats",
+    "SawmillApp",
+    "run_tui",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +93,13 @@ class MessageStats(Static):
         self._severity_levels = list(severity_levels) if severity_levels else []
         self._counts: dict[str, int] = {}
         self._active: dict[str, bool] = {}
+
+    def set_levels(self, severity_levels: list[SeverityLevel]) -> None:
+        """Replace the severity levels shown and clear counts and toggles."""
+        self._severity_levels = list(severity_levels)
+        self._counts = {}
+        self._active = {}
+        self.refresh()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -130,7 +157,9 @@ class LogViewer(DataTable):
 
     # Fixed columns: (key, label, width)
     FIXED_COLUMNS = [
+        ("status", "St", 4),
         ("line", "Line", 8),
+        ("log", "Log", 18),
         ("severity", "Severity", 14),
         ("msg_id", "ID", 20),
     ]
@@ -267,6 +296,13 @@ class LogViewer(DataTable):
             return text
         return text[: self._flex_col_width - 1] + "\u2026"
 
+    @staticmethod
+    def truncate_left(text: str, width: int) -> str:
+        """Truncate ``text`` to ``width`` chars, keeping the end, with a leading ellipsis."""
+        if len(text) <= width:
+            return text
+        return "\u2026" + text[len(text) - width + 1 :]
+
     def action_scroll_top(self) -> None:
         if self.navigate is not None:
             self._go(0)
@@ -296,25 +332,28 @@ class FilterInput(Input):
 class SawmillApp(App):
     """Main Textual application for sawmill log analysis.
 
+    Shows one tab per target. The table is merged across the active
+    target's logs with a log column.
+
     Attributes:
-        log_file: Path to the log file being analyzed.
-        messages: List of parsed messages.
-        filtered_messages: List of messages after filtering.
+        filtered_messages: Active target's messages after filtering.
     """
 
     CSS_PATH = ["base.tcss"]
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("ctrl+s", "save", "Save", show=False),
         Binding("escape", "clear_filter", "Clear Filter", show=False),
         Binding("/", "focus_filter", "Filter", show=False),
         Binding("tab", "toggle_focus", "Toggle Focus", show=False),
         Binding("o", "cycle_sort", "Sort", show=False),
-        Binding("s", "suppress", "Suppress", show=False),
-        Binding("w", "waive", "Waive", show=False),
-        Binding("left", "prev_tab", "Prev Tab", show=False),
+        Binding("left", "prev_tab", "Previous Tab", show=False),
         Binding("right", "next_tab", "Next Tab", show=False),
+        Binding("v", "toggle_show_all", "Show All", show=False),
+        Binding("w", "waive", "Waive", show=False),
+        Binding("h", "hide_id", "Hide", show=False),
+        Binding("r", "refresh_rules", "Refresh", show=False),
+        Binding("R", "refresh_all", "Refresh All", show=False),
         Binding("1", "toggle_sev_1", "Sev 1", show=False),
         Binding("2", "toggle_sev_2", "Sev 2", show=False),
         Binding("3", "toggle_sev_3", "Sev 3", show=False),
@@ -328,42 +367,33 @@ class SawmillApp(App):
     filter_pattern: reactive[str] = reactive("", init=False)
     severity_filter: reactive[dict[str, bool]] = reactive({}, always_update=True, init=False)
     sort_mode: reactive[str] = reactive(SORT_LINE, init=False)
-    suppressed_ids: reactive[set[str]] = reactive(set, always_update=True, init=False)
-    # TODO: _waiver_version is a workaround to trigger re-filtering when
-    # _waiver_matcher changes. Investigate making _waiver_matcher itself
-    # reactive, or using Textual's message system instead.
-    _waiver_version: reactive[int] = reactive(0, init=False)
-    active_tab: reactive[str] = reactive("messages", init=False)
+
+    LOG_COL_WIDTH = 17
 
     def __init__(
         self,
-        severity_levels: list[SeverityLevel],
-        log_file: Path | None = None,
-        messages: list[Message] | None = None,
-        plugin_name: str | None = None,
-        waiver_file_path: Path | None = None,
+        targets: list[TargetResult],
         *args,
+        single_log: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        if not severity_levels:
-            raise ValueError("severity_levels is required and cannot be empty")
-        self.log_file = log_file
-        self._messages: list[Message] = messages or []
+        if not targets:
+            raise ValueError("targets is required and cannot be empty")
+        self._states: list[TargetState] = [TargetState(t) for t in targets]
+        self._active: int = 0
+        self._single_log = single_log
+        # Rules file chosen through the single-log prompt (asked once per session)
+        self._single_log_rules_path: Path | None = None
         self._filtered_messages: list[Message] = []
         # Windowing state: the table shows _filtered_messages[_window_start:...]
         self._window_start: int = 0
         self._cursor_index: int = 0
         self._shown_window_size: int = 0
-        self._plugin_name = plugin_name
-        self._severity_levels = list(severity_levels)
-        self._severity_level_map: dict[str, int] = {
-            level.id.lower(): level.level for level in self._severity_levels
-        }
+        self._severity_levels: list[SeverityLevel] = []
+        self._severity_level_map: dict[str, int] = {}
         # Map numeric keys to severity IDs (sorted ascending by level: 1=lowest)
         self._key_to_severity: dict[int, str] = {}
-        for i, level in enumerate(sorted(self._severity_levels, key=lambda s: s.level), start=1):
-            self._key_to_severity[i] = level.id
 
         # Widget refs (set in on_mount)
         self._stats_widget: MessageStats | None = None
@@ -371,42 +401,95 @@ class SawmillApp(App):
         self._filter_input: FilterInput | None = None
         self._detail_content: Static | None = None
 
-        # Suppress state
-        self._suppressions_dirty: bool = False
-        self._suppress_patterns: list[str] = []
-
-        # Waive state
-        from sawmill.models.waiver import Waiver
-
-        self._file_waivers: list[Waiver] = []
-        self._session_waivers: list[Waiver] = []
-        self._waivers_dirty: bool = False
-        self._waiver_file_path: Path | None = waiver_file_path
-        self._waiver_matcher = WaiverMatcher([])
-
         # ID count cache for count sort mode
         self._id_counts: dict[str, int] = {}
 
-        # Tab message lists (managed in _apply_filters, not reactive)
-        self._main_messages: list[Message] = []
-        self._waived_messages: list[Message] = []
-        self._suppressed_messages: list[Message] = []
+        self._load_active_target()
 
-    def _rebuild_waiver_matcher(self) -> None:
-        """Rebuild the WaiverMatcher from file + session waivers and trigger re-filter."""
-        self._waiver_matcher = WaiverMatcher(self._file_waivers + self._session_waivers)
-        self._waiver_version += 1
+    OVERVIEW = -1
+
+    def _active_state(self) -> TargetState:
+        """Return the state of the active target (never call on the overview)."""
+        return self._states[self._active]
+
+    def _load_active_target(self) -> None:
+        """Load the active tab: severity scheme and saved view state.
+
+        Restores the target's filter text, severity toggles, sort mode,
+        cursor and window without triggering watchers, then re-applies the
+        filters once when mounted. On the overview only the table is cleared.
+        """
+        if self._active == self.OVERVIEW:
+            if self._stats_widget is not None:
+                self._stats_widget.set_levels([])
+            if self._log_viewer is not None:
+                self._apply_filters()
+            return
+        state = self._active_state()
+        levels = list(state.result.severity_levels)
+        self._severity_levels = levels
+        self._severity_level_map = {level.id.lower(): level.level for level in levels}
+        self._key_to_severity = {
+            i: level.id for i, level in enumerate(sorted(levels, key=lambda s: s.level), start=1)
+        }
+        self.set_reactive(SawmillApp.filter_pattern, state.filter_text)
+        self.set_reactive(SawmillApp.severity_filter, dict(state.severity_filter))
+        self.set_reactive(SawmillApp.sort_mode, state.sort_mode)
+        self._window_start = state.window_start
+        self._cursor_index = state.cursor_index
+        if self._filter_input is not None:
+            with self.prevent(Input.Changed):
+                self._filter_input.value = state.filter_text
+        if self._stats_widget is not None:
+            self._stats_widget.set_levels(levels)
+        if self._log_viewer is not None:
+            self._apply_filters()
+
+    def _save_active_target(self) -> None:
+        """Store the app's view state into the active target's state."""
+        if self._active == self.OVERVIEW:
+            return
+        state = self._active_state()
+        state.filter_text = self.filter_pattern
+        state.severity_filter = dict(self.severity_filter)
+        state.sort_mode = self.sort_mode
+        state.cursor_index = self._cursor_index
+        state.window_start = self._window_start
+
+    def _tab_order(self) -> list[int]:
+        """Return the tab indices in display order."""
+        order = list(range(len(self._states)))
+        return order if self._single_log else [self.OVERVIEW, *order]
+
+    def _switch_tab(self, step: int) -> None:
+        """Move ``step`` tabs along the tab order, wrapping."""
+        order = self._tab_order()
+        if len(order) < 2:
+            return
+        new = order[(order.index(self._active) + step) % len(order)]
+        self._save_active_target()
+        self._active = new
+        self._update_header()
+        self._load_active_target()
+
+    def _update_header(self) -> None:
+        """Mark the active tab and show its fail_on in the header."""
+        try:
+            tabs = list(self.query(".header-tab"))
+            right = self.query_one("#header-right", Static)
+        except Exception:
+            return
+        active_id = (
+            "tab-overview" if self._active == self.OVERVIEW else f"tab-target-{self._active}"
+        )
+        for tab in tabs:
+            tab.set_class(tab.id == active_id, "active-tab")
+        if self._active == self.OVERVIEW:
+            right.update("")
+        else:
+            right.update(f"fail_on: {self._active_state().result.fail_on}")
 
     # -- Properties ----------------------------------------------------------
-
-    @property
-    def messages(self) -> list[Message]:
-        return self._messages
-
-    @messages.setter
-    def messages(self, value: list[Message]) -> None:
-        self._messages = value
-        self._apply_filters()
 
     @property
     def filtered_messages(self) -> list[Message]:
@@ -415,41 +498,42 @@ class SawmillApp(App):
     # -- Compose & Mount -----------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        filename = self.log_file.name if self.log_file else ""
         with Horizontal(id="header"):
             yield Static("sawmill", id="header-brand")
-            yield Static("Messages", id="tab-messages", classes="header-tab active-tab")
-            yield Static("Waived", id="tab-waived", classes="header-tab")
-            yield Static("Suppressed", id="tab-suppressed", classes="header-tab")
-            yield Static(filename, id="header-right")
+            if not self._single_log:
+                yield Static("Overview", id="tab-overview", classes="header-tab")
+            for i, state in enumerate(self._states):
+                classes = "header-tab active-tab" if i == self._active else "header-tab"
+                yield Static(
+                    state.result.qualified_name,
+                    id=f"tab-target-{i}",
+                    classes=classes,
+                    markup=False,
+                )
+            yield Static(
+                f"fail_on: {self._active_state().result.fail_on}",
+                id="header-right",
+                markup=False,
+            )
         with Vertical(id="severity-panel", classes="panel"):
             yield MessageStats(severity_levels=self._severity_levels, id="severity-bar")
         with Vertical(id="search-panel", classes="panel"):
             yield FilterInput(id="filter-input")
         with Vertical(id="messages-panel", classes="panel"):
             yield LogViewer(id="log-viewer")
+            overview = OverviewTable(id="overview-table")
+            overview.display = False
+            yield overview
         with Vertical(id="detail-panel", classes="panel"):
             yield Static(
                 "Select a message to view details",
                 id="detail-content",
                 markup=False,
             )
-        yield SawmillFooter(
-            bindings=[
-                ("q", "Quit"),
-                ("/", "Search"),
-                ("Tab", "Focus"),
-                ("1-4", "Severity"),
-                ("o", "Sort"),
-                ("\u2190\u2192", "Tab"),
-                ("s", "Suppress"),
-                ("w", "Waive"),
-                ("?", "Help"),
-            ],
-        )
+        yield SawmillFooter(bindings=list(self.TARGET_HINTS))
 
     def on_mount(self) -> None:
-        """Handle app mount — apply theme, set up widgets, load saved state."""
+        """Handle app mount: apply theme and set up widgets."""
         register_nord_theme(self)
 
         # Widget refs
@@ -466,104 +550,12 @@ class SawmillApp(App):
 
         # Columns are set up by LogViewer.on_mount via _setup_columns()
 
-        # Load config (may set default_plugin before loading messages)
-        self._load_config()
-
-        # Load messages if we have a log file
-        if self.log_file and not self._messages:
-            self._load_messages()
-
-        # Load saved suppressions and waivers (does not mark dirty)
-        self._load_saved_suppressions()
-        self._load_saved_waivers()
-
         # Defer initial display until after layout so LogViewer knows its width
         self.call_after_refresh(self._apply_filters)
 
         # Focus the log viewer by default
         if self._log_viewer:
             self._log_viewer.focus()
-
-    # -- Data loading --------------------------------------------------------
-
-    def _load_messages(self) -> None:
-        """Load messages from the log file using a plugin."""
-        if not self.log_file:
-            return
-
-        from sawmill.core.plugin import (
-            PluginError,
-            get_plugin_manager,
-            load_messages,
-            select_plugin,
-        )
-        from sawmill.models.plugin_api import severity_levels_from_dicts
-
-        manager = get_plugin_manager()
-
-        try:
-            plugin = select_plugin(manager, self._plugin_name, self.log_file)
-            # PR1: collapse the streaming iterator eagerly; PR3 will
-            # consume incrementally on a background worker.
-            self._messages = list(load_messages(plugin, self.log_file))
-
-            if hasattr(plugin, "get_severity_levels"):
-                try:
-                    severity_dicts = plugin.get_severity_levels()
-                    self._severity_levels = severity_levels_from_dicts(severity_dicts)
-                    self._severity_level_map = {
-                        level.id.lower(): level.level for level in self._severity_levels
-                    }
-                except Exception:
-                    pass
-        except PluginError as e:
-            self.notify(f"Error loading log: {e}", severity="error")
-
-    def _load_config(self) -> None:
-        """Load config on startup and apply defaults (e.g. default_plugin)."""
-        try:
-            from sawmill.core.config import ConfigLoader
-
-            config = ConfigLoader().load_resolved()
-            if config.general.default_plugin and not self._plugin_name:
-                self._plugin_name = config.general.default_plugin
-        except Exception:
-            pass  # Config errors are non-fatal at startup
-
-    def _load_saved_suppressions(self) -> None:
-        """Load saved suppression IDs from .sawmill/suppress.toml."""
-        try:
-            from sawmill.tui.session import load_suppressions
-
-            config = load_suppressions()
-            if config.message_ids:
-                self.suppressed_ids = set(config.message_ids)
-            if config.patterns:
-                self._suppress_patterns = list(config.patterns)
-        except Exception:
-            pass  # Suppression load errors are non-fatal
-
-    def _load_saved_waivers(self) -> None:
-        """Load saved waivers from waiver file."""
-        try:
-            from sawmill.tui.session import load_waivers
-            from sawmill.utils.dirs import resolve_sawmill_dir
-
-            waiver_path = self._waiver_file_path
-            if waiver_path is None:
-                sawmill_dir = resolve_sawmill_dir()
-                if sawmill_dir is not None:
-                    candidate = sawmill_dir / "waivers.toml"
-                    if candidate.exists():
-                        waiver_path = candidate
-
-            if waiver_path and waiver_path.exists():
-                waivers = load_waivers(waiver_path)
-                if waivers:
-                    self._file_waivers = waivers
-                    self._rebuild_waiver_matcher()
-        except Exception:
-            pass  # Waiver load errors are non-fatal
 
     # -- Filtering & Sorting -------------------------------------------------
 
@@ -573,7 +565,22 @@ class SawmillApp(App):
         This is the single rendering path. All state changes that affect the
         display go through reactive watchers which call this method.
         """
-        filtered = self._messages
+        self._show_overview(self._active == self.OVERVIEW)
+        if self._active == self.OVERVIEW:
+            self._filtered_messages = []
+            self._id_counts = {}
+            if self._stats_widget:
+                self._stats_widget.total = 0
+                self._stats_widget.counts = {}
+            if self._log_viewer:
+                self._log_viewer.clear()
+                self._log_viewer.window_start = 0
+                self._log_viewer.total_rows = 0
+            if self._detail_content:
+                self._detail_content.update(self.OVERVIEW_DETAIL)
+            self._update_panel_titles()
+            return
+        filtered = self._active_state().base_messages()
 
         # Parse the search bar for prefix filters
         parsed = parse_filter(self.filter_pattern)
@@ -594,6 +601,15 @@ class SawmillApp(App):
         if parsed.message_id:
             filtered = [m for m in filtered if match_message_id(m.message_id, parsed.message_id)]
 
+        # Apply log: prefix filter (case-sensitive fnmatch on log_path)
+        if parsed.log:
+            log_pat = parsed.log
+            filtered = [
+                m
+                for m in filtered
+                if (fnmatch.fnmatchcase(m.log_path, log_pat) if m.log_path else log_pat == "*")
+            ]
+
         # Apply cat: prefix filter
         if parsed.category:
             filtered = [m for m in filtered if m.category and m.category.lower() == parsed.category]
@@ -609,26 +625,7 @@ class SawmillApp(App):
                     parsed.pattern, filtered, case_sensitive=False
                 )
 
-        # Bucket into three lists: suppressed, waived, main
-        engine = FilterEngine()
-        non_suppressed, self._suppressed_messages = engine.apply_suppress_ids(
-            self.suppressed_ids, filtered
-        )
-
-        # Apply regex suppression patterns (from saved config)
-        if self._suppress_patterns:
-            non_suppressed = engine.apply_suppressions(self._suppress_patterns, non_suppressed)
-
-        waived: list[Message] = []
-        main: list[Message] = []
-        is_waived = self._waiver_matcher.is_waived
-        for m in non_suppressed:
-            (main if is_waived(m) is None else waived).append(m)
-        self._waived_messages = waived
-        self._main_messages = main
-
-        # Select active list
-        self._filtered_messages = self._active_message_list()
+        self._filtered_messages = filtered
 
         # Compute ID counts for count sort mode (on active list)
         self._id_counts = {}
@@ -640,20 +637,7 @@ class SawmillApp(App):
         self._filtered_messages = self._sort_messages(self._filtered_messages)
 
         self._update_stats()
-        self._update_tab_labels()
         self._populate_table()
-
-    def _active_message_list(self) -> list[Message]:
-        """Return the message list for the currently active tab."""
-        if self.active_tab == "waived":
-            return self._waived_messages
-        elif self.active_tab == "suppressed":
-            return self._suppressed_messages
-        return self._main_messages
-
-    def _update_tab_labels(self) -> None:
-        """Update tab label counts from the bucketed message lists."""
-        pass  # Tab labels are now static text without counts
 
     def _sort_messages(self, messages: list[Message]) -> list[Message]:
         """Sort messages according to current sort mode."""
@@ -799,6 +783,10 @@ class SawmillApp(App):
         viewer.window_start = start
         viewer.total_rows = total
 
+        state = self._active_state()
+        waived = state.waived_ids if state.show_all else frozenset()
+        hidden = state.hidden_ids if state.show_all else set()
+
         with self.batch_update():
             viewer.clear()
 
@@ -807,8 +795,14 @@ class SawmillApp(App):
                 sev = msg.severity or ""
                 msg_id = msg.message_id or ""
                 content = viewer.truncate_text(msg.content)
+                log = viewer.truncate_left(msg.log_path or "", self.LOG_COL_WIDTH)
+                status = ("W" if id(msg) in waived else "") + (
+                    "H" if msg.message_id and msg.message_id in hidden else ""
+                )
                 viewer.add_row(
+                    status,
                     str(msg.start_line),
+                    escape(log),
                     sev.title(),
                     escape(msg_id),
                     escape(content),
@@ -829,21 +823,74 @@ class SawmillApp(App):
 
         self._update_panel_titles()
 
+    TARGET_HINTS: list[tuple[str, str]] = [
+        ("q", "Quit"),
+        ("/", "Search"),
+        ("Tab", "Focus"),
+        ("1-4", "Severity"),
+        ("o", "Sort"),
+        ("\u2190\u2192", "Tab"),
+        ("v", "All"),
+        ("w", "Waive"),
+        ("h", "Hide"),
+        ("r/R", "Refresh"),
+        ("?", "Help"),
+    ]
+    OVERVIEW_HINTS: list[tuple[str, str]] = [
+        ("q", "Quit"),
+        ("\u2190\u2192", "Tab"),
+        ("Enter", "Open"),
+        ("?", "Help"),
+    ]
+    OVERVIEW_DETAIL = "Select a target or log and press Enter"
+
+    def _show_overview(self, show: bool) -> None:
+        """Swap the log viewer and footer for the overview table, or back."""
+        try:
+            overview = self.query_one("#overview-table", OverviewTable)
+        except Exception:
+            return
+        if self._log_viewer is None:
+            return
+        had_focus = overview.has_focus or self._log_viewer.has_focus
+        if show:
+            overview.populate(self._states)
+        overview.display = show
+        self._log_viewer.display = not show
+        footer = self.query_one(SawmillFooter)
+        hints = self.OVERVIEW_HINTS if show else self.TARGET_HINTS
+        if footer._footer_bindings != hints:
+            footer.update_bindings(list(hints))
+        if had_focus:
+            (overview if show else self._log_viewer).focus()
+
+    def on_overview_table_open(self, event: OverviewTable.Open) -> None:
+        """Open a target's tab, filtered to the log when one is given."""
+        if self._active != self.OVERVIEW:
+            return
+        self._save_active_target()
+        self._active = event.target_index
+        if event.log_rel_path is not None:
+            self._active_state().filter_text = f"log:{event.log_rel_path}"
+        self._update_header()
+        self._load_active_target()
+
     def _update_panel_titles(self) -> None:
         """Update panel border title, position and sort subtitle."""
         try:
             panel = self.query_one("#messages-panel")
         except Exception:
             return
-        titles = {
-            "messages": "Messages",
-            "waived": "Waived",
-            "suppressed": "Suppressed",
-        }
-        panel.border_title = titles.get(self.active_tab, "Messages")
+        if self._active == self.OVERVIEW:
+            panel.border_title = "Overview"
+            panel.border_subtitle = ""
+            return
+        state = self._active_state()
+        panel.border_title = state.result.qualified_name
         total = len(self._filtered_messages)
         position = f"row {self._cursor_index + 1} of {total} \u00b7 " if total else ""
-        panel.border_subtitle = f"{position}sorted by: {self.sort_mode}"
+        show_all = " \u00b7 all" if state.show_all else ""
+        panel.border_subtitle = f"{position}sorted by: {self.sort_mode}{show_all}"
 
     def _update_detail_for_row(self, row_index: int) -> None:
         """Update the detail panel for a given row index."""
@@ -864,61 +911,6 @@ class SawmillApp(App):
 
     def watch_sort_mode(self, mode: str) -> None:
         self._apply_filters()
-
-    def watch_suppressed_ids(self, value: set[str]) -> None:
-        self._apply_filters()
-
-    def watch__waiver_version(self, value: int) -> None:
-        self._apply_filters()
-
-    def watch_active_tab(self, tab: str) -> None:
-        """Handle tab switch: swap displayed messages, update header styling."""
-        for tab_id in ("tab-messages", "tab-waived", "tab-suppressed"):
-            try:
-                widget = self.query_one(f"#{tab_id}", Static)
-                if tab_id == f"tab-{tab}":
-                    widget.add_class("active-tab")
-                else:
-                    widget.remove_class("active-tab")
-            except Exception:
-                pass
-
-        # Swap the displayed message list and repopulate
-        self._filtered_messages = self._active_message_list()
-
-        # Recompute ID counts for the new list
-        self._id_counts = {}
-        for m in self._filtered_messages:
-            mid = m.message_id or ""
-            self._id_counts[mid] = self._id_counts.get(mid, 0) + 1
-
-        self._filtered_messages = self._sort_messages(self._filtered_messages)
-        self._update_stats()
-        self._populate_table()
-        self._update_footer_hints()
-
-    def _update_footer_hints(self) -> None:
-        """Update footer keybinding hints based on the active tab."""
-        try:
-            footer = self.query_one(SawmillFooter)
-        except Exception:
-            return
-        base: list[tuple[str, str]] = [
-            ("q", "Quit"),
-            ("/", "Search"),
-            ("Tab", "Focus"),
-            ("1-4", "Severity"),
-            ("o", "Sort"),
-            ("\u2190\u2192", "Tab"),
-        ]
-        if self.active_tab == "messages":
-            base.extend([("s", "Suppress"), ("w", "Waive")])
-        elif self.active_tab == "waived":
-            base.extend([("s", "Suppress"), ("w", "Un-waive")])
-        elif self.active_tab == "suppressed":
-            base.append(("s", "Un-suppress"))
-        base.append(("?", "Help"))
-        footer.update_bindings(base)
 
     # -- Event handlers ------------------------------------------------------
 
@@ -972,95 +964,8 @@ class SawmillApp(App):
     # -- Actions -------------------------------------------------------------
 
     async def action_quit(self) -> None:
-        """Quit with dirty-state check."""
-        if self._suppressions_dirty or self._waivers_dirty:
-            from sawmill.tui.widgets.quit_modal import QuitConfirmModal
-
-            suppression_count = len(self.suppressed_ids)
-            waiver_count = len(self._session_waivers)
-            self.push_screen(
-                QuitConfirmModal(
-                    suppression_count=suppression_count,
-                    waiver_count=waiver_count,
-                ),
-                callback=self._on_quit_result,
-            )
-        else:
-            self.exit()
-
-    def _on_quit_result(self, result: str | None) -> None:
-        """Handle quit confirmation modal result."""
-        if result == "save_quit":
-            self._save_all()
-            self.exit()
-        elif result == "discard_quit":
-            self.exit()
-        # else: None (cancelled) — stay in app
-
-    def action_save(self) -> None:
-        """Save session state (Ctrl+S)."""
-        self._save_all()
-
-    def _notify_safe(self, message: str, **kwargs) -> None:
-        """Notify if the app is mounted, otherwise silently ignore."""
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            self.notify(message, **kwargs)
-
-    def _save_all(self) -> None:
-        """Save both suppressions and waivers to their respective files."""
-        saved_parts = []
-
-        # Save suppressions to sawmill.toml
-        if self._suppressions_dirty:
-            try:
-                self._save_suppressions()
-                saved_parts.append(f"{len(self.suppressed_ids)} suppressions to suppress.toml")
-                self._suppressions_dirty = False
-            except Exception as e:
-                self._notify_safe(f"Failed to save suppressions: {e}", severity="error")
-
-        # Save waivers to waiver file
-        if self._waivers_dirty and self._session_waivers:
-            try:
-                self._save_waivers()
-                saved_parts.append(
-                    f"{len(self._session_waivers)} waivers to {self._resolve_waiver_path().name}"
-                )
-                self._waivers_dirty = False
-                self._session_waivers = []
-            except Exception as e:
-                self._notify_safe(f"Failed to save waivers: {e}", severity="error")
-
-        if saved_parts:
-            self._notify_safe(f"Saved: {', '.join(saved_parts)}")
-        elif not self._suppressions_dirty and not self._waivers_dirty:
-            self._notify_safe("Nothing to save")
-
-    def _save_suppressions(self) -> None:
-        """Save suppression IDs to .sawmill/suppress.toml."""
-        from sawmill.tui.session import save_suppressions
-
-        save_suppressions(self.suppressed_ids)
-
-    def _resolve_waiver_path(self) -> Path:
-        """Resolve the waiver file path, defaulting to .sawmill/waivers.toml."""
-        if self._waiver_file_path is None:
-            from sawmill.tui.session import resolve_waiver_path
-
-            self._waiver_file_path = resolve_waiver_path()
-        return self._waiver_file_path
-
-    def _save_waivers(self) -> None:
-        """Append session waivers to the waiver file."""
-        from sawmill.tui.session import save_session_waivers
-
-        save_session_waivers(
-            self._session_waivers,
-            self._resolve_waiver_path(),
-            plugin_name=self._plugin_name,
-        )
+        """Quit the application."""
+        self.exit()
 
     def action_clear_filter(self) -> None:
         """Clear the search bar and severity filter, return focus to table."""
@@ -1072,6 +977,8 @@ class SawmillApp(App):
             self._log_viewer.focus()
 
     def action_focus_filter(self) -> None:
+        if self._active == self.OVERVIEW:
+            return
         if self._filter_input:
             self._filter_input.focus()
 
@@ -1083,154 +990,250 @@ class SawmillApp(App):
             else:
                 self._filter_input.focus()
 
-    def action_prev_tab(self) -> None:
-        """Switch to the previous tab (left arrow)."""
-        if self._filter_input and self._filter_input.has_focus:
-            return
-        tabs = ["messages", "waived", "suppressed"]
-        idx = tabs.index(self.active_tab)
-        self.active_tab = tabs[(idx - 1) % len(tabs)]
-
-    def action_next_tab(self) -> None:
-        """Switch to the next tab (right arrow)."""
-        if self._filter_input and self._filter_input.has_focus:
-            return
-        tabs = ["messages", "waived", "suppressed"]
-        idx = tabs.index(self.active_tab)
-        self.active_tab = tabs[(idx + 1) % len(tabs)]
-
     def action_cycle_sort(self) -> None:
         """Cycle through sort modes."""
+        if self._active == self.OVERVIEW:
+            return
         idx = SORT_MODES.index(self.sort_mode)
         self.sort_mode = SORT_MODES[(idx + 1) % len(SORT_MODES)]
 
-    def action_suppress(self) -> None:
-        """Context-sensitive suppress: un-suppress on Suppressed tab, suppress elsewhere."""
-        if self.active_tab == "suppressed":
-            self._unsuppress_current()
-        else:
-            self._suppress_current()
+    def action_prev_tab(self) -> None:
+        """Switch to the previous tab, wrapping."""
+        self._switch_tab(-1)
 
-    def _suppress_current(self) -> None:
-        """Suppress the highlighted message (from Messages or Waived tab)."""
-        if not self._log_viewer or not self._filtered_messages:
-            return
-        msg = self._current_message()
-        if msg is None:
-            return
-        if msg.message_id is None:
-            self.notify("Cannot suppress: message has no ID")
-            return
-        current = set(self.suppressed_ids)
-        current.add(msg.message_id)
-        self._suppressions_dirty = True
-        self.notify(f"Suppressed: {msg.message_id}")
-        self.suppressed_ids = current
+    def action_next_tab(self) -> None:
+        """Switch to the next tab, wrapping."""
+        self._switch_tab(1)
 
-    def _unsuppress_current(self) -> None:
-        """Un-suppress the highlighted message (from Suppressed tab)."""
-        if not self._log_viewer or not self._filtered_messages:
+    def action_toggle_show_all(self) -> None:
+        """Toggle showing waived and hidden messages on the active target."""
+        if self._active == self.OVERVIEW:
             return
-        msg = self._current_message()
-        if msg is None:
-            return
-        if msg.message_id is None:
-            return
-        current = set(self.suppressed_ids)
-        current.discard(msg.message_id)
-        self._suppressions_dirty = True
-        self.notify(f"Un-suppressed: {msg.message_id}")
-        self.suppressed_ids = current
+        state = self._active_state()
+        state.show_all = not state.show_all
+        self._apply_filters()
 
     def action_waive(self) -> None:
-        """Context-sensitive waive: un-waive on Waived tab, no-op on Suppressed, waive elsewhere."""
-        if self.active_tab == "waived":
-            self._unwaive_current()
-        elif self.active_tab == "suppressed":
-            self.notify("Un-suppress first before waiving", severity="warning")
-        else:
-            self._waive_current()
-
-    def _waive_current(self) -> None:
-        """Open waive modal for the highlighted message."""
-        if not self._log_viewer or not self._filtered_messages:
+        """Open the waive modal on the highlighted message of a target tab."""
+        if self._active == self.OVERVIEW:
             return
-
         msg = self._current_message()
         if msg is None:
             return
-        if msg.message_id is None:
-            self.notify("Cannot waive: message has no ID")
+        if not msg.message_id:
+            self.notify("Cannot waive: message has no ID", severity="warning")
             return
+        result = self._active_state().result
+        manifest = result.manifest
+        target_files = result.target.rule_paths(manifest.rules_dir)
+        loader = RuleLoader()
+        plugin_files: list[Path] = []
+        for path in manifest.rule_paths():
+            try:
+                if loader.load(path).plugin == result.plugin_name:
+                    plugin_files.append(path)
+            except (RuleValidationError, OSError):
+                continue
+        if not target_files and not plugin_files:
+            no_manifest = manifest.path is None or not manifest.path.exists()
+            if self._single_log and no_manifest:
+                if self._single_log_rules_path is None:
+                    self.push_screen(
+                        RulesFilePrompt(
+                            rules_dir=manifest.rules_dir,
+                            default_name=f"{result.plugin_name}.toml",
+                            log_name=result.target.name,
+                        ),
+                        callback=lambda value: self._on_rules_prompt_result(value, msg),
+                    )
+                    return
+                target_files = [self._single_log_rules_path]
+            else:
+                self.notify(
+                    "No rule file listed for this target; add one to the manifest",
+                    severity="warning",
+                )
+                return
+        self._open_waive_modal(msg, target_files, plugin_files)
 
-        from sawmill.tui.widgets.waive_modal import WaiveModal
-        from sawmill.utils.author import discover_author
-
+    def _open_waive_modal(
+        self, msg: Message, target_files: list[Path], plugin_files: list[Path]
+    ) -> None:
+        """Push the waive modal for ``msg`` with the given destination files."""
         self.push_screen(
             WaiveModal(
-                message_id=msg.message_id,
-                severity=(msg.severity or "").title(),
+                message_id=msg.message_id or "",
+                severity=msg.severity or "",
                 content=msg.content,
+                log_rel_path=msg.log_path or "",
+                target_files=target_files,
+                plugin_files=plugin_files,
                 author=discover_author(),
-                waiver_file_path=str(self._resolve_waiver_path()),
             ),
-            callback=self._on_waive_modal_result,
+            callback=self._on_waive_result,
         )
 
-    def _unwaive_current(self) -> None:
-        """Un-waive the highlighted message (from Waived tab)."""
-        if not self._log_viewer or not self._filtered_messages:
+    def _on_rules_prompt_result(self, value: dict | None, msg: Message) -> None:
+        """Set up the chosen rules file (and manifest), then open the waive modal."""
+        if not value or self._active == self.OVERVIEW:
+            return
+        path: Path = value["path"]
+        state = self._active_state()
+        result = state.result
+        manifest = result.manifest
+        plugin_name = result.plugin_name
+        self._single_log_rules_path = path
+        try:
+            if value["create_manifest"]:
+                mpath = manifest.path
+                if mpath is None:
+                    raise ValueError("log has no manifest location")
+                if not mpath.exists():
+                    write_manifest_template(mpath, name=manifest.root.name)
+                log_path = result.logs[0].path if result.logs else manifest.root
+                name = re.sub(r"[^A-Za-z0-9]", "_", log_path.stem)
+                glob = log_path.relative_to(manifest.root).as_posix()
+                add_target(mpath, name, plugin_name, glob, rules_file=path.name)
+                new_manifest = ManifestLoader().load(mpath)
+                new_target = new_manifest.get_target(name)
+                if new_target is None:
+                    raise ValueError(f"target '{name}' missing from {mpath}")
+                state.set_result(reapply_rules(result, ref=TargetRef(new_manifest, new_target)))
+                self.notify(f"Created {mpath} with target '{name}'")
+            else:
+                ensure_rule_file(path, plugin_name)
+                target = result.target.model_copy(update={"rules": [path.name]})
+                state.set_result(reapply_rules(result, ref=TargetRef(manifest, target)))
+        except (
+            OSError,
+            ManifestError,
+            RuleValidationError,
+            RunnerError,
+            ValueError,
+        ) as e:
+            self._single_log_rules_path = None
+            self.notify(f"Cannot set up rules file: {e}", severity="error")
+            return
+        self._open_waive_modal(msg, [path], [])
+
+    def _on_waive_result(self, value: dict | None) -> None:
+        """Append the modal's rule to its file and re-apply rules live."""
+        if not value or self._active == self.OVERVIEW:
+            return
+        rule = value["rule"]
+        path: Path = value["path"]
+        active = self._active_state()
+        plugin_name = active.result.plugin_name
+        try:
+            append_rule(path, rule, plugin_name)
+        except (RuleValidationError, OSError) as e:
+            self.notify(f"Cannot waive: {e}", severity="error")
+            return
+        if value["scope"] == "plugin":
+            states = [s for s in self._states if s.result.plugin_name == plugin_name]
+        else:
+            states = [active]
+        for state in states:
+            try:
+                state.set_result(reapply_rules(state.result))
+            except (RunnerError, RuleValidationError) as e:
+                self.notify(
+                    f"Cannot re-apply rules for {state.result.qualified_name}: {e}",
+                    severity="error",
+                )
+        self._cursor_index = self._current_index()
+        self._apply_filters()
+        self.notify(f"Waived {rule.id} in {path.name}")
+
+    def action_hide_id(self) -> None:
+        """Toggle session hiding of the highlighted message's ID."""
+        if self._active == self.OVERVIEW:
             return
         msg = self._current_message()
         if msg is None:
             return
-        if msg.message_id is None:
+        if not msg.message_id:
+            self.notify("Cannot hide: message has no ID", severity="warning")
             return
-
-        matching_waiver = self._waiver_matcher.is_waived(msg)
-        if matching_waiver is None:
-            return
-
-        was_session = any(w is matching_waiver for w in self._session_waivers)
-        was_file = any(w is matching_waiver for w in self._file_waivers)
-        self._session_waivers = [w for w in self._session_waivers if w is not matching_waiver]
-        self._file_waivers = [w for w in self._file_waivers if w is not matching_waiver]
-        self._waivers_dirty = True
-        self._rebuild_waiver_matcher()
-
-        if was_session:
-            self.notify(f"Un-waived: {msg.message_id}")
-        elif was_file:
-            self.notify(
-                f"Un-waived: {msg.message_id} (for this session only \u2014 "
-                f"edit waivers.toml to remove permanently)",
-                severity="warning",
-            )
+        hidden = self._active_state().hidden_ids
+        if msg.message_id in hidden:
+            hidden.discard(msg.message_id)
+            verb = "Unhidden"
         else:
-            self.notify(f"Un-waived: {msg.message_id}")
+            hidden.add(msg.message_id)
+            verb = "Hidden"
+        self._cursor_index = self._current_index()
+        self._apply_filters()
+        self.notify(f"{verb} {msg.message_id}")
 
-    def _on_waive_modal_result(self, result: dict | None) -> None:
-        """Handle the result from the waive modal."""
-        if result is None:
-            return
+    def _refresh_ref(self, state: TargetState) -> TargetRef | None:
+        """Re-read a target's manifest and return the ref to re-run it with.
 
-        from sawmill.models.waiver import Waiver
+        Returns None, after notifying, when the manifest is invalid or no
+        longer defines the target. For a single log (no manifest on disk)
+        the plugin rules file beside the log is re-checked.
+        """
+        manifest = state.result.manifest
+        target = state.result.target
+        path = manifest.path
+        if path is None or not path.exists():
+            rules_name = f"{target.plugin}.toml"
+            rules = [rules_name] if (manifest.rules_dir / rules_name).exists() else []
+            return TargetRef(manifest, target.model_copy(update={"rules": rules}))
+        try:
+            new_manifest = ManifestLoader().load(path)
+        except ManifestError as e:
+            self.notify(f"Cannot re-read manifest: {e}", severity="error")
+            return None
+        new_target = new_manifest.get_target(target.name)
+        if new_target is None:
+            self.notify(f"target '{target.name}' no longer in manifest", severity="error")
+            return None
+        return TargetRef(new_manifest, new_target)
 
-        waiver = Waiver(
-            message_id=result["message_id"],
-            content_match=result.get("content_match"),
-            content_pattern=result.get("content_pattern"),
-            reason=result["reason"],
-            author=result["author"],
-            date=date.today().isoformat(),
-        )
-        self._session_waivers.append(waiver)
-        self._waivers_dirty = True
-        self.notify(f"Waived: {waiver.message_id}")
-        self._rebuild_waiver_matcher()
+    def _refresh(self, reparse: bool) -> int:
+        """Re-run every target from the re-read manifest; return the count refreshed."""
+        self._cursor_index = self._current_index()
+        refreshed = 0
+        for state in self._states:
+            ref = self._refresh_ref(state)
+            if ref is None:
+                continue
+            try:
+                if reparse:
+                    new = rerun_target(state.result, ref=ref)
+                else:
+                    new = reapply_rules(state.result, ref=ref)
+            except (RunnerError, RuleValidationError) as e:
+                self.notify(
+                    f"Cannot refresh {state.result.qualified_name}: {e}",
+                    severity="error",
+                )
+                continue
+            state.set_result(new)
+            refreshed += 1
+        if self._active == self.OVERVIEW:
+            self._apply_filters()
+        else:
+            self._save_active_target()
+            self._update_header()
+            self._load_active_target()
+        return refreshed
+
+    def action_refresh_rules(self) -> None:
+        """Re-read the manifest and rule files and re-apply them to all targets."""
+        n = self._refresh(reparse=False)
+        self.notify(f"Rules re-applied ({n} targets)")
+
+    def action_refresh_all(self) -> None:
+        """Re-read the manifest, rule files and logs of all targets."""
+        n = self._refresh(reparse=True)
+        self.notify(f"Logs re-read ({n} targets)")
 
     def _toggle_severity(self, key_num: int) -> None:
         """Toggle visibility of a severity level by number key."""
+        if self._active == self.OVERVIEW:
+            return
         sev_id = self._key_to_severity.get(key_num)
         if not sev_id:
             return
@@ -1272,33 +1275,12 @@ class SawmillApp(App):
 # ---------------------------------------------------------------------------
 
 
-def run_tui(
-    log_file: Path | None = None,
-    plugin_name: str | None = None,
-    severity_levels: list[SeverityLevel] | None = None,
-    waiver_file_path: Path | None = None,
-) -> None:
+def run_tui(targets: list[TargetResult], single_log: bool = False) -> None:
     """Run the TUI application.
 
     Args:
-        log_file: Path to the log file to analyze.
-        plugin_name: Name of plugin to use.
-        severity_levels: Severity level definitions from plugin.
-        waiver_file_path: Path to the waiver file for saving waivers.
+        targets: Runner results, one tab per target.
+        single_log: True when the one target is a bare log file (no overview).
     """
-    app = SawmillApp(
-        log_file=log_file,
-        plugin_name=plugin_name,
-        severity_levels=severity_levels or [],
-        waiver_file_path=waiver_file_path,
-    )
+    app = SawmillApp(targets, single_log=single_log)
     app.run()
-
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) > 1:
-        run_tui(Path(sys.argv[1]))
-    else:
-        run_tui()

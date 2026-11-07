@@ -58,12 +58,13 @@ class SawmillHookSpec:
         logs without holding every line in memory at once.
 
         Implementations should:
-        1. Open the file and stream line-by-line (`for line in f`, not
-           `f.readlines()`) so memory is O(in-flight message), not O(file).
+
+        1. Open the file and stream line-by-line (``for line in f``, not
+           ``f.readlines()``) so memory is O(in-flight message), not O(file).
         2. Parse each line/section into logical messages.
         3. Group multi-line messages into single Message objects.
         4. Extract severity, message IDs, and other metadata.
-        5. `yield` each completed Message as soon as it is built.
+        5. ``yield`` each completed Message as soon as it is built.
 
         Args:
             path: Path to the log file to parse.
@@ -108,48 +109,35 @@ class SawmillHookSpec:
 
         Plugins MUST implement this hook to define their severity levels.
         The base app uses these levels for:
-        - Filtering messages by severity (--severity, --fail-on)
-        - Sorting and grouping messages
-        - Styling output (colors in terminal)
-        - Determining pass/fail in --check mode
 
-        Level numbering contract:
-            Plugins MUST use consecutive integers starting at 0.
-            Level 0 is the lowest severity (informational/note).
-            Higher numbers indicate more severe levels.
+        - Filtering messages by severity in the TUI
+        - Sorting and grouping messages
+        - Styling output (colours in the terminal)
+        - Determining pass/fail in ``sawmill check`` (``fail_on``)
+
+        Level numbering contract: plugins MUST use consecutive integers
+        starting at 0. Level 0 is the lowest severity (informational/note).
+        Higher numbers indicate more severe levels.
 
         Returns:
-            List of severity definitions with these fields:
-            [
-                {
-                    "id": "fatal",       # Internal identifier (lowercase)
-                    "name": "Fatal",     # Display name
-                    "style": "red bold", # Rich style for display
-                    "level": 3,          # Numeric level (0 = lowest, higher = more severe)
-                },
-                {
-                    "id": "error",
-                    "name": "Error",
-                    "style": "red",
-                    "level": 2,
-                },
-                {
-                    "id": "warning",
-                    "name": "Warning",
-                    "style": "yellow",
-                    "level": 1,
-                },
-                {
-                    "id": "note",
-                    "name": "Note",
-                    "style": "cyan",
-                    "level": 0,          # Level 0 = lowest (informational)
-                },
-            ]
+            List of severity definitions with these fields::
 
-        The numeric "level" field is used for threshold comparisons:
-        - --check defaults to failing on the second-lowest level and above
-        - --fail-on <severity> sets the threshold to that severity's level
+                [
+                    {
+                        "id": "fatal",       # Internal identifier (lowercase)
+                        "name": "Fatal",     # Display name
+                        "style": "red bold", # Rich style for display
+                        "level": 3,          # Numeric level (0 = lowest)
+                    },
+                    {"id": "error", "name": "Error", "style": "red", "level": 2},
+                    {"id": "warning", "name": "Warning", "style": "yellow", "level": 1},
+                    {"id": "note", "name": "Note", "style": "cyan", "level": 0},
+                ]
+
+            The numeric ``level`` field is used for threshold comparisons:
+            ``sawmill check`` defaults to failing on the second-lowest level
+            and above, and ``fail_on`` sets the threshold to that severity's
+            level.
 
         Raises:
             NotImplementedError: If not implemented by the plugin.
@@ -164,30 +152,47 @@ class SawmillHookSpec:
         messages. This includes both standard fields (severity, id, file)
         and custom metadata fields populated by the plugin.
 
-        Returns:
-            List of field definitions:
-            [
-                {
-                    "id": "severity",     # Field identifier
-                    "name": "Severity",   # Display name
-                    "type": "builtin",    # "builtin", "metadata", or "file_ref"
-                    "description": "Group by message severity level",
-                },
-                {
-                    "id": "hierarchy",
-                    "name": "Design Hierarchy",
-                    "type": "metadata",   # Uses Message.metadata["hierarchy"]
-                    "description": "Group by RTL hierarchy path",
-                },
-                ...
-            ]
-
         Standard field types:
-        - "builtin": Uses Message attributes (severity, message_id, category)
-        - "metadata": Uses Message.metadata[field_id]
-        - "file_ref": Uses Message.file_ref.path
+
+        - ``"builtin"``: Uses Message attributes (severity, message_id, category)
+        - ``"metadata"``: Uses ``Message.metadata[field_id]``
+        - ``"file_ref"``: Uses ``Message.file_ref.path``
 
         If not implemented, the base app provides default groupings:
         severity, id, file, category.
+
+        Returns:
+            List of field definitions::
+
+                [
+                    {
+                        "id": "severity",     # Field identifier
+                        "name": "Severity",   # Display name
+                        "type": "builtin",    # "builtin", "metadata", or "file_ref"
+                        "description": "Group by message severity level",
+                    },
+                    {
+                        "id": "hierarchy",
+                        "name": "Design Hierarchy",
+                        "type": "metadata",   # Uses Message.metadata["hierarchy"]
+                        "description": "Group by RTL hierarchy path",
+                    },
+                ]
         """
         ...
+
+    @hookspec
+    def configure(self, options: dict) -> None:
+        """Configure the plugin for one target before any log is parsed.
+
+        Optional hook. The base app calls it once per manifest target, before
+        loading any log, with the target's ``plugin_options`` table from the
+        manifest (an empty dict when the target gives none, so a plugin can
+        reset state between targets).
+
+        Plugins should validate the options and raise ``ValueError`` with a
+        clear message for unknown keys or bad values.
+
+        Args:
+            options: The target's ``plugin_options`` table.
+        """

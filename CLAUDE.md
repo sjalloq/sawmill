@@ -1,7 +1,7 @@
 # Sawmill
 
 Terminal log analyser for structured tool logs. Plugins parse tool-specific
-formats (Vivado, Slang, Synplify, ...); the base app filters, groups, waives
+formats (Vivado, Slang, ...); the base app filters, groups, waives
 and reports. Batch CLI for CI, Textual TUI for interactive triage.
 
 ## Setup
@@ -72,3 +72,12 @@ options, or TUI session persistence. The user guide pages on waivers and the
 - No `Co-Authored-By` or generated-by lines.
 - Never modify git config.
 - Use git worktrees for parallel work.
+
+## Testing
+
+- testing will require additional plugins; see table below.
+
+| Tool | Install Path |
+|---|---|
+| Xilinx Vivado | https://github.com/sjalloq/sawmill-plugin-vivado.git |
+| Slang | https://github.com/sjalloq/sawmill-plugin-slang.git |

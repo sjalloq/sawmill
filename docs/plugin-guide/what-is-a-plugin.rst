@@ -34,7 +34,7 @@ interface:
 
 ``get_filters() -> list[dict]``
    Pre-defined filter categories (e.g. ``timing``, ``drc``, ``synth``)
-   that users can activate with ``--category``.
+   listed by ``sawmill plugins info``.
 
 ``extract_file_reference(content) -> FileRef | None``
    Extract source file and line number references from message content.
@@ -63,13 +63,13 @@ the plugin automatically.
 
 .. code-block:: console
 
-   $ sawmill --list-plugins
+   $ sawmill plugins list
 
 **Show plugin details** (severity levels, filters, hooks):
 
 .. code-block:: console
 
-   $ sawmill --show-info --plugin vivado
+   $ sawmill plugins info vivado
 
 Auto-detection
 --------------

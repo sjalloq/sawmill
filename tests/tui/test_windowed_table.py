@@ -1,10 +1,13 @@
 """Tests for the windowed LogViewer: the DataTable holds only rows near the cursor."""
 
+from __future__ import annotations
+
 import pytest
 
 from sawmill.models.message import Message
 from sawmill.models.plugin_api import SeverityLevel
 from sawmill.tui.app import SORT_MODES, LogViewer, SawmillApp
+from tests.tui.conftest import make_target_result
 
 N = 1000
 SIZE = (120, 40)
@@ -39,7 +42,7 @@ def _messages(n: int = N) -> list[Message]:
 
 @pytest.fixture
 def app(severity_levels):
-    return SawmillApp(severity_levels, messages=_messages())
+    return SawmillApp([make_target_result({"build.log": _messages()}, severity_levels)])
 
 
 async def _settle(pilot, n: int = 3) -> None:
@@ -153,22 +156,6 @@ class TestWindowedTable:
                 assert 0 <= app._cursor_index < N
                 assert _highlighted_message(app) is app.filtered_messages[app._cursor_index]
 
-    async def test_switch_tabs(self, app):
-        async with app.run_test(size=SIZE) as pilot:
-            await _settle(pilot)
-            table = app.query_one(LogViewer)
-            app.suppressed_ids = {"ID-1"}
-            await _settle(pilot)
-            app.active_tab = "suppressed"
-            await _settle(pilot)
-            assert all(m.message_id == "ID-1" for m in app.filtered_messages)
-            assert table.row_count == min(len(app.filtered_messages), app._window_size())
-            assert _highlighted_message(app).message_id == "ID-1"
-            app.active_tab = "messages"
-            await _settle(pilot)
-            assert table.row_count == app._window_size()
-            assert _highlighted_message(app) is app.filtered_messages[app._cursor_index]
-
     async def test_row_key_maps_to_message(self, app):
         async with app.run_test(size=SIZE) as pilot:
             await _settle(pilot)
@@ -190,3 +177,24 @@ class TestWindowedTable:
             assert app._window_start > 0
             assert table.window_start == app._window_start
             assert _highlighted_message(app) is app.filtered_messages[app._cursor_index]
+
+
+async def test_switch_tabs_keeps_window_behaviour(severity_levels):
+    app = SawmillApp(
+        [
+            make_target_result({"a.log": _messages()}, severity_levels),
+            make_target_result({"b.log": _messages()}, severity_levels, name="u"),
+        ]
+    )
+    async with app.run_test(size=SIZE) as pilot:
+        await _settle(pilot)
+        app.query_one(LogViewer).focus()
+        await pilot.press("right")
+        await _settle(pilot)
+        assert app._active == 1
+        await pilot.press("end")
+        await _settle(pilot)
+        table = app.query_one(LogViewer)
+        assert table.row_count == app._window_size()
+        assert app._cursor_index == N - 1
+        assert _highlighted_message(app) is app.filtered_messages[-1]

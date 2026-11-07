@@ -6,6 +6,11 @@ These are used by both the CLI and TUI layers.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sawmill.models.plugin_api import SeverityLevel
+
 
 def get_severity_levels(plugin):
     """Get severity levels from plugin.
@@ -92,3 +97,33 @@ def severity_at_or_above(
     msg_level = level_map.get(message_severity.lower(), -1)
     min_level = level_map.get(min_severity.lower(), 0)
     return msg_level >= min_level
+
+
+def resolve_fail_on_level(fail_on: str | None, severity_levels: list[SeverityLevel]) -> int:
+    """Resolve a fail-on severity name to its numeric level.
+
+    Args:
+        fail_on: Severity id, or None for the default.
+        severity_levels: Severity levels defined by the plugin.
+
+    Returns:
+        Numeric level threshold. The default is the second-lowest level, or
+        the only level if the plugin defines just one.
+
+    Raises:
+        ValueError: If ``fail_on`` is not a severity id defined by the plugin.
+    """
+    if fail_on is None:
+        sorted_levels = sorted(severity_levels, key=lambda s: s.level)
+        if len(sorted_levels) >= 2:
+            return int(sorted_levels[1].level)
+        return int(sorted_levels[0].level) if sorted_levels else 0
+
+    level_map = {level.id.lower(): level.level for level in severity_levels}
+    fail_on_lower = fail_on.lower()
+    if fail_on_lower not in level_map:
+        valid = sorted(level_map, key=lambda x: -level_map[x])
+        raise ValueError(
+            f"Unknown severity '{fail_on}'. Valid options for this plugin: {', '.join(valid)}"
+        )
+    return int(level_map[fail_on_lower])

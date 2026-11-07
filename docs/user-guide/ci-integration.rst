@@ -1,184 +1,181 @@
 CI Integration
 ==============
 
-Sawmill can gate your CI pipeline on log quality. Use ``--check`` to
-exit non-zero when unwaived messages exceed a severity threshold.
+``sawmill check`` runs manifest targets, applies their rules and exits
+non-zero when any unwaived message reaches a target's ``fail_on`` level.
+It needs a manifest; see :doc:`sawmill-directory`.
 
-Check mode
+Exit codes
 ----------
 
-.. code-block:: console
+=========================== ====== ======== ========
+Outcome                     check  report   rules
+=========================== ====== ======== ========
+All targets pass            0      0        0
+A target fails              1      0        0
+Configuration error         2      2        2
+=========================== ====== ======== ========
 
-   $ sawmill build.log --check
+*Configuration error* covers invalid manifests, rule files or user config,
+discovery errors (no manifest, duplicate names, unknown or ambiguous
+targets), unknown ``fail_on`` ids, missing plugins, plugins rejecting their
+``plugin_options``, and usage errors.
 
-In check mode, sawmill:
+A target fails when:
 
-1. Parses the log file using the auto-detected (or ``--plugin``) plugin.
-2. Loads waivers from ``.sawmill/waivers.toml`` (or ``--waivers``).
-3. Counts unwaived messages at or above the failure threshold.
-4. Exits with code **1** if any are found, **0** otherwise.
+- any log has an unwaived message at or above ``fail_on``, or
+- its ``logs`` globs match no file.
 
-Failure threshold
------------------
+Unused rules and ``max_count`` overflows are reported but never fail a run.
 
-``--fail-on`` sets the minimum severity that causes a failure:
-
-.. code-block:: console
-
-   $ sawmill build.log --check --fail-on warning
-
-If ``--fail-on`` is omitted, the default threshold is the **second-lowest
-severity level** from the plugin. For a plugin with levels
-``note (0) / warning (1) / error (2) / fatal (3)``, the default is
-``warning`` (level 1) --- meaning notes pass, but warnings and above fail.
-
-Waivers in CI
--------------
-
-Waived messages are excluded from the failure count:
-
-.. code-block:: console
-
-   $ sawmill build.log --check --waivers .sawmill/waivers.toml
-
-If ``--waivers`` is not specified, sawmill auto-discovers
-``.sawmill/waivers.toml`` (or ``sawmill/waivers.toml``) in the current
-directory.
-
-See :doc:`/user-guide/waivers` for the waiver file format.
-
-Suppressions do NOT affect CI
-------------------------------
-
-Suppressions are display-only. If you combine ``--suppress`` or
-``--suppress-id`` with ``--check``, sawmill emits a warning to stderr:
-
-.. code-block:: text
-
-   Warning: --suppress/--suppress-id affects display only, not CI pass/fail.
-   Use --waivers for CI acceptance.
-
-Suppressed messages are still counted toward CI pass/fail. Use waivers to
-formally accept messages.
-
-JSON reports
+check output
 ------------
 
-``--report`` writes a JSON summary to a file:
+.. code-block:: console
+
+   $ sawmill check
+   == soc:lint (slang, fail_on=warning)
+   build/lint/top.log  error=0 warning=0 note=14  waived=3  PASS
+   build/lint/sub_a.log  error=0 warning=2 note=9  waived=0  FAIL
+       sub_a.sv:12:8: warning: unused variable 'dbg_q' [-Wunused-variable]
+       sub_a.sv:40:2: warning: implicit conversion truncates from 5 to 4 bits [-Wwidth-trunc]
+   == soc:pnr (vivado, fail_on=critical_warning)
+   no logs matched: build/pnr/job_*/vivado.log  FAIL
+   Overflows:
+       vivado-pnr.toml#2  build/pnr/job_3/vivado.log  3/2
+   Unused rules:
+       vivado.toml#4  Old timing waiver, BER-99
+   check: 0/2 targets passed, 1 unused rules
+
+- One ``== manifest:target (plugin, fail_on=id)`` header per target.
+- One line per log: path relative to the project root, counts per
+  severity most severe first (``other=`` only when non-zero), waived count,
+  ``PASS`` or ``FAIL``.
+- Failing messages are listed under the log, first line of each, up to 20
+  per log, then ``... and N more``.
+- ``Overflows:`` lists ``rule  scope  count/max_count`` for each exhausted
+  ``max_count``.
+- ``Unused rules:`` lists rules that matched nothing in the whole run,
+  except for targets with ``unused_rules = "ignore"``.
+- The last line is the summary.
+
+Warnings, such as ``plugin_options`` given to a plugin without a
+``configure`` hook, go to stderr as ``warning: ...``.
+
+Options:
 
 .. code-block:: console
 
-   $ sawmill build.log --check --report report.json
+   $ sawmill check pnr --fail-on error          # override fail_on for every target
+   $ sawmill check --report build/report.json   # also write the JSON report
+   $ sawmill check --all --root /work/fpga      # every manifest under a root
 
-The report structure:
+Reports
+-------
 
-.. code-block:: json
+``sawmill report`` runs the same targets and writes a report without
+gating: it exits 0 whatever the result.
 
-   {
-     "metadata": {
-       "log_file": "build.log",
-       "plugin": "vivado",
-       "timestamp": "2026-01-15T10:30:00+00:00",
-       "fail_on_level": 1
-     },
-     "exit_code": 0,
-     "summary": {
-       "total": 100,
-       "suppressed": 5,
-       "waived": 10,
-       "by_severity": {"error": 3, "warning": 20, "note": 77},
-       "waived_by_severity": {"error": 1, "warning": 5, "note": 4}
-     },
-     "issues": [
-       {
-         "message_id": "Vivado 12-3523",
-         "severity": "warning",
-         "content": "Attempt to change...",
-         "line": 42,
-         "raw_text": "WARNING: [Vivado 12-3523] ..."
-       }
-     ],
-     "waived": [
-       {
-         "message_id": "Synth 8-6157",
-         "severity": "warning",
-         "content": "...",
-         "line": 100,
-         "waiver_message_id": "Synth 8-6157",
-         "waiver_reason": "Expected in this design"
-       }
-     ],
-     "suppressed": [
-       {
-         "message_id": "Common 17-55",
-         "severity": "note",
-         "content": "...",
-         "line": 5,
-         "raw_text": "INFO: [Common 17-55] ..."
-       }
-     ],
-     "unused_waivers": [
-       {
-         "message_id": "DRC RTSTAT-10",
-         "reason": "No longer triggered"
-       }
-     ]
-   }
+.. code-block:: console
 
-Auditing
+   $ sawmill report                          # JSON to stdout
+   $ sawmill report --format junit -o build/sawmill.xml
+   $ sawmill report --format text            # same text as check
+   $ sawmill report -o                       # JSON to the manifest's `report` path
+
+``--output``/``-o`` with no path uses ``[manifest] report``, resolved from
+the project root; it is an error if the key is absent. Parent directories
+are created.
+
+``check --report PATH`` writes the same JSON document as
+``report --format json``.
+
+The JSON schema and JUnit mapping are in :doc:`/reference/file-formats`.
+
+JUnit
+^^^^^
+
+One ``<testsuite>`` per target (named ``manifest:target``), one
+``<testcase>`` per log. A failing log has a ``<failure>`` listing its
+failing messages. A target with no logs gets a single failing
+``(no logs)`` test case. Counts, waived, unwaived, ``fail_on``, plugin and
+unused rules are suite ``<property>`` elements.
+
+Examples
 --------
-
-**Show waived messages** in the output:
-
-.. code-block:: console
-
-   $ sawmill build.log --show-waived
-
-**Report unused waivers** (stale waivers that no longer match any
-messages):
-
-.. code-block:: console
-
-   $ sawmill build.log --report-unused
-
-CI pipeline examples
---------------------
 
 GitHub Actions
 ^^^^^^^^^^^^^^
 
 .. code-block:: yaml
 
-   - name: Check log quality
-     run: |
-       pip install sawmill sawmill-plugin-vivado
-       sawmill build.log --check --fail-on warning --report report.json
+   name: Log check
+   on: [push, pull_request]
 
-   - name: Upload report
-     if: always()
-     uses: actions/upload-artifact@v4
-     with:
-       name: sawmill-report
-       path: report.json
+   jobs:
+     sawmill:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: astral-sh/setup-uv@v5
+         - run: uv tool install sawmill-parser sawmill-plugin-vivado
+         - run: make build    # produces the logs
+         - run: sawmill check --report build/sawmill-report.json
+         - if: always()
+           run: sawmill report --format junit -o build/sawmill.xml
+         - if: always()
+           uses: actions/upload-artifact@v4
+           with:
+             name: sawmill-report
+             path: build/sawmill-*
 
 GitLab CI
 ^^^^^^^^^
 
 .. code-block:: yaml
 
-   check_logs:
+   sawmill:
+     stage: test
      script:
-       - pip install sawmill sawmill-plugin-vivado
-       - sawmill build.log --check --fail-on warning --report report.json
+       - uv tool install sawmill-parser sawmill-plugin-vivado
+       - sawmill check --report build/sawmill-report.json
+     after_script:
+       - sawmill report --format junit -o build/sawmill.xml
      artifacts:
        when: always
        paths:
-         - report.json
+         - build/sawmill-report.json
+       reports:
+         junit: build/sawmill.xml
 
 Makefile
 ^^^^^^^^
 
-.. code-block:: makefile
+.. code-block:: make
 
-   check-logs:
-   	sawmill build.log --check --fail-on warning --report report.json
+   .PHONY: check-logs
+   check-logs: build
+   	sawmill check --report build/sawmill-report.json
+
+Multiple projects
+^^^^^^^^^^^^^^^^^
+
+One invocation covers every target, so no shell loops or exit-code merging
+are needed:
+
+.. code-block:: console
+
+   $ sawmill check --all --root fpga --root asic --report build/all.json
+
+Baselining an existing flow
+---------------------------
+
+To adopt sawmill on a flow that already has many warnings:
+
+.. code-block:: console
+
+   $ sawmill rules generate pnr > .sawmill/rules/pnr-baseline.toml
+   $ $EDITOR .sawmill/rules/pnr-baseline.toml   # replace each TODO comment
+
+Then add ``"pnr-baseline.toml"`` to the target's ``rules`` list. See
+:doc:`rules`.

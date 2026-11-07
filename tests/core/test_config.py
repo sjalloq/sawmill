@@ -1,5 +1,7 @@
 """Tests for sawmill configuration loading."""
 
+from pathlib import Path
+
 import pytest
 
 from sawmill.core.config import (
@@ -247,7 +249,7 @@ class TestLoadResolved:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         loader = ConfigLoader()
-        config = loader.load_resolved(tmp_path)
+        config = loader.load_resolved()
 
         assert config.output.format == "text"
         assert config.output.color is True
@@ -267,78 +269,44 @@ class TestLoadResolved:
         work_dir.mkdir()
 
         loader = ConfigLoader()
-        config = loader.load_resolved(work_dir)
+        config = loader.load_resolved()
 
         assert config.output.color is False
         assert config.general.default_plugin == "vivado"
 
-    def test_local_config_only(self, tmp_path, monkeypatch):
-        """Loads local config when no user config exists."""
-        monkeypatch.setenv("HOME", str(tmp_path))  # no .config/sawmill/
 
-        sawmill_dir = tmp_path / ".sawmill"
-        sawmill_dir.mkdir()
-        (sawmill_dir / "config.toml").write_text('[output]\nformat = "json"\n')
+def test_general_config_roots_default_empty():
+    """roots defaults to an empty list."""
+    assert GeneralConfig().roots == []
+    assert Config.from_dict({}).general.roots == []
 
-        loader = ConfigLoader()
-        config = loader.load_resolved(tmp_path)
 
-        assert config.output.format == "json"
+def test_general_config_roots_parsed(tmp_path):
+    """[general] roots is read as a list of strings."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[general]\nroots = ["a", "/b"]\n')
+    config = ConfigLoader().load(config_file)
+    assert config.general.roots == ["a", "/b"]
 
-    def test_local_overrides_user(self, tmp_path, monkeypatch):
-        """Local config sections override user config sections."""
-        # User config
-        user_config_dir = tmp_path / ".config" / "sawmill"
-        user_config_dir.mkdir(parents=True)
-        (user_config_dir / "config.toml").write_text(
-            '[output]\nformat = "text"\ncolor = false\n[general]\ndefault_plugin = "generic"\n'
-        )
-        monkeypatch.setenv("HOME", str(tmp_path))
 
-        # Local config overrides output section
-        work_dir = tmp_path / "work"
-        work_dir.mkdir()
-        sawmill_dir = work_dir / ".sawmill"
-        sawmill_dir.mkdir()
-        (sawmill_dir / "config.toml").write_text('[output]\nformat = "json"\n')
+def test_general_config_roots_not_list_raises():
+    """A non-list roots value is rejected."""
+    with pytest.raises(ConfigError):
+        Config.from_dict({"general": {"roots": "a"}})
 
-        loader = ConfigLoader()
-        config = loader.load_resolved(work_dir)
 
-        assert config.output.format == "json"  # local overrides
-        # Note: shallow merge per section means entire [output] is replaced
-        assert config.output.color is True  # reverts to default (local replaced section)
-        assert config.general.default_plugin == "generic"  # from user (not in local)
+def test_load_resolved_reads_only_user_config(tmp_path, monkeypatch):
+    """Only the user config is read; a project-level .sawmill/config.toml is ignored."""
+    home = tmp_path / "home"
+    user_dir = home / ".config" / "sawmill"
+    user_dir.mkdir(parents=True)
+    (user_dir / "config.toml").write_text('[general]\ndefault_plugin = "user"\n')
+    monkeypatch.setattr(Path, "home", lambda: home)
 
-    def test_dot_sawmill_dir_works(self, tmp_path, monkeypatch):
-        """Config loads from .sawmill/ directory."""
-        monkeypatch.setenv("HOME", str(tmp_path))
-        sawmill_dir = tmp_path / ".sawmill"
-        sawmill_dir.mkdir()
-        (sawmill_dir / "config.toml").write_text('[general]\ndefault_plugin = "vivado"\n')
+    work = tmp_path / "work"
+    (work / ".sawmill").mkdir(parents=True)
+    (work / ".sawmill" / "config.toml").write_text('[general]\ndefault_plugin = "local"\n')
+    monkeypatch.chdir(work)
 
-        loader = ConfigLoader()
-        config = loader.load_resolved(tmp_path)
-        assert config.general.default_plugin == "vivado"
-
-    def test_plain_sawmill_dir_works(self, tmp_path, monkeypatch):
-        """Config loads from sawmill/ directory."""
-        monkeypatch.setenv("HOME", str(tmp_path))
-        sawmill_dir = tmp_path / "sawmill"
-        sawmill_dir.mkdir()
-        (sawmill_dir / "config.toml").write_text('[general]\ndefault_plugin = "vivado"\n')
-
-        loader = ConfigLoader()
-        config = loader.load_resolved(tmp_path)
-        assert config.general.default_plugin == "vivado"
-
-    def test_invalid_local_toml_raises_config_error(self, tmp_path, monkeypatch):
-        """Invalid TOML in local config raises ConfigError."""
-        monkeypatch.setenv("HOME", str(tmp_path))
-        sawmill_dir = tmp_path / ".sawmill"
-        sawmill_dir.mkdir()
-        (sawmill_dir / "config.toml").write_text("invalid [[[")
-
-        loader = ConfigLoader()
-        with pytest.raises(ConfigError):
-            loader.load_resolved(tmp_path)
+    config = ConfigLoader().load_resolved()
+    assert config.general.default_plugin == "user"

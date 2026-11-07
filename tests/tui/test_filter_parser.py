@@ -120,3 +120,19 @@ class TestParseFilter:
         result = parse_filter('sev:error "unclosed')
         assert result.severities == ["error"]
         # Should not crash
+
+
+class TestLogPrefix:
+    """Tests for the log: prefix."""
+
+    def test_log_prefix_parsed(self):
+        result = parse_filter("log:build/*/a.log needle")
+        assert result.log == "build/*/a.log"
+        assert result.pattern == "needle"
+
+    def test_log_prefix_case_of_value_preserved(self):
+        result = parse_filter("LOG:Build/A.log")
+        assert result.log == "Build/A.log"
+
+    def test_no_log_prefix_is_none(self):
+        assert parse_filter("needle").log is None

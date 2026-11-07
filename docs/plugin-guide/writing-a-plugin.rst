@@ -219,8 +219,8 @@ Each ``Message`` has these fields:
    ``get_severity_levels()`` IDs).
 
 ``message_id``
-   Tool-specific ID (e.g. ``"Synth 8-6157"``). Used for waiver
-   matching, suppression, and grouping.
+   Tool-specific ID (e.g. ``"Synth 8-6157"``). Used for rule
+   matching (the rule ``id`` key), session hiding and grouping.
 
 ``category``
    Optional category for grouping (e.g. ``"timing"``).
@@ -244,6 +244,50 @@ The typical workflow is:
 4. Implement ``load_and_parse()`` as a generator that yields messages.
 5. Implement ``get_severity_levels()`` with the correct level mapping.
 6. Optionally add ``get_filters()`` for common categories.
+
+Plugin options: the ``configure`` hook
+--------------------------------------
+
+A manifest target can pass options to its plugin with a
+``[target.plugin_options]`` table:
+
+.. code-block:: toml
+
+   [[target]]
+   name = "pnr"
+   plugin = "quartus"
+   logs = ["build/pnr/*.log"]
+
+   [target.plugin_options]
+   mode = "fit"
+
+Implement the optional ``configure`` hook to receive them:
+
+.. code-block:: python
+
+   _MODES = {"synthesis", "fit"}
+
+   class QuartusPlugin(SawmillPlugin):
+       mode = "synthesis"
+
+       @hookimpl
+       def configure(self, options: dict) -> None:
+           unknown = set(options) - {"mode"}
+           if unknown:
+               raise ValueError(f"unknown option(s): {', '.join(sorted(unknown))}")
+           mode = options.get("mode", "synthesis")
+           if mode not in _MODES:
+               raise ValueError(f"mode must be one of {sorted(_MODES)}, got {mode!r}")
+           self.mode = mode
+
+- Called once per target, before any of the target's logs is parsed.
+- ``options`` is the target's ``plugin_options`` table, or ``{}`` when the
+  target has none; reset any per-target state here.
+- Raise ``ValueError`` for unknown keys or bad values. Sawmill reports it as
+  a configuration error and exits with status 2.
+- The ``SawmillPlugin`` base class provides a no-op ``configure``. If a
+  target gives ``plugin_options`` and the plugin does not override it, sawmill prints ``warning: ...`` on stderr and ignores the
+  options.
 
 Performance checklist
 ---------------------
@@ -283,8 +327,8 @@ Verify it appears in sawmill:
 
 .. code-block:: console
 
-   $ sawmill --list-plugins
-   $ sawmill --show-info --plugin quartus
+   $ sawmill plugins list
+   $ sawmill plugins info quartus
 
 Entry point registration
 ^^^^^^^^^^^^^^^^^^^^^^^^

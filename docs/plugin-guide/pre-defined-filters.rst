@@ -10,7 +10,7 @@ define filters for ``timing``, ``drc``, and ``synth`` message categories.
 
 Each filter has:
 
-- **id** --- unique identifier (used with ``--category``).
+- **id** --- unique identifier.
 - **name** --- human-readable display name.
 - **pattern** --- a regular expression.
 - **description** --- what the filter matches.
@@ -18,11 +18,11 @@ Each filter has:
 Listing filters
 ---------------
 
-Use ``--show-info`` to see what filters a plugin provides:
+Use ``sawmill plugins info`` to see what filters a plugin provides:
 
 .. code-block:: console
 
-   $ sawmill --show-info --plugin vivado
+   $ sawmill plugins info vivado
 
 The output includes a table of all filters with their IDs, names, and
 descriptions.
@@ -30,24 +30,17 @@ descriptions.
 Using filters
 -------------
 
-Activate a pre-defined filter with ``--category``:
+No CLI option applies pre-defined filters. In the TUI search bar
+(:doc:`/user-guide/tui-usage`), use the filter's pattern as a regex term,
+or ``cat:`` when the plugin sets the message's ``category``. Terms combine
+with AND, and ``sev:`` selects a single severity:
 
-.. code-block:: console
+.. code-block:: text
 
-   $ sawmill build.log --category timing
-   $ sawmill build.log --category drc --category synth
+   cat:timing sev:warning
+   '\[Timing \d+-\d+\]' sev:warning
 
-Multiple ``--category`` flags can be combined. Messages matching **any**
-of the selected categories are included.
-
-Pre-defined filters compose with other filters:
-
-.. code-block:: console
-
-   $ sawmill build.log --category timing --severity warning
-
-This shows only ``warning``-level (and above) messages that match the
-``timing`` category.
+Single-quote regex terms that contain backslashes or spaces. Both show only ``warning`` messages in the timing group.
 
 Worked example
 --------------
@@ -75,10 +68,10 @@ Suppose a plugin defines these filters:
            ),
        ]
 
-A user can then run:
+A user can then type this in the TUI search bar:
 
-.. code-block:: console
+.. code-block:: text
 
-   $ sawmill build.log --category timing
+   '\[Timing \d+-\d+\]'
 
-to see only messages whose content matches ``\[Timing \d+-\d+\]``.
+to see only messages whose text matches the ``timing`` pattern.

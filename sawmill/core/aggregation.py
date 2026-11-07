@@ -56,6 +56,7 @@ class MessageStats:
         count: Number of messages in this group.
         messages: List of messages in this group.
         files_affected: Set of unique files affected by messages in this group.
+        by_log: Message counts per log path (messages without a log are not counted).
     """
 
     key: str
@@ -63,6 +64,7 @@ class MessageStats:
     count: int = 0
     messages: list = field(default_factory=list)
     files_affected: set = field(default_factory=set)
+    by_log: dict[str, int] = field(default_factory=dict)
 
     def add_message(self, message: Message) -> None:
         """Add a message to this group.
@@ -74,6 +76,8 @@ class MessageStats:
         self.messages.append(message)
         if message.file_ref:
             self.files_affected.add(message.file_ref.path)
+        if message.log_path is not None:
+            self.by_log[message.log_path] = self.by_log.get(message.log_path, 0) + 1
 
 
 @dataclass

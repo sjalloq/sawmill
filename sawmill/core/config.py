@@ -39,11 +39,19 @@ class GeneralConfig:
     """General configuration settings."""
 
     default_plugin: str | None = None
+    roots: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> "GeneralConfig":
-        """Create GeneralConfig from a dictionary."""
-        return cls(default_plugin=data.get("default_plugin"))
+        """Create GeneralConfig from a dictionary.
+
+        Raises:
+            ConfigError: If ``roots`` is not a list of strings.
+        """
+        roots = data.get("roots", [])
+        if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
+            raise ConfigError("[general] roots must be a list of strings")
+        return cls(default_plugin=data.get("default_plugin"), roots=list(roots))
 
 
 @dataclass
@@ -97,7 +105,7 @@ class ConfigLoader:
         # Or load defaults when no file exists
         config = loader.load(None)
 
-        # Or load resolved (user + local merge)
+        # Or load the user config (~/.config/sawmill/config.toml)
         config = loader.load_resolved()
     """
 
@@ -129,47 +137,21 @@ class ConfigLoader:
             line = self._extract_line_number(str(e))
             raise ConfigError(str(e), line=line, path=path) from e
 
-    def load_resolved(self, start_path: Path | None = None) -> Config:
-        """Load and merge configuration from user and local config files.
+    def load_resolved(self) -> Config:
+        """Load the user configuration (~/.config/sawmill/config.toml).
 
-        Two-level merge: user config (~/.config/sawmill/config.toml)
-        is the base, local config (<.sawmill|sawmill>/config.toml)
-        overrides per-section.
-
-        Args:
-            start_path: Starting directory for local config discovery.
-                If None, uses current working directory.
+        Project-level configuration lives in the manifest, not here.
 
         Returns:
-            Config instance with merged values from all sources.
+            Config instance from the user config, or defaults if absent.
 
         Raises:
-            ConfigError: If any config file contains invalid TOML,
-                or if both .sawmill/ and sawmill/ exist.
+            ConfigError: If the user config contains invalid TOML.
         """
-        from sawmill.utils.dirs import resolve_sawmill_dir
-
-        merged_data: dict = {}
-
-        # 1. User config (lowest precedence)
         user_config = Path.home() / ".config" / "sawmill" / "config.toml"
-        if user_config.exists():
-            merged_data = self._load_toml(user_config)
-
-        # 2. Local config from .sawmill/ or sawmill/ directory
-        sawmill_dir = resolve_sawmill_dir(start_path)
-        if sawmill_dir is not None:
-            local_config = sawmill_dir / "config.toml"
-            if local_config.exists():
-                local_data = self._load_toml(local_config)
-                # Shallow merge per section (local overrides user)
-                for key, value in local_data.items():
-                    merged_data[key] = value
-
-        if not merged_data:
+        if not user_config.exists():
             return Config()
-
-        return Config.from_dict(merged_data)
+        return Config.from_dict(self._load_toml(user_config))
 
     def _load_toml(self, path: Path) -> dict:
         """Load and parse a TOML file, returning the raw dict.

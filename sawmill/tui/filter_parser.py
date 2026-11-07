@@ -4,6 +4,7 @@ Parses prefix syntax in the search bar:
     sev:error          → filter by severity
     severity:warning   → same (long form)
     id:Synth 8-*       → filter by message ID (fnmatch)
+    log:build/*.log    → filter by log path (fnmatch, case-sensitive)
     plain text         → regex on raw_text
 
 Multiple prefixes compose with AND logic.
@@ -23,12 +24,14 @@ class ParsedFilter:
         severities: Severity IDs to show (from sev:/severity: prefix).
         message_id: Message ID pattern (from id: prefix, supports fnmatch).
         category: Category to filter by (from cat:/category: prefix).
+        log: Log path pattern (from log: prefix, case-sensitive fnmatch).
         pattern: Remaining text treated as regex on raw_text.
     """
 
     severities: list[str] = field(default_factory=list)
     message_id: str | None = None
     category: str | None = None
+    log: str | None = None
     pattern: str | None = None
 
 
@@ -39,6 +42,7 @@ def parse_filter(text: str) -> ParsedFilter:
         sev:<id> or severity:<id>  → severity filter
         id:<pattern>               → message ID filter (fnmatch wildcards)
         cat:<name> or category:<name> → category filter
+        log:<pattern>              → log path filter (fnmatch wildcards)
         <text>                     → regex on everything
 
     Args:
@@ -74,6 +78,12 @@ def parse_filter(text: str) -> ParsedFilter:
             _, _, value = token.partition(":")
             if value:
                 result.message_id = value
+
+        # log: prefix
+        elif lower.startswith("log:"):
+            _, _, value = token.partition(":")
+            if value:
+                result.log = value
 
         # cat: or category: prefix
         elif lower.startswith("cat:") or lower.startswith("category:"):

@@ -1,11 +1,9 @@
 """Tests for the extensible plugin API (severity levels, grouping fields, metadata)."""
 
 import pytest
-from click.testing import CliRunner
 from pydantic import ValidationError
 from sawmill_plugin_vivado.plugin import VivadoPlugin
 
-from sawmill.__main__ import cli
 from sawmill.core.aggregation import Aggregator, make_severity_sort_key
 from sawmill.models.message import FileRef, Message
 from sawmill.models.plugin_api import (
@@ -370,33 +368,3 @@ class TestVivadoPluginNewHooks:
             assert "id" in field
             assert "name" in field
             assert "field_type" in field
-
-
-class TestListGroupingsCLI:
-    """Tests for --list-groupings CLI option."""
-
-    @pytest.fixture
-    def runner(self):
-        """Create a CLI runner."""
-        return CliRunner()
-
-    def test_list_groupings_shows_fields(self, runner):
-        """Test --list-groupings shows available fields."""
-        result = runner.invoke(cli, ["--list-groupings", "--plugin", "vivado"])
-        assert result.exit_code == 0
-        assert "severity" in result.output.lower()
-        assert "id" in result.output.lower()
-        assert "file" in result.output.lower()
-
-    def test_list_groupings_without_plugin_shows_defaults(self, runner):
-        """Test --list-groupings without --plugin shows defaults."""
-        result = runner.invoke(cli, ["--list-groupings"])
-        assert result.exit_code == 0
-        assert "severity" in result.output.lower()
-        assert "No plugin specified" in result.output
-
-    def test_list_groupings_shows_usage_hint(self, runner):
-        """Test --list-groupings shows usage hint."""
-        result = runner.invoke(cli, ["--list-groupings", "--plugin", "vivado"])
-        assert result.exit_code == 0
-        assert "--group-by" in result.output

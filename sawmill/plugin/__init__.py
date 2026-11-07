@@ -183,6 +183,18 @@ class SawmillPlugin:
         )
 
     @hookimpl
+    def configure(self, options: dict) -> None:
+        """Accept per-target options; the default ignores them.
+
+        Override to validate and apply the target's ``plugin_options``. Raise
+        ``ValueError`` for bad options.
+
+        Args:
+            options: The target's ``plugin_options`` table.
+        """
+        return None
+
+    @hookimpl
     def get_grouping_fields(self) -> list[dict]:
         """Return available grouping fields for this tool.
 

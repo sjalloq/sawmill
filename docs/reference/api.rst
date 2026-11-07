@@ -20,10 +20,10 @@ Data Models
    :undoc-members:
    :show-inheritance:
 
-``sawmill.models.waiver``
-^^^^^^^^^^^^^^^^^^^^^^^^^
+``sawmill.models.rule``
+^^^^^^^^^^^^^^^^^^^^^^^
 
-.. automodule:: sawmill.models.waiver
+.. automodule:: sawmill.models.rule
    :members:
    :undoc-members:
    :show-inheritance:
@@ -66,10 +66,10 @@ Core Modules
    :undoc-members:
    :show-inheritance:
 
-``sawmill.core.waiver``
-^^^^^^^^^^^^^^^^^^^^^^^
+``sawmill.core.rules``
+^^^^^^^^^^^^^^^^^^^^^^
 
-.. automodule:: sawmill.core.waiver
+.. automodule:: sawmill.core.rules
    :members:
    :undoc-members:
    :show-inheritance:
@@ -82,10 +82,10 @@ Core Modules
    :undoc-members:
    :show-inheritance:
 
-``sawmill.core.suppress``
+``sawmill.core.manifest``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. automodule:: sawmill.core.suppress
+.. automodule:: sawmill.core.manifest
    :members:
    :undoc-members:
    :show-inheritance:

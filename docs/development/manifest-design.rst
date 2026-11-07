@@ -1,10 +1,30 @@
 Manifest and rules redesign
 ===========================
 
-Status: draft for review, 2026-11-06. Nothing here is implemented yet.
+Status: Implemented 2026-11-07; see the user guide (:doc:`/user-guide/rules`,
+:doc:`/user-guide/sawmill-directory`).
 
-This note replaces the waiver and suppression design described in
-``user-guide/waivers.rst`` and ``user-guide/sawmill-directory.rst``. There is
+Deviations from this note
+-------------------------
+
+The implementation differs from the design below in these points:
+
+- ``view`` has no filter or output options; it takes a target or log file,
+  ``--plugin``, ``--fail-on``, ``--manifest`` and ``--root`` only.
+- Plugin listing and inspection moved to ``sawmill plugins list`` and
+  ``sawmill plugins info NAME``.
+- The TUI has no separate waived or hidden tabs. ``v`` toggles waived and
+  hidden rows into the table, marked in a status column (``W``, ``H``).
+- Refresh keys are ``r`` (re-read manifest and rules) and ``R`` (also
+  re-read logs), not ``R`` and ``shift+R``.
+- When a rule's ``max_count`` is exhausted, the excess is unwaived; later
+  rules are not tried for that message.
+- The project-level ``config.toml`` is removed. Only the user config
+  ``~/.config/sawmill/config.toml`` remains.
+- ``report --output`` given without a path writes to the manifest's
+  ``report`` key.
+
+This note replaced the earlier waiver and suppression design. There is
 no backwards compatibility requirement; the project is pre-release.
 
 Motivation
@@ -12,8 +32,8 @@ Motivation
 
 The current design grew out of single-block lint flows: one log, one plugin,
 one waiver file found in the current directory. It does not fit multi-stage
-flows such as the HAPS ProtoCompiler flow, which produces several Synplify
-``.srr`` logs and eight parallel Vivado jobs per run. Specific problems:
+flows such as an FPGA build that produces several lint logs and eight
+parallel Vivado jobs per run. Specific problems:
 
 - one log per invocation, so CI needs shell loops and exit-code merging;
 - waivers and suppressions are discovered relative to the current working
@@ -53,15 +73,15 @@ Layout
 
 ::
 
-    haps/
+    soc/
       .sawmill/
         manifest.toml
         rules/
           vivado.toml
           vivado-pnr.toml
-          synplify.toml
+          slang.toml
       build/
-        synth/top.srr  sub_a.srr  sub_b.srr
+        lint/top.log  sub_a.log  sub_b.log
         pnr/job_0/vivado.log ... job_7/vivado.log
 
 The directory containing ``.sawmill/`` is the *project root*. Log globs are
@@ -74,15 +94,15 @@ Manifest
 .. code-block:: toml
 
     [manifest]
-    name = "haps"
-    rules = ["vivado.toml", "synplify.toml"]   # plugin-wide, see rule header
+    name = "soc"
+    rules = ["vivado.toml", "slang.toml"]   # plugin-wide, see rule header
     report = "build/sawmill-report.json"       # default for `report`
     fail_on = "warning"                        # default for all targets
 
     [[target]]
-    name = "synth"
-    plugin = "synplify"
-    logs = ["build/synth/*.srr"]
+    name = "lint"
+    plugin = "slang"
+    logs = ["build/lint/*.log"]
 
     [[target]]
     name = "pnr"
@@ -280,8 +300,8 @@ case per log, for CI systems that render it.
 Open questions
 --------------
 
-- Whether ``file`` should also accept a plugin-provided label (Vivado run
-  name, Synplify project) as an alternative to path globs. Deferred until
+- Whether ``file`` should also accept a plugin-provided label (for example a
+  Vivado run name) as an alternative to path globs. Deferred until
   globs prove insufficient.
 - Whether ``expires`` deserves enforcement as a first-class key. Deferred;
   today it is a convention in ``comment``.

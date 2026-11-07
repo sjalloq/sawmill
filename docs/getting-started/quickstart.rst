@@ -8,79 +8,75 @@ Install sawmill and a plugin for your tool:
 
 .. code-block:: console
 
-   $ pip install sawmill sawmill-plugin-vivado
+   $ uv tool install sawmill-parser sawmill-plugin-vivado
 
-Verify the installation:
+Check the installation:
 
 .. code-block:: console
 
    $ sawmill --version
-   sawmill 0.1.0
+   $ sawmill plugins list
 
-   $ sawmill --list-plugins
-   ┌────────┬─────────┬───────────────────────────────────────┐
-   │ Name   │ Version │ Description                           │
-   ├────────┼─────────┼───────────────────────────────────────┤
-   │ vivado │ 0.1.0   │ Xilinx Vivado log parser for sawmill  │
-   └────────┴─────────┴───────────────────────────────────────┘
-
-Browse interactively
---------------------
-
-Open a log file in the TUI:
+Look at one log
+---------------
 
 .. code-block:: console
 
-   $ sawmill build.log
+   $ sawmill build/synth/vivado.log
 
-Sawmill auto-detects the plugin (Vivado, Quartus, etc.) and opens an
-interactive view:
+The plugin is auto-detected. Use ``/`` to search, ``1``--``4`` to toggle
+severity levels, ``?`` for all keys and ``q`` to quit. See
+:doc:`/user-guide/tui-usage`.
 
-- **Severity bar** at the top shows message counts per level. Press
-  number keys (``1``--``4``) to toggle levels on and off.
-- **Search bar** accepts regex patterns, or prefix filters like
-  ``sev:error`` or ``id:Synth 8-*``.
-- **Message table** shows Line, Severity, ID, and Message columns. Use
-  arrow keys, ``j``/``k``, or ``g``/``G`` to navigate.
-- **Detail panel** shows the full text of the highlighted message.
-- Press ``s`` to suppress a message ID, ``w`` to waive it, ``Ctrl+S``
-  to save, and ``q`` to quit.
+Create a manifest
+-----------------
 
-See :doc:`/user-guide/tui-usage` for the full TUI reference.
-
-Run in CI
----------
-
-Use ``--check`` to gate your pipeline on log quality:
+From the project root:
 
 .. code-block:: console
 
-   $ sawmill build.log --check --fail-on warning --report report.json
+   $ sawmill init --name myproj
+   created /work/myproj/.sawmill/manifest.toml
 
-This command:
+   $ sawmill init --target synth 'build/synth/*.log'
+   appended target 'synth' (plugin vivado) to /work/myproj/.sawmill/manifest.toml
+   created /work/myproj/.sawmill/rules/synth.toml
 
-1. Parses the log and loads any waivers from ``.sawmill/waivers.toml``.
-2. Checks for unwaived messages at ``warning`` level or above.
-3. Writes a JSON report to ``report.json``.
-4. Exits with code 1 if failures are found, 0 otherwise.
+.. code-block:: toml
 
-See :doc:`/user-guide/ci-integration` for CI pipeline examples.
+   # .sawmill/manifest.toml (comments trimmed)
+   [manifest]
+   name = "myproj"
 
-The ``.sawmill/`` directory
----------------------------
+   [[target]]
+   name = "synth"
+   plugin = "vivado"
+   logs = ["build/synth/*.log"]
+   rules = ["synth.toml"]
 
-After your first save (``Ctrl+S`` in the TUI), a ``.sawmill/`` directory
-appears in your project root:
+Commit ``.sawmill/``. See :doc:`/user-guide/sawmill-directory`.
 
-.. code-block:: text
+Triage
+------
 
-   .sawmill/
-   ├── config.toml      # Output preferences (optional)
-   ├── suppress.toml    # Suppressed message IDs
-   └── waivers.toml     # Waiver entries (commit this!)
+.. code-block:: console
 
-Commit ``waivers.toml`` and ``config.toml`` to version control.
-Consider adding ``suppress.toml`` to ``.gitignore`` since suppressions
-are personal display preferences.
+   $ sawmill view
 
-See :doc:`/user-guide/sawmill-directory` for details.
+The Overview tab shows each target and log with counts and PASS/FAIL.
+Press ``Enter`` on a log to open it, select a message and press ``w`` to
+add a rule to ``.sawmill/rules/synth.toml``. Counts update immediately.
+See :doc:`/user-guide/rules`.
+
+Gate CI
+-------
+
+.. code-block:: console
+
+   $ sawmill check --report build/sawmill-report.json
+   == myproj:synth (vivado, fail_on=warning)
+   build/synth/vivado.log  error=0 critical_warning=0 warning=0 info=212  waived=4  PASS
+   check: 1/1 targets passed
+
+``check`` exits 0 when every target passes, 1 when any fails and 2 on a
+configuration error. See :doc:`/user-guide/ci-integration`.

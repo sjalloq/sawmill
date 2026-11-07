@@ -475,3 +475,40 @@ class TestAggregatorSortedSummary:
         sorted_list = aggregator.sorted_summary(summary)
         severities = [s for s, _ in sorted_list]
         assert severities == ["info", "unknown"]
+
+
+def _with_log(msg: Message, log: str | None) -> Message:
+    msg.log_path = log
+    return msg
+
+
+def test_message_stats_by_log_counts():
+    stats = MessageStats(key="X")
+    stats.add_message(_with_log(make_message("a1"), "a"))
+    stats.add_message(_with_log(make_message("a2"), "a"))
+    stats.add_message(_with_log(make_message("b1"), "b"))
+    stats.add_message(_with_log(make_message("none"), None))
+    assert stats.by_log == {"a": 2, "b": 1}
+    assert stats.count == 4
+
+
+def test_group_by_id_has_per_log_counts(severity_levels):
+    msgs = [
+        _with_log(make_message("x", "error", "ID-1"), "a.log"),
+        _with_log(make_message("y", "error", "ID-1"), "b.log"),
+        _with_log(make_message("z", "error", "ID-1"), "a.log"),
+        _with_log(make_message("w", "warning", "ID-2"), "b.log"),
+    ]
+    groups = Aggregator(severity_levels=severity_levels).group_by_id(msgs)
+    assert groups["ID-1"].by_log == {"a.log": 2, "b.log": 1}
+    assert groups["ID-2"].by_log == {"b.log": 1}
+
+
+def test_group_by_field_has_per_log_counts(severity_levels):
+    m1 = _with_log(make_message("x"), "a.log")
+    m2 = _with_log(make_message("y"), "b.log")
+    m3 = _with_log(make_message("z"), "b.log")
+    for m in (m1, m2, m3):
+        m.metadata = {"phase": "synth"}
+    groups = Aggregator(severity_levels=severity_levels).group_by_field([m1, m2, m3], "phase")
+    assert groups["synth"].by_log == {"a.log": 1, "b.log": 2}
